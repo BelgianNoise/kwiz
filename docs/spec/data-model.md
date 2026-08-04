@@ -23,7 +23,8 @@ main way this design can go wrong.
 │      ├─ jeopardy_category   │  │   game_question                   │
 │      └─ question            │  │    ├─ game_question_option        │
 │          ├─ question_option │  │    ├─ game_accepted_answer        │
-│          ├─ accepted_answer │  │    └─ game_attachment             │
+│          ├─ accepted_answer │  │    ├─ game_question_keyword       │
+│          ├─ question_keyword│  │    └─ game_attachment             │
 │          └─ attachment      │  │                                   │
 │                             │  │ Copied on game creation.          │
 │ Edited freely, forever.     │  │ Never edited afterwards.          │
@@ -36,7 +37,8 @@ main way this design can go wrong.
                     │        │                    TRUTH       │
                     │        ├── game_answer            ┐     │
                     │        ├── game_buzz              │ proj│
-                    │        ├── game_score_adjustment  ┘     │
+                    │        ├── game_score_adjustment  │proj │
+                    │        ├── game_keyword_mark      ┘     │
                     │        └── game_answer_draft  (NOT proj) │
                     └─────────────────────────────────────────┘
 ```
@@ -51,7 +53,8 @@ revision number alone cannot, because template rows are mutable.
 **`game_event` is the only source of truth for play** (D4). Everything that happens
 during a game is an appended event; the table is never updated or deleted.
 
-**Projection tables** (`game_answer`, `game_buzz`, `game_score_adjustment`) are derived
+**Projection tables** (`game_answer`, `game_buzz`, `game_score_adjustment`,
+`game_keyword_mark`) are derived
 caches. They exist so the validation queue and review screens are indexed SQL rather
 than a replay. They are written *exclusively* by the reducer, in the same transaction
 as the event append, and can be dropped and rebuilt from `game_event` at any time.
@@ -61,7 +64,7 @@ as the event append, and can be dropped and rebuilt from `game_event` at any tim
 > you want to `UPDATE game_answer` directly, the change you want is an event.
 >
 > Two tables are exempt, both narrowly and deliberately: `game_device.lastSeenAt`
-> (§6.3) and `game_answer_draft` (§6.7). Nothing else in the play half escapes the log.
+> (§6.3) and `game_answer_draft` (§6.8). Nothing else in the play half escapes the log.
 
 ### 1.1 What is deliberately *not* stored
 
@@ -118,7 +121,7 @@ function call and cannot interleave. The append path (§6.4) depends on it.
 
 ## 3. Shared column definitions
 
-Six template tables have a game-scoped twin. Maintaining two parallel definitions by
+Seven template tables have a game-scoped twin. Maintaining two parallel definitions by
 hand is how a column gets added to `question` and forgotten in `game_question` —
 silent data loss in every game created afterwards.
 
@@ -136,7 +139,7 @@ export const questionColumns = () => ({
   position:     integer('position').notNull(),
   prompt:       text('prompt').notNull(),
   answerMethod: text('answer_method', {
-    enum: ['FREE_TEXT', 'MULTIPLE_CHOICE', 'BUZZER', 'DO'],
+    enum: ['FREE_TEXT', 'MULTIPLE_CHOICE', 'BUZZER', 'DO', 'KEYWORDS'],
   }).notNull(),
   points:       integer('points').notNull(),
   timerMs:      integer('timer_ms'),
@@ -146,7 +149,7 @@ export const questionColumns = () => ({
 
 export const roundColumns = () => ({
   position:       integer('position').notNull(),
-  type:           text('type', { enum: ['QUESTION_SET', 'JEOPARDY'] }).notNull(),
+  type:           text('type', { enum: ['QUESTION_SET', 'JEOPARDY', 'DSMTW_FINALE'] }).notNull(),
   title:          text('title').notNull(),
   defaultPoints:  integer('default_points').notNull().default(10),
   defaultTimerMs: integer('default_timer_ms'),
@@ -174,6 +177,16 @@ export const optionColumns = () => ({
 export const acceptedAnswerColumns = () => ({
   position: integer('position').notNull(),
   text:     text('text').notNull(),
+})
+
+export const keywordColumns = () => ({
+  position: integer('position').notNull(),      // 0–4; exactly 5 per question
+  text:     text('text').notNull(),             // NEVER sent to the room unguessed (D53)
+
+  // Character count per word, e.g. "i like cows" → [1,4,4]. This is what the main screen
+  // renders as blurred tiles — the shape of the phrase without any of its characters.
+  // Derived from `text` on write, stored so the payload filter never touches `text`.
+  wordLengths: text('word_lengths', { mode: 'json' }).$type<number[]>().notNull(),
 })
 
 export const categoryColumns = () => ({
@@ -219,9 +232,22 @@ export const round = sqliteTable('round', {
 }))
 ```
 
-`config` is the extension point for new round types (PRD 1 §8.3): `QUESTION_SET → {}`,
-`JEOPARDY → { valueLadder: number[] }` (an authoring default for new tiles). A new
-round type adds a zod schema and a domain reducer, and needs **no migration**.
+`config` is the extension point for new round types (PRD 1 §8.3), zod-validated per `type`:
+
+```ts
+QUESTION_SET  → {}
+JEOPARDY      → { valueLadder: number[] }          // authoring default for new tiles
+DSMTW_FINALE  → {
+                  secondsPerPoint: number,          // points → seconds conversion (D54)
+                  penaltySeconds:  number,          // default 20; overridable at SETUP
+                }
+```
+
+A new round type adds a zod schema and a domain reducer, and needs **no migration**.
+
+**The `DSMTW_FINALE` values here are authoring *defaults*.** The live values come from a
+`FINALE_CONFIGURED` event, because the right penalty depends on how many teams are playing —
+known only at game setup — and editing the game copy would violate I16 (D54).
 
 ### 4.3 `jeopardy_category`
 
@@ -241,6 +267,26 @@ The board is **not** a stored grid — it is `categories × questions`, laid out
 `(question.categoryId, question.position)`. A category with fewer questions than its
 neighbours has a shorter column, which the authoring UI must allow, because masters
 build boards incrementally.
+
+### 4.3.1 `question_keyword`
+
+`DSMTW_FINALE` only — exactly 5 rows per question (D50, PRD 1 §8.8).
+
+```ts
+export const questionKeyword = sqliteTable('question_keyword', {
+  id:         text('id').primaryKey().$defaultFn(uuidv7),
+  questionId: text('question_id').notNull().references(() => question.id, { onDelete: 'cascade' }),
+  ...keywordColumns(),
+}, (t) => ({
+  question: index('question_keyword_question_idx').on(t.questionId, t.position),
+}))
+```
+
+**`wordLengths` is stored, not computed at read time.** Deriving it in the payload filter
+would mean the filter holds `text` in a local variable — one refactor away from including it.
+Storing the shape means the filter selects `wordLengths` and **never loads `text` at all**
+until the keyword is marked, which is the difference between a rule and a guarantee (D53,
+PRD 1 §7 invariant 8).
 
 ### 4.4 `question`
 
@@ -406,6 +452,15 @@ export const gameQuestionOption = sqliteTable('game_question_option', {
   question: index('game_question_option_question_idx').on(t.gameQuestionId, t.position),
 }))
 
+export const gameQuestionKeyword = sqliteTable('game_question_keyword', {
+  id:             text('id').primaryKey().$defaultFn(uuidv7),
+  gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
+  gameQuestionId: text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
+  ...keywordColumns(),
+}, (t) => ({
+  question: index('game_question_keyword_question_idx').on(t.gameQuestionId, t.position),
+}))
+
 export const gameAttachment = sqliteTable('game_attachment', {
   id:             text('id').primaryKey().$defaultFn(uuidv7),
   gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
@@ -442,7 +497,7 @@ export const game = sqliteTable('game', {
   quizName:     text('quiz_name').notNull(),
   quizRevision: integer('quiz_revision').notNull(),
 
-  // Human-readable join handle, NOT an identifier (PRD 1 §8.2, §8.10).
+  // Human-readable join handle, NOT an identifier (PRD 1 §8.2 and §8.11).
   // Regenerable while status = 'SETUP' (Q3).
   code: text('code').notNull(),
 
@@ -484,6 +539,12 @@ export const gameTeam = sqliteTable('game_team', {
 
   // Projected: sum(answers) + sum(non-revoked adjustments). May be negative (D15).
   score: integer('score').notNull().default(0),
+
+  // DSMTW_FINALE only (D50). Null when the team never played a finale, was not selected as a
+  // finalist, or survived it. Set when the team's derived clock reached zero; the *order* of
+  // these timestamps is what produces the final ranking (D51), so it is projected rather
+  // than recomputed on every read.
+  eliminatedAt: integer('eliminated_at', { mode: 'timestamp_ms' }),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
 }, (t) => ({
@@ -683,7 +744,38 @@ The **lockout set is not stored** — it is derived (`teams with a DENIED buzz o
 question`) and held in memory per §1.1. Storing it would be a second source of truth
 for the same fact.
 
-### 6.7 `game_answer_draft` — **not** a projection
+### 6.7 `game_keyword_mark` (projection)
+
+Which team got which keyword, in a `DSMTW_FINALE` round. Cannot reuse `game_answer`: that is
+unique per `(question, team)`, and one team may claim several keywords on one question.
+
+```ts
+export const gameKeywordMark = sqliteTable('game_keyword_mark', {
+  id:               text('id').primaryKey().$defaultFn(uuidv7),
+  gameId:           text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
+  gameQuestionId:   text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
+  gameKeywordId:    text('game_keyword_id').notNull().references(() => gameQuestionKeyword.id, { onDelete: 'cascade' }),
+
+  // Null when the keyword was never guessed and the master revealed it (D50).
+  teamId:  text('team_id').references(() => gameTeam.id, { onDelete: 'cascade' }),
+
+  markedAt: integer('marked_at', { mode: 'timestamp_ms' }).notNull(),
+
+  // Set by KEYWORD_UNMARKED when the master mis-marked. Revoked rows are excluded from
+  // scoring and from the room's view, but never deleted — the D41 revoke-never-delete
+  // pattern, and it matters here because a wrongly-marked keyword also charged every other
+  // team a penalty that must be reversed.
+  revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
+}, (t) => ({
+  oneMarkPerKeyword: uniqueIndex('game_keyword_mark_unique_idx').on(t.gameKeywordId),
+  byQuestion:        index('game_keyword_mark_question_idx').on(t.gameQuestionId),
+}))
+```
+
+`teamId` is **nullable on purpose**: a revealed-but-unguessed keyword still gets a row, so
+review can distinguish *"nobody got it"* from *"we never reached that question"*.
+
+### 6.8 `game_answer_draft` — **not** a projection
 
 Debounced in-progress answers (D8). Deliberately its own table rather than columns on
 `game_answer`, so that `game_answer` remains a pure projection and **I15
@@ -718,7 +810,7 @@ what surfaces the D26 "not confirmed by team" marker.
 The composite primary key `(gameQuestionId, teamId)` makes the upsert natural and
 enforces one draft per team per question without a separate constraint.
 
-### 6.8 `game_score_adjustment` (projection)
+### 6.9 `game_score_adjustment` (projection)
 
 ```ts
 export const gameScoreAdjustment = sqliteTable('game_score_adjustment', {
@@ -760,6 +852,7 @@ createGame(quizId, teams[]) →
     3. copy jeopardy_category → game_jeopardy_category
     4. copy question          → game_question          (remap roundId, categoryId)
     5. copy accepted_answer   → game_accepted_answer   (remap questionId)
+    5b. copy question_keyword → game_question_keyword  (remap questionId)
     6. copy question_option   → game_question_option   (remap questionId)
     7. copy attachment        → game_attachment        (same checksum — no file copy)
     8. insert game_team rows
@@ -900,6 +993,12 @@ validation.
 | **I10** | At most one `game_buzz` per `(game, question)` has `outcome = 'AWAITING'`. |
 | **I11** | `game_device` count per `(gameId, teamId)` ≤ `KWIZ_MAX_DEVICES_PER_TEAM` (D20). |
 | **I12** | `question.timerMs` is null or > 0. Zero is not "no timer"; null is. |
+| **I17** | A `DSMTW_FINALE` question has **exactly 5** `question_keyword` rows, positions 0–4 (D50). |
+| **I18** | `answerMethod = 'KEYWORDS'` **iff** the round's `type = 'DSMTW_FINALE'`. No other method is legal there, and `KEYWORDS` is illegal anywhere else. |
+| **I19** | `keyword.wordLengths` equals the per-word character counts of `keyword.text`, recomputed on every write (D53). A stale shape is a hint that lies. |
+| **I20** | At most one `DSMTW_FINALE` round per quiz, and its `position` is the highest in the quiz (PRD 1 §8.8). |
+| **I21** | `game_keyword_mark.teamId` is null **only** for a keyword revealed unguessed; a mark created by the master marking a guess always carries a team. |
+| **I22** | A team with `eliminatedAt` set accrues no further penalty and takes no further turn. Its clock is frozen at zero. |
 | **I13** | A game-copy subtree is structurally identical to its source at copy time — same counts, positions, and shared-column values at every level (§7.2). |
 | **I14** | `game_answer.selectedOptionId`, when set, belongs to that answer's `gameQuestionId`. A real FK guarantees existence but not *which question* it belongs to. |
 | **I15** | Every projection table's contents equal a replay of `game_event` for that game — verified by rebuild-and-compare. |
@@ -917,9 +1016,10 @@ Per-game copies make deletion far simpler than a shared-content design would.
 | Deleting | Behaviour |
 | --- | --- |
 | `quiz` | Cascades through the template subtree. **Always allowed, even with games** — every game owns its own copy, so no history is lost. Affected games' `sourceQuizId` and `sourceId`s go null; `game.quizName` preserves the display title. |
-| `game` | Cascades to its copy subtree, teams, devices, events, drafts and all three projections. Offered per game from PRD 2 §11.1; there is no bulk prune (Q5). |
+| `game` | Cascades to its copy subtree, teams, devices, events, drafts and all four projections. Offered per game from PRD 2 §12.1; there is no bulk prune (Q5). |
 | `round` / `question` / etc. (template) | Cascades downward. Never touches game copies. |
 | `attachment` (template) | Row deleted; **file survives** if any `game_attachment` still references its checksum (§8). |
+| `question_keyword` | Cascades with its question. Editing keywords recomputes `wordLengths` (I19) |
 | `game_team` mid-game | Not offered. Removing a team would orphan answers and rewrite scores. Config pages allow **renaming and recolouring**, never deletion. |
 | `game_event` | Never. Append-only. |
 | Game-copy rows individually | Never. Only via deleting the game. |
@@ -961,7 +1061,7 @@ Specific to this schema:
 | # | Question | Recommendation |
 | --- | --- | --- |
 | ~~Q4~~ | ~~Re-sync a `SETUP` game from its template~~ | **Resolved: allowed.** Copy subtree replaced, game/code/teams/devices preserved, refused once answers or buzzes exist (§7.1). |
-| ~~Q5~~ | ~~Prunable games~~ | **Resolved: per-game delete only, no bulk pruning.** Deleting one game belongs on the game detail page (PRD 2 §11.1) — it's the master's own data. Bulk pruning would solve a storage problem that doesn't exist: a game copy is ~100–200 rows, and attachment files are shared by checksum so they never duplicate. |
+| ~~Q5~~ | ~~Prunable games~~ | **Resolved: per-game delete only, no bulk pruning.** Deleting one game belongs on the game detail page (PRD 2 §12.1) — it's the master's own data. Bulk pruning would solve a storage problem that doesn't exist: a game copy is ~100–200 rows, and attachment files are shared by checksum so they never duplicate. |
 | ~~Q6~~ | ~~`game_attachment` dedup within a game~~ | **Resolved: one row per `(question, attachment)`.** `position` and `showOnPlayerDevices` are legitimately per-question — the same image may be projector-only on one question and pushed to phones on another. The *file* is already deduplicated by checksum (§8). |
 
 ---

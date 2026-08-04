@@ -19,6 +19,7 @@ surface PRD conflicts with them, the spec wins:
 | --- | --- |
 | [Data model](../spec/data-model.md) | Drizzle schema, entities, relationships, ID policy |
 | [Realtime & export](../spec/protocol.md) | Event catalogue, role-filtered payloads, zip format |
+| [Conventions](../spec/conventions.md) | Toolchain, code alphabet, team palette, error codes, timing constants, i18n keys |
 
 And one document that is **not** a spec but a working agreement:
 
@@ -92,6 +93,7 @@ over scalable ones throughout.
 - **Concurrent SSE connections:** ~25 per game (20 phones + main screen + control +
   spares), so ~125 at the five-game ceiling
 - **Rounds per quiz:** up to 15 · **Questions per round:** up to 40
+- **`DSMTW_FINALE`:** at most one per quiz, last round, 5 keywords per question, ≥2 finalists
 - **Attachment size:** up to 50 MB per file, ~2 GB per quiz
 
 At this scale a single Node process with an in-memory projection is not a
@@ -119,8 +121,8 @@ Explicitly out of scope. Listed so they don't get built by accident.
   answers exist in exactly one language, as authored (§9.4).
 - **Mobile apps.** Mobile web only.
 - **Public quiz library / sharing marketplace.** The zip file is the sharing mechanism.
-- **Round types beyond `QUESTION_SET` and `JEOPARDY`.** The schema is built to
-  extend (§8.3), but only these two ship.
+- **Round types beyond `QUESTION_SET`, `JEOPARDY` and `DSMTW_FINALE`.** The schema is built
+  to extend (§8.3), but only these three ship.
 
 ---
 
@@ -147,7 +149,7 @@ answer key"*:
 
 **Hard rule for internet deployment:** if this server is exposed publicly, the game
 code is the only thing standing between a stranger and your quiz. Codes are
-therefore drawn from a large enough space to resist casual guessing (§8.10), but
+therefore drawn from a large enough space to resist casual guessing (§8.11), but
 **public exposure is at the operator's risk and is not a supported configuration.**
 
 ---
@@ -189,7 +191,7 @@ knowingly rather than re-argued from scratch.
 | D28 | **Full EN/NL parity on the player and main screens; config and control are i18n-wired but English-first if effort needs trimming** | Guest-facing surfaces must speak the room's language. The master is one known person who can work in English. Halves the copy-specification burden with no architectural difference. | — |
 | D29 | **A game carries a default player language, defaulting to `en`** | With `Accept-Language` dropped (D17), this is the only thing that gets a Dutch room into Dutch without twelve people each tapping a switcher. Overrides the default, never a player's explicit choice. | — |
 | D30 | **Jeopardy turn order is a computed rule, displayed authoritatively, overridable by the master** | Lowest score picks first; whoever answers correctly picks next; nobody correct falls back to lowest score. A real rule rather than a hint, but never a hard block — a locked UI in a live room is a trap (§8.6). | — |
-| D31 | **No partial credit on free-text answers** | Accept or deny only. The rare "half right" case is covered by manual score adjustment (§8.8) without adding a scoring dimension to every surface and every payload. | — |
+| D31 | **No partial credit on free-text answers** | Accept or deny only. The rare "half right" case is covered by manual score adjustment (§8.9) without adding a scoring dimension to every surface and every payload. | — |
 | D32 | **Tied teams share a rank, displayed as a visible tie. No tiebreaker round** | Honest, and a tiebreaker round is a whole round type's worth of design for an occasional event a master can handle verbally. | — |
 | D33 | **The authoring UI exposes alternative accepted answers** | With matching at lowercase+trim (D22), alternatives are the only tool a master has to keep obvious variants out of the live validation queue. | — |
 | D34 | **Every Jeopardy tile is a buzzer question. The answer method is not configurable on a tile** | Buzzer adjudication always resolves to exactly one credited team or none — which is precisely the condition D30’s turn rule needs. It is also what makes the pick-passing rule meaningful: a simultaneous-answer tile has no single winner to hand the next pick to. | — |
@@ -204,9 +206,19 @@ knowingly rather than re-argued from scratch.
 | D43 | **Submission is final and first-write-wins.** The player UI locks after submit; the server accepts the first submission per (question, team) and rejects later ones, returning the canonical answer | Not a technical block — §4 still trusts players — but the *product* rule: handing in your answer is handing it in, as with a paper sheet. First-write-wins matters because of multi-device teams (D20): under last-write-wins, a second device that was mid-typing would silently overwrite the first device’s deliberate submission. Because nothing changes after submission, a validated verdict can never go stale. | — |
 | D44 | **Selecting is not submitting.** Typing and option-selection stay freely reversible; only an explicit Submit is final | Without this, D43 makes a mis-tap on a phone unrecoverable — and mis-tapping a radio option with a thumb is easy. The buzzer is the deliberate exception: the buzz *is* the action, and its immediacy is the whole point. | — |
 | D45 | **A team’s draft is shared across all of its devices** via the pushed view | Makes D20’s "all of a team’s devices see identical state" true rather than aspirational, and means two devices cannot diverge in the first place — so D43’s reject path is a rare safety net rather than a routine occurrence. | — |
-| D46 | **`SKIPPED` is a terminal question state**, reachable from `PENDING` or `OPEN` | PRD 2 §9’s *play anyway* deliberately creates questions the master intends to skip, and a master may abandon an open question whose audio turns out to be broken. Without an explicit state, "skipped" and "never reached" are indistinguishable in the timeline, on the main screen and in review. Awards nothing; answers already submitted stay recorded and are marked *question skipped*. | — |
+| D46 | **`SKIPPED` is a terminal question state**, reachable from `PENDING` or `OPEN` | PRD 2 §10’s *play anyway* deliberately creates questions the master intends to skip, and a master may abandon an open question whose audio turns out to be broken. Without an explicit state, "skipped" and "never reached" are indistinguishable in the timeline, on the main screen and in review. Awards nothing; answers already submitted stay recorded and are marked *question skipped*. | — |
 | D47 | **The master may submit an answer on a team’s behalf, flagged as master-entered** | PRD 1 §14 already names this as the mitigation for unusable wifi — without it, a team whose phone cannot reach the server is out of the quiz entirely. Flagged because an unflagged proxy answer makes the review log assert something untrue: that the team typed it. This is the sole exception to D43’s finality, and it resets the verdict. | — |
 | D48 | **Player devices keep the screen awake via `nosleep.js`.** Scoped to player devices only | A phone locking mid-question is the most common way a team loses a question they knew. `navigator.wakeLock` needs a secure context and the LAN is plain HTTP (§6.10), so it is `undefined` exactly where it is needed — `nosleep.js` uses it where present and falls back to a muted looping video, which works over HTTP on iOS and Android. Using the library rather than hand-rolling gets the `playsinline`/codec/browser-quirk handling that this technique needs. The projected screen is excluded: it runs on the master’s own laptop, where display sleep is an OS setting they can set once. | LAN HTTPS ever becomes practical |
+| D49 | **A journey-based end-to-end browser suite is built after the surfaces exist**, covering the flows the PRDs document | Not a contradiction of D18 — that is about unit-test coverage, whereas E2E answers whether documented behaviour survives being wired together. Justified here by a public, unrecoverable failure mode, by most of the subtle rules being cross-surface, and by one assertion that exists only at this level: that no secret crosses the wire into a player’s browser. Journey-based, never exhaustive. | — |
+| D50 | **A third round type: `DSMTW_FINALE`** — keyword questions played as a timed, elimination final round | Modelled on the Flemish game show *De Slimste Mens ter Wereld*. Named for the format rather than generically, so a future differently-shaped finale can be added beside it rather than overloading one type. Full mechanics in §8.7. | — |
+| D51 | **The finale decides the final ranking outright; points are shown alongside, not summed** | Points are *spent* to buy seconds, so they are gone. Ranking is survival order. The `FINISHED` screen carries **two tabs** — elimination result and total points earned — because the points view stays interesting even though it no longer decides anything. | — |
+| D52 | **Every clock is derived from event timestamps. No server timer exists** | `remaining = startingSeconds − Σ turn durations − penalties − (now − currentTurnStart)`. Consistent with D4 and D8: nothing in this system enforces time server-side. It also means a restart mid-turn recovers every clock exactly, for free. | — |
+| D53 | **An unguessed keyword’s text never reaches the room. Only its word-length shape does** | "Blurred" cannot mean sending the text and blurring it in CSS — that is §7 invariant 8 and devtools reads the answers. The payload carries `wordLengths` (`"i like cows"` → `[1,4,4]`), so the room sees three blurred words of the right shape. A real hint, deliberately given, with no secret transmitted. | — |
+| D54 | **The per-keyword penalty and the points→seconds rate are authored as defaults and overridable while `SETUP`** | The right penalty depends on how many teams are playing, which is only known at game setup. Overridden by a `FINALE_CONFIGURED` event rather than by editing the game copy, which I16 forbids. | — |
+| D55 | **Finalists are chosen by the master when the round opens; the default is every team** | Scores are only final at that moment. Defaulting to all teams keeps the master in control rather than the app deciding who is worthy; presenting them in descending score order makes deselecting the bottom few a two-second job. Minimum two finalists. | — |
+| D56 | **No floor on converted seconds — 0 points is 0 seconds and immediate elimination** | Your time is what you earned. The finalist picker shows each team’s converted seconds, so a `0s · out immediately` row is visible while the master is still choosing rather than discovered live. | Masters report it lands badly in the room |
+| D57 | **Finale clocks are shown as whole seconds — `120`, never `2:00`** | The entire round is mental arithmetic against a penalty measured in seconds: a master and a room subtracting 20 from `2:00` are doing a base-60 conversion under time pressure, while `120 → 100` is instant. Comparing two teams is also immediate when both are plain integers. Applies to finale banks only — break countdowns and media durations stay `m:ss`, because neither is arithmetic. | — |
+| D58 | **The authoring and setup UIs compute and show a suggested question count** | A finale that runs out of questions with three teams still alive falls back to "most seconds wins", which is a flat ending to the most dramatic round. The needed count is not guessable — it swings from 4 to 16 questions on a fourfold penalty change — so it is simulated and shown, recomputed live as the penalty and team count change. **Over-supplying is free**: the round ends when one finalist remains, whatever questions are left. Under-supplying breaks the finale. So the suggestion errs high and the shortfall is a warning, never a block. | — |
 
 ### 5.1 Timer mechanics (consequence of D7 + D8)
 
@@ -444,8 +456,10 @@ anything a quiz master should decide belongs in the UI, not in an env var.
 | `KWIZ_AUTO_MIGRATE` | unset | Apply pending migrations without prompting (§6.7) |
 | `KWIZ_MAX_UPLOAD_MB` | `50` | Per-attachment upload limit (§2.1) |
 
-All are read and validated **once at boot** through a single typed config module, which
-fails fast with a clear message on an invalid value. No `process.env` access anywhere
+All are read and validated **once at boot** through a single typed config module — a zod
+schema with the types inferred from it — which fails fast with a clear message on an
+invalid value. `KWIZ_MAX_DEVICES_PER_TEAM=abc` must stop the server, not become `NaN` and
+silently admit unlimited devices. No `process.env` access anywhere
 else in the codebase, and never in `packages/domain`.
 
 `KWIZ_MAX_DEVICES_PER_TEAM` is enforced server-side on join. When a team is at its cap,
@@ -561,6 +575,9 @@ field that must not be displayed is **absent from the payload**, not falsy in it
    `MAIN_SCREEN` or `PLAYER`, in any state. Introduced by `DO` questions (§8.6) but
    available on every question type, since "don't accept 'Paris' if they mean the
    person" is a note the master wants everywhere.
+8. A `DSMTW_FINALE` keyword's **text** never appears in a `MAIN_SCREEN` or `PLAYER` payload
+   until that keyword is marked as guessed or revealed (D53). Only its `wordLengths` shape
+   does. Blurring transmitted text in CSS is a leak, not a filter.
 
 > **Design note.** Invariant 5 has a real consequence: the main screen cannot
 > pre-load a tile's media, so there may be a visible fetch delay when a Jeopardy
@@ -633,6 +650,7 @@ Used consistently in code, UI copy, and all PRDs.
 | **Round** | An ordered section of a quiz with a `roundType`. |
 | **Question** | A single scorable item within a round. |
 | **Attachment** | An image, audio or video file bound to a question. |
+| **Keyword** | One of the 5 accepted terms on a `DSMTW_FINALE` question (§8.8). Guessed aloud, marked by the master. |
 | **Game** | One playthrough of a quiz. Your "quiz instance". Has its own teams, answers, scores, and event log. |
 | **Team** | A group playing in one game, with a name and colour chosen by the master. |
 | **Device** | One browser playing on behalf of a team. |
@@ -647,7 +665,7 @@ game-scoped tables, and the game plays and is reviewed entirely from its own cop
 mutable.
 
 Multiple games may be live at once, and none of them is "the current game" — see
-§8.9, which every surface must respect.
+§8.10, which every surface must respect.
 
 ### 8.2 Identifiers
 
@@ -669,12 +687,18 @@ validated JSON `config` column, with a zod schema per type. Adding a round type
 means adding a schema, a domain reducer, and one component per surface — touching
 no existing round type and requiring no migration.
 
-Ships with `QUESTION_SET` and `JEOPARDY`.
+Ships with **`QUESTION_SET`** (§8.4), **`JEOPARDY`** (§8.7) and **`DSMTW_FINALE`** (§8.8).
+
+`DSMTW_FINALE` is the proof the extension point works: it added a table pair for keywords and
+a set of events, but no existing round type changed. It is also the first type with a
+*positional* constraint — at most one per quiz, and it must be last.
 
 ### 8.4 Answer methods
 
 **`QUESTION_SET` questions only.** Jeopardy tiles are always buzzer questions and have
-no answer-method setting (D34, §8.7).
+no answer-method setting (D34, §8.7). A fifth method, **`KEYWORDS`**, exists solely for
+`DSMTW_FINALE` questions and is illegal anywhere else (§8.8, I18) — it is not an option a
+master ever picks.
 
 | Method | Player device shows | Scoring |
 | --- | --- | --- |
@@ -945,12 +969,111 @@ refuses to let the master proceed is a trap in a live room. Overrides are record
 events like everything else.
 
 **No automatic penalty for a wrong answer** in v1. Real Jeopardy deducts points; here
-the master can use manual score adjustment (§8.8) if they want that. Making it
+the master can use manual score adjustment (§8.9) if they want that. Making it
 automatic would need a per-round setting and interacts awkwardly with every answer
 method, for a house rule not everyone uses.
 
 
-### 8.8 Manual score adjustment (D15)
+### 8.8 `DSMTW_FINALE` — the timed keyword finale (D50)
+
+Modelled on the finale of the Flemish game show *De Slimste Mens ter Wereld*. It is a
+**final round only**: it consumes the teams' points and replaces the leaderboard as the way
+the game is decided.
+
+#### The shape
+
+- The round holds **keyword questions**: an open prompt — *"What do you know about Michael
+  Jackson?"* — with exactly **5 keywords or phrases** as its answers.
+- Teams guess **out loud**. Nothing is typed on any phone during this round.
+- The master marks each keyword as it is said. The room sees it unblur (D53).
+
+#### The twist: points become time
+
+At round open, each finalist's **points convert to a bank of seconds** at the authored rate
+(D54). Then:
+
+| Rule | Detail |
+| --- | --- |
+| **The guessing team's clock runs** | Ticking down for as long as it is their turn |
+| **A correct keyword costs every *other* remaining finalist the penalty** | Default 20 s (D54). Eliminated teams lose nothing further |
+| **Fewest seconds goes first** | Recomputed live, so the team most in trouble always speaks next |
+| **Drying up passes the question on** | To the next-fewest-seconds team that hasn't yet passed *this question* |
+| **Zero seconds is elimination** | Immediate, and it can happen off-turn — a penalty can take a waiting team to zero |
+| **Between turns, no clock runs** | The master hands over explicitly; nobody is charged for the handover |
+| **Every clock reads as whole seconds** | `120`, never `2:00` (D57). The round is arithmetic; base-60 conversion under pressure is not |
+
+#### Deriving a clock (D52)
+
+There is no server timer. Every clock is a pure function of the event log:
+
+```
+remaining(team) =
+    startingSeconds(team)                                  from the conversion at round open
+  − Σ (turnEndedAt − turnStartedAt)   over that team's turns
+  − penaltySeconds × (keywords marked for other teams while this team was still in)
+  − (now − turnStartedAt)             if this team is currently on turn
+```
+
+Clients render a countdown from the current turn's start; nothing is authoritative but the
+event timestamps. A server restart mid-turn recovers every clock exactly.
+
+#### Question lifecycle
+
+Maps onto the existing state machine (§7.1) without a new one:
+
+| State | Meaning here |
+| --- | --- |
+| `OPEN` | Teams are taking turns guessing |
+| `LOCKED` | All 5 found, or every remaining finalist has passed |
+| `REVEALED` | Master has shown the keywords nobody got |
+| `SCORED` | Done; move on |
+
+Unguessed keywords are revealed **per question, master-triggered** — the room learns the
+answers while they still care, and the master keeps the beat to say *"nobody? it was Billie
+Jean."*
+
+#### Ending, and the final ranking (D51)
+
+The round ends when **one finalist remains**, when **all finalists are eliminated**, or when
+**the questions run out**.
+
+| Position | Determined by |
+| --- | --- |
+| 1st | Last finalist standing. If the questions ran out first, most seconds remaining |
+| 2nd … | Reverse order of elimination — last out is second, first out is last among finalists |
+| Below the finalists | Non-finalists, ranked among themselves by points |
+
+**Simultaneous elimination shares a rank.** Two teams on identical seconds, taken to zero by
+the same keyword's penalty, are eliminated at the same computed instant and tie — consistent
+with D32 everywhere else. In the degenerate case where *every* finalist is eliminated by one
+keyword, there is **no winner**, and the result shows a shared first place. It is a reachable
+outcome with equal banks and a high penalty, so it is defined rather than left to whatever the
+sort happens to do.
+
+**Points do not carry into the result.** They were spent. The `FINISHED` screen therefore
+shows two tabs — the elimination result, and total points earned — because the points view is
+still worth seeing even though it decides nothing (PRD 4).
+
+#### Constraints
+
+- **A finale is optional.** Most quizzes won't have one, and nothing requires it.
+- **Enough questions to plausibly reach one survivor.** Not enforced — a master may know
+  their room — but computed and shown while authoring and again at game setup (D58,
+  PRD 2 §9). Running out of questions is a legal ending, just a flat one.
+- **But at most one per quiz, and it must be the last round.** The authoring UI *prevents*
+  both violations rather than reporting them later — the round-type picker stops offering
+  `DSMTW_FINALE` once one exists, and no round can be placed after it (PRD 2 §6). Pre-flight
+  re-checks as a backstop (PRD 2 §10, I20).
+- **Exactly 5 keywords per question**, no more, no fewer.
+- **At least 2 finalists**, or there is no contest.
+- Attachments work as on any question, though a keyword question rarely needs one.
+
+> **Design note on the penalty.** It does not scale with team count: 5 keywords × 8 teams at
+> 20 s removes up to 700 s from a 960 s pool, ending the round in roughly one and a half
+> questions. This is why the penalty is configurable at setup (D54) and why the authoring UI
+> shows the arithmetic. The master is trusted with it — but they must be *shown* it.
+
+### 8.9 Manual score adjustment (D15)
 
 The master can add or subtract any number of points from any team **at any moment** —
 between rounds, mid-question, after the game has finished — with an **optional
@@ -993,7 +1116,7 @@ checkbox costs one control and covers the case where the master needs discretion
 > it was announced. Suppressing the announcement hides it from the room, never from
 > the audit trail.
 
-### 8.9 Game scoping (D21)
+### 8.10 Game scoping (D21)
 
 Multiple games may be live simultaneously, so **there is no such thing as "the current
 game"** anywhere in the system. This is stated as an invariant because it's the kind of
@@ -1012,7 +1135,7 @@ removing it means touching everything.
 - Every event, subscription, and broadcast is scoped to one game. A broadcast must not
   be able to reach a subscriber of a different game — this is worth a test, because it
   fails silently and only under concurrency.
-- Game codes are unique across all **active** games (§8.10).
+- Game codes are unique across all **active** games (§8.11).
 - Devices bind to `(gameId, teamId)`. A device holding a stale `gameId` for a finished
   game gets a clear "this game has ended" state, not an error.
 
@@ -1021,11 +1144,13 @@ The config dashboard lists games and offers "open control screen" / "open main s
 per game, each yielding a URL the master opens on the relevant display. There is no
 "project the current game" shortcut, because there is no current game.
 
-### 8.10 Game codes
+### 8.11 Game codes
 
-- 6 characters, uppercase, from a 26-character alphabet excluding visually
-  ambiguous glyphs (no `0`/`O`, `1`/`I`/`L`, `U`/`V`) — because these get read
-  aloud across a noisy room and typed by hand.
+- 6 characters from **Crockford Base32** — `0123456789ABCDEFGHJKMNPQRSTVWXYZ`, which
+  excludes `I`, `L`, `O` and `U`. An existing standard designed for humans reading and
+  re-typing codes, which is exactly the job: read aloud across a noisy room, typed by
+  someone squinting at a projector. Exact alphabet and normalisation rules in
+  [conventions §2](../spec/conventions.md).
 - Unique among **active** games only; retired codes are reusable.
 - Case-insensitive and whitespace-insensitive on entry.
 - The QR code encodes a full join URL including the code, so scanning skips entry
@@ -1211,11 +1336,11 @@ audience, or destroys data:
 | Question state machine (§7.1) | Every surface's behaviour derives from it |
 | Payload filtering invariants 1–7 (§7) | You cannot un-show an answer at a live event |
 | Answer normalisation & matching (O6) | Silently marking a correct answer wrong is the worst possible bug |
-| Scoring, incl. `DO` modes and manual adjustments (§8.6, §8.8) | Wrong totals invalidate the whole night |
+| Scoring, incl. `DO` modes and manual adjustments (§8.6, §8.9) | Wrong totals invalidate the whole night |
 | Buzz ordering, and the buzz/deny/reopen loop (§8.4) | Contested by definition, must be deterministic given an event sequence — and the lockout loop has states (all teams locked out, timer paused mid-adjudication) that are tedious to reach by hand |
 | Export → import round-trip | Data loss, and the one operation with no undo |
 | Reconnect replay from `seq` (§6.5) | Fails only under conditions nobody tests manually |
-| Game isolation with two live games (§8.9) | Cross-game leakage fails silently and only under concurrency — never caught by hand |
+| Game isolation with two live games (§8.10) | Cross-game leakage fails silently and only under concurrency — never caught by hand |
 
 **Explicitly not worth testing:** presentational components, layout, styling, and
 anything whose failure is immediately visible the first time you look at the screen.
@@ -1234,8 +1359,27 @@ const state = reduce([
 expect(state.scores[teamA]).toBe(10)
 ```
 
-Integration tests are worth writing for exactly one thing: the full
-**author → export → import → play → score** path, once, as a smoke test.
+### 11.2 End-to-end browser tests (D49)
+
+Separately from the unit bar above, a **journey-based end-to-end suite** is built once the
+surfaces exist (build-order slice 9). This is not a contradiction of D18: that decision is
+about not chasing unit-test coverage percentages. E2E here answers a different question —
+*does the documented behaviour actually work once four surfaces are wired together?*
+
+It earns its place for three reasons specific to this product:
+
+- **The failure mode is public and unrecoverable.** "It broke in front of a room" is the
+  risk the whole design optimises against.
+- **Most of the subtle rules are cross-surface** — buzz ordering, submission finality,
+  shared drafts, cross-game isolation, payload filtering. Unit tests prove the logic; only
+  E2E proves the wiring.
+- **One test can only exist at this level:** a **network-level sentinel assertion** that no
+  secret crosses the wire into a player's browser. §7's unit sentinel test proves the filter
+  function is correct; this proves the filter is the thing actually being used.
+
+**Journey-based, not exhaustive.** Scenarios derive from the flows the PRDs document, not
+from enumerating controls. Full scenario list in
+[build-order slice 9](../build-order.md).
 
 ---
 
@@ -1252,7 +1396,7 @@ Blocking items are marked. Nothing below has been assumed in this document.
 | ~~O2~~ | ~~Database layer~~ | **Resolved → D14.** Drizzle + `better-sqlite3`, migrations prompted on boot (§6.7). | — |
 | ~~O3~~ | ~~Word for a playthrough~~ | **Resolved → D19.** "Game". | — |
 | ~~O4~~ | ~~Multiple devices per team~~ | **Resolved → D20.** Allowed, cap via `KWIZ_MAX_DEVICES_PER_TEAM`, default 3 (§6.8). | — |
-| ~~O5~~ | ~~Concurrent games~~ | **Resolved → D21.** Multiple concurrent games supported; everything explicitly scoped to a `gameId`, nothing resolves "the current game" (§8.9). | — |
+| ~~O5~~ | ~~Concurrent games~~ | **Resolved → D21.** Multiple concurrent games supported; everything explicitly scoped to a `gameId`, nothing resolves "the current game" (§8.10). | — |
 | ~~O6~~ | ~~Free-text matching~~ | **Resolved → D22.** Lowercase + trim only (§8.4). | — |
 | ~~O7~~ | ~~Attachment visibility~~ | **Resolved → D27.** Audio/video main screen only; images main screen by default with a per-attachment player toggle (§8.5). | — |
 | ~~O8~~ | ~~Partial credit~~ | **Resolved → D31.** Accept/deny only; manual adjustment covers the rare case. | — |

@@ -79,7 +79,7 @@ forces the master to re-locate the button they need, every time.
 ### 2.1 The timeline
 
 `Q1✓ Q2✓ Q3✓ [Q4] Q5 Q6⚠ Q7` — current question bracketed, done ticked, and `⚠` marking
-a question that failed pre-flight (PRD 2 §9's *play anyway*).
+a question that failed pre-flight (PRD 2 §10's *play anyway*).
 
 **Clicking a past question navigates the timeline only — it does not reopen anything.**
 Questions are never re-opened for answers (§9.2). This is a read-only jump to see what
@@ -101,11 +101,13 @@ this order — highest first:
 | Priority | State | Rationale |
 | --- | --- | --- |
 | 1 | `ADJUDICATE_BUZZ` | The room is silent, waiting. Nothing is more urgent. |
-| 2 | `SCORE_DO` | A challenge just finished; teams are watching for a verdict. |
-| 3 | `BREAK_TIE_FOR_PICK` | The Jeopardy board is stalled until this resolves. |
-| 4 | `VALIDATE_QUESTION` | Needed before scores are honest, but the room isn't blocked. |
-| 5 | `ADVANCE` | Nothing is wrong; the master decides the pace. |
-| 6 | `NONE` | Show the leaderboard. |
+| 2 | `FINALE_TURN` | Clocks are running and every second costs a team. Only a buzz outranks it, and the two cannot co-occur. |
+| 3 | `SCORE_DO` | A challenge just finished; teams are watching for a verdict. |
+| 4 | `BREAK_TIE_FOR_PICK` | The Jeopardy board is stalled until this resolves. |
+| 5 | `PICK_FINALISTS` | The finale cannot start until it resolves, but no clock is running yet. |
+| 6 | `VALIDATE_QUESTION` | Needed before scores are honest, but the room isn't blocked. |
+| 7 | `ADVANCE` | Nothing is wrong; the master decides the pace. |
+| 8 | `NONE` | Show the leaderboard. |
 
 **The UI never shows two competing primary zones.** If something lower-priority is
 waiting, it appears as a quiet count in the right rail (*"3 answers to validate"*), never
@@ -143,7 +145,7 @@ The attention zone updates behind it and the popover gets a one-line notice:
 - `[Start the quiz]` is enabled even with teams unjoined — PRD 1 flow step 10 explicitly
   does not block joins after start, and a team that's still ordering drinks shouldn't
   hold up the room. No confirmation, per §1.1.
-- The QR code and join URL live on PRD 2 §11's game detail page, which is where the
+- The QR code and join URL live on PRD 2 §12's game detail page, which is where the
   master has been while people arrive. Control shows the code in its header; it does not
   duplicate the QR — this screen is for starting, not for joining.
 
@@ -155,7 +157,7 @@ The attention zone updates behind it and the popover gets a one-line notice:
 
 ```
 ┌─ ATTENTION ─────────────────────────────────────────────┐
-│  Q4 · FREE TEXT · 10 pts                        0:18 ⏱  │
+│  Q4 · FREE TEXT · 10 pts                          18s ⏱  │
 │                                                         │
 │  Who released "Kid A" in 2000?                          │
 │                                                         │
@@ -286,7 +288,7 @@ unanswerable. Judging `Radio Head` in isolation, they cannot see they just accep
 The same grouping is used inline in §5.1, so this is one component in two places rather
 than two designs.
 
-It is the same argument as PRD 2 §12.1's review grid, and it respects D39's bounded-view
+It is the same argument as PRD 2 §13.1's review grid, and it respects D39's bounded-view
 rule because a group is O(teams) — at most 20 rows.
 
 Protocol §5.4 carries this as `attention.VALIDATE_QUESTION` with `items:
@@ -320,7 +322,7 @@ QUESTION_SET round, the admin is shown each question with each team's answer"*.
 
 **Closing a round with validations outstanding is allowed**, and closing the *game* with
 them outstanding is too. Scores simply aren't final: the main screen's leaderboard carries
-a *"scores provisional"* marker so the room isn't misled, and PRD 2 §12.1's review grid
+a *"scores provisional"* marker so the room isn't misled, and PRD 2 §13.1's review grid
 remains available indefinitely. Blocking the master from moving on would be the one thing
 worse than provisional scores.
 
@@ -456,7 +458,7 @@ Opening a tile runs §7's buzzer flow, since every tile is a buzzer question (D3
 
 ### 9.1 Skipping a question
 
-A question marked `⚠` by pre-flight (PRD 2 §9), or one the master simply decides against,
+A question marked `⚠` by pre-flight (PRD 2 §10), or one the master simply decides against,
 can be skipped from the overflow menu: `[Skip this question]`.
 
 Skipping emits `QUESTION_SKIPPED` and moves the question to the terminal `SKIPPED` state
@@ -475,15 +477,144 @@ Stated plainly because the absence is deliberate:
 | --- | --- | --- |
 | Re-opening a locked question for answers | Teams have seen the answer; re-opening is not a fair state | — |
 | Editing a question's text or answers mid-game | Game copies are write-once (data model I16) | Template edit + next game |
-| Deleting a team | Would orphan answers and rewrite scores | Rename/recolour instead (PRD 2 §12.3) |
+| Deleting a team | Would orphan answers and rewrite scores | Rename/recolour instead (PRD 2 §13.4) |
 | Un-revealing an answer | The room has seen it | — |
+| Un-eliminating a team | Their clock genuinely reached zero, and the ranking depends on the order | Un-mark a keyword (§10.4) if the elimination was caused by a mis-marked penalty |
 
 **Every scoring mistake is correctable** — via re-validation (§6.1) or a score adjustment
 (§10) — which is what makes refusing the above acceptable.
 
 ---
 
-## 10. Score adjustment
+## 10. `DSMTW_FINALE` (D50)
+
+The most time-pressured screen in the product. Clocks are running, the room is watching, and
+every keyword the master hears must be marked *now*. PRD 1 §8.8 has the mechanics; this is
+the desk.
+
+### 10.1 Picking finalists
+
+`attention: PICK_FINALISTS` when the round opens.
+
+```
+┌─ ATTENTION ─────────────────────────────────────────────┐
+│  Who plays the finale?          2 points = 1 second     │
+│                                                         │
+│   ☑ ● Quizzly Bears        340 pts  →  170s             │
+│   ☑ ● The Quizinart        310 pts  →  155s             │
+│   ☑ ● Norfolk & Chance     290 pts  →  145s             │
+│   ☑ ● Team 4                40 pts  →   20s             │
+│   ☐ ● Late Arrivals          0 pts  →    0s  out at once │
+│                                                         │
+│   Penalty per keyword: 20s → up to 320s off a 490s pool │
+│                                                         │
+│                              [ Start the finale ]        │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **Descending score order, all pre-selected** (D55). Deselecting the bottom few is then a
+  couple of clicks, which is the common case; the master never has to hunt.
+- **Converted seconds are shown next to points**, so the consequence of the conversion rate
+  is visible *before* the round rather than inferred during it.
+- **`0s · out at once` is spelled out** — D56 has no floor, so a team on zero points is
+  eliminated before speaking. The master should see that while choosing.
+- **The penalty arithmetic is restated live** against the actual finalist count, because it
+  is the one number that decides whether the round lasts five questions or one (PRD 1 §8.8's
+  design note).
+- Minimum two finalists; `[Start the finale]` stays disabled below that.
+
+### 10.2 The turn desk
+
+`attention: FINALE_TURN`. Everything the master needs, arranged for speed rather than
+completeness.
+
+```
+┌─ ATTENTION ─────────────────────────────────────────────┐
+│  Q3 of 6 · What do you know about Michael Jackson?      │
+│                                                         │
+│   ● NORFOLK & CHANCE            84        next: Team 4  │
+│                                                         │
+│   1  Thriller          ✓ Quizzly                        │
+│   2  Bad                                        [ mark ]│
+│   3  Moonwalk          ✓ Norfolk                        │
+│   4  Neverland                                  [ mark ]│
+│   5  Billie Jean                                [ mark ]│
+│                                                         │
+│                          [  Pass to Team 4  ]           │
+├─────────────────────────────────────────────────────────┤
+│  ● Quizzly 138   ● Quizinart 155   ● Team 4 91          │
+│  ● Late Arrivals — out 21:03                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Why it's shaped like this:**
+
+- **The current team's name and clock dominate.** The master says the name aloud and watches
+  that number; both must be readable without focusing.
+- **Clocks are whole seconds, never `m:ss`** (D57). `84 → 64` after a penalty is instant; `1:24 → 1:04` is a base-60 conversion the master does not have spare attention for.
+- **`next:` is always visible.** PRD 1 §8.8 recomputes order live, so "who's next" changes as
+  penalties land. Showing it means the handover needs no thought.
+- **Unmarked keywords are the buttons.** One click per keyword, no dialog, no confirmation.
+  A marked keyword becomes static text with the credited team — so the row list doubles as
+  the record of who got what.
+- **Marking never pauses the clock.** The room's time keeps running while the master clicks,
+  exactly as the show works. Only a handover stops it.
+- **Every clock is on screen at all times**, in the bottom strip. The master is asked "how
+  long have I got?" constantly, and a team about to be eliminated by someone else's correct
+  guess is the thing they most need to see coming.
+- **`[Pass to <next team>]` names the team**, so the handover is one deliberate click rather
+  than a generic "next" the master has to interpret.
+
+### 10.3 Keyboard
+
+This round earns its own bindings, because clicking five buttons under time pressure is
+where a master falls behind the room:
+
+| Key | Action |
+| --- | --- |
+| `1`–`5` | Mark that keyword |
+| `Space` | Pass to the next team |
+| `Shift`+`1`–`5` | Un-mark (mis-heard) |
+
+`Space` for pass is the one deliberate overload of a common key in this product. It is safe
+because passing is *reversible in effect* — the next team starts, and the master can pass
+straight back — and because the alternative is the master looking down to find a button
+while a clock runs.
+
+### 10.4 Un-marking
+
+A mis-marked keyword is not merely a wrong tick: it **charged every other team the penalty**.
+`Shift`+`n` appends `KEYWORD_UNMARKED`, which reverses the mark *and* the time it took from
+everyone (protocol §4.6).
+
+This is why marks are revoked rather than deleted (D41): reversing seconds requires knowing
+exactly what was charged and to whom.
+
+### 10.5 Closing a question
+
+When all five are found, or every remaining finalist has passed:
+
+```
+   All teams passed · 1 unguessed        [ Reveal remaining ]
+```
+
+Master-triggered, so they keep the beat to say *"nobody? it was Billie Jean."* Then
+`[Next question]`. Clocks stop while nobody is on turn.
+
+### 10.6 Elimination and the end
+
+- A clock reaching zero eliminates immediately. Control detects it and posts the event; the
+  **server recomputes the exact instant from the log** so the ranking cannot be skewed by a
+  slow browser (protocol §4.6).
+- **Elimination can happen off-turn** — a penalty can take a waiting team to zero. The bottom
+  strip is where the master sees it, and the room needs to be told, so it is announced on the
+  main screen (PRD 4).
+- The round ends on one finalist left, all eliminated, or questions exhausted. Control then
+  shows the final ranking with its two tabs (D51) mirroring PRD 4's `FINISHED` stage.
+
+---
+
+## 11. Score adjustment
 
 Available at all times from the right rail (D15), per team.
 
@@ -508,7 +639,7 @@ Available at all times from the right rail (D15), per team.
 - Recent adjustments are listed with `[Undo]`, which appends
   `SCORE_ADJUSTMENT_REVOKED` (D41).
 
-### 10.1 Showing the leaderboard on demand
+### 11.1 Showing the leaderboard on demand
 
 `[Show scores on screen]` in the right rail pushes the leaderboard to the main screen
 mid-round (`SCOREBOARD_TOGGLED`). It **clears automatically when the next question opens**,
@@ -519,7 +650,7 @@ for the master finishing a long stretch of questions who wants to show standings
 pressing on — whose only alternative would be ending the round early, distorting the quiz's
 structure to work around a missing button.
 
-### 10.2 Starting a break
+### 11.2 Starting a break
 
 `[Start break]` in the overflow menu asks for one number — how many minutes — and puts the
 main screen into its `BREAK` stage with a countdown (PRD 4 §11).
@@ -541,7 +672,7 @@ main screen into its `BREAK` stage with a countdown (PRD 4 §11).
   re-issuing the same call — because "five more minutes" is the most predictable thing
   that happens during an interval.
 
-### 10.3 Entering an answer for a team
+### 11.3 Entering an answer for a team
 
 When a team's device cannot reach the server, the master can type their answer (D47). The
 control appears on the team's row in the answer list (§5.1) as
@@ -554,7 +685,7 @@ resets the verdict to unjudged.
 
 ---
 
-## 11. Edge cases & failure handling
+## 12. Edge cases & failure handling
 
 | Situation | Behaviour |
 | --- | --- |
@@ -567,7 +698,7 @@ resets the verdict to unjudged.
 
 ---
 
-## 12. Keyboard map
+## 13. Keyboard map
 
 The master has one hand free. Every high-frequency action is reachable without the
 trackpad.
@@ -578,8 +709,10 @@ trackpad.
 | `N` | Deny — same target |
 | `Enter` | The primary suggested action (open / close / reveal / next) |
 | `1`–`9` | Select team — `DO` winners, tie-breaks |
-| `Space` | Play/pause the current attachment |
 | `←` `→` | Move along the timeline (read-only, §2.1) |
+| `1`–`5` | Mark a finale keyword (§10.3) |
+| `Shift`+`1`–`5` | Un-mark a finale keyword |
+| `Space` | Play/pause an attachment — **or pass the finale turn** when a finale turn is active |
 | `Esc` | Close a popover |
 
 Deliberately **not** bound, because a stray keystroke during a live event must not be able
@@ -588,7 +721,7 @@ team's behalf (D47).
 
 ---
 
-## 13. Open questions
+## 14. Question log
 
 | # | Question | Recommendation | Affects |
 | --- | --- | --- | --- |
@@ -601,7 +734,7 @@ team's behalf (D47).
 
 ---
 
-## 14. Next
+## 15. Next
 
 [PRD 4 — the main screen](./04-main-screen.md): the projected surface, where D40's
 two-beat reveal, the buzz timings from §7, and O4's leaderboard toggle all have to look

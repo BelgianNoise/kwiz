@@ -53,10 +53,10 @@ Typed code →  landing page (PRD 2 §3) → /play/7KMQ2X →  team picker
 
 - **The QR encodes the full join URL including the code**, so scanning goes straight to
   the team picker with nothing typed (PRD 1 §8.10).
-- **The code is normalised on entry** — lowercase accepted, spaces stripped, and the
-  ambiguous glyphs the alphabet already excludes are mapped in anyway (`O`→`0` is *not*
-  needed since `0` isn't in the alphabet, but `l`→`1`-style slips are corrected). Someone
-  is squinting at a projector across a dark room.
+- **The code is normalised on entry**, in this order: strip whitespace and hyphens →
+  uppercase → map the excluded glyphs onto what they were mistaken for (`O`→`0`, `I`→`1`,
+  `L`→`1`) → validate. Someone is squinting at a projector across a dark room, so
+  `kmq2x` and `KMQ2X` and `kMQ-2X` all work. Exact rules: [conventions §2](../spec/conventions.md).
 
 ### 2.2 Team picker
 
@@ -79,7 +79,7 @@ Typed code →  landing page (PRD 2 §3) → /play/7KMQ2X →  team picker
 └──────────────────────────────┘
 ```
 
-- **Teams are created by the master** (PRD 2 §10) — players choose from a list and never
+- **Teams are created by the master** (PRD 2 §11) — players choose from a list and never
   name themselves. This is what keeps team identity under the master's control for
   scoring, and it means the picker needs no text input at all.
 - **Full teams are shown, not hidden**, with the reason (D20). Hiding a team makes a
@@ -128,6 +128,7 @@ Rendered from `PlayerView.stage` (protocol §5.3). Exactly one at a time.
 | `QUESTION` | The answer surface — §5–§8 by method |
 | `JEOPARDY_BOARD` | The board, read-only (§9) |
 | `BREAK` | Countdown to resume (§10) |
+| `FINALE` | The `DSMTW_FINALE` round, watch-only (§10.1) |
 | `FINISHED` | Final standings (§11) |
 
 ---
@@ -447,6 +448,51 @@ clock when the master set no duration.
 
 ---
 
+### 10.1 `FINALE` — watch-only
+
+The finale is played **out loud** (PRD 1 §8.8). Nothing is typed, tapped or buzzed, so this
+screen has no controls at all — but it is far from idle, because a team's clock is the most
+important number of their evening.
+
+```
+┌──────────────────────────────┐
+│  ● Quizzly Bears             │
+│          138                 │
+│                              │
+│  ─────────────────────────   │
+│  ● Norfolk & Chance          │
+│    guessing now    84        │
+│                              │
+│  1  ████████                 │
+│  2  Thriller      ● Quizzly  │
+│  3  ██████ ████              │
+│  4  Moonwalk      ● Norfolk  │
+│  5  ████ ████████            │
+│                              │
+│  You're up next.             │
+└──────────────────────────────┘
+```
+
+- **Whole seconds, never `m:ss`** (D57) — identical to the projector, so a table glancing between the two never has to reconcile two formats.
+- **Your own clock is the largest thing on the screen.** Not the keywords, not whose turn it
+  is — the number that decides whether your team survives. It is also what the table will
+  stare at while someone else guesses.
+- **"You're up next" when the team is `nextTeamId`.** Turn order is recomputed live, so a
+  team's position can change while they wait; telling them means the table is ready rather
+  than caught out.
+- **The same blurred word shapes as the main screen** (D53) — identical `wordLengths`, no
+  text until marked. A team huddled over a phone gets exactly what the room gets, which
+  matters because they will be reading their phone rather than looking up.
+- **The penalty is visible when it lands**: the clock jumps and briefly shows `−20s`. A number
+  that silently drops looks like a bug; a number that drops with a label is the game working.
+- **No input control of any kind** — not a disabled one (same rule as `DO`, §8.1). A greyed
+  field invites a team to try to type an answer that would never count.
+- **Non-finalists** get a spectator variant: the tiles, the clocks, and a line explaining they
+  are not in the finale and their placing is already set.
+- Eliminated teams see their own clock at `0` and `OUT`, and keep watching the rest.
+
+---
+
 ## 11. Reveal, scores and `FINISHED`
 
 At reveal the phone shows the team's **own** outcome. Never another team's answer — that
@@ -522,6 +568,7 @@ onTeamPicked(() => noSleep.enable())
 | --- | --- | --- |
 | Team picked | `enable()` | The gesture we already have |
 | `BREAK` starts | `disable()` | The phone is in a pocket at the bar; let it sleep |
+| `FINALE` | keep enabled | The table is watching a clock for several minutes without touching the screen — the one stretch where a phone would certainly lock, and the worst time for it |
 | Tab hidden | `disable()` | Nothing to keep awake for, and it would be lost anyway |
 | Tab visible again, game `LIVE` | `enable()` | Both mechanisms drop on backgrounding |
 | `FINISHED` / `ABANDONED` | `disable()` | |

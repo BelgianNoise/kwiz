@@ -140,8 +140,8 @@ Games                                                    [show finished ▾]
 ```
 
 - **`[Play]` is the primary action on a quiz**, not `[Edit]`. The verb a master reaches
-  for is "run this"; editing is the occasional act. `[Play]` runs pre-flight (§9) then
-  goes to game setup (§10).
+  for is "run this"; editing is the occasional act. `[Play]` runs pre-flight (§10) then
+  goes to game setup (§11).
 - **Live and setup games are pinned above finished ones**, and finished games are
   collapsed behind a toggle. A master who has run 30 quizzes should not scroll past them
   to find tonight's.
@@ -154,7 +154,7 @@ Games                                                    [show finished ▾]
   it is also the moment the SQLite file gets created (PRD 1 §6.6).
 - `[⋯]` → Duplicate, Export, Delete.
 
-**Deleting a quiz is now safe** (data model §10) — games keep their own copies. The
+**Deleting a quiz is now safe** (data model §11) — games keep their own copies. The
 confirmation says so explicitly: *"2 played games will be kept and stay reviewable."*
 Masters otherwise assume deletion destroys their history and never clean up.
 
@@ -173,8 +173,9 @@ Masters otherwise assume deletion destroys their history and never clean up.
   ⠿  2  Music              QUESTION_SET   10 questions   100 pts   [Open →]
   ⠿  3  Jeopardy!          JEOPARDY       5×5 board      1500 pts  [Open →]
   ⠿  4  Do or Die          QUESTION_SET    4 questions   200 pts   [Open →]
+  📌 5  Finale             DSMTW_FINALE    6 questions   —         [Open →]
 
-  Total: 84 questions · 1920 points · est. 95 min
+  Total: 90 questions · 1920 points · est. 105 min
 ```
 
 - **Round rows show per-round point totals and the quiz total.** Balance between rounds
@@ -184,10 +185,35 @@ Masters otherwise assume deletion destroys their history and never clean up.
   "est." and don't pretend otherwise — but a master planning an evening needs to know
   whether they have written 45 minutes or 3 hours.
 - **Drag to reorder** via the `⠿` handle, writing contiguous `position` values
-  (data model I7). Keyboard-accessible alternative required (§14.2).
+  (data model I7). Keyboard-accessible alternative required (§15.2).
 - `+ Add round` asks only for **type** and **title** — everything else has defaults and
   is set in the round editor. A dialog that demands eight fields before you can write a
   question is how authoring stalls.
+
+### 6.1 The finale is optional, and pinned last
+
+A quiz **does not need** a `DSMTW_FINALE` — most won't have one. But if it has one, it is the
+last round and there is only ever one (PRD 1 §8.8, I20). The editor **prevents** both, rather
+than letting a master build something invalid and learn about it at pre-flight:
+
+| Situation | Behaviour |
+| --- | --- |
+| A finale already exists | The `+ Add round` type picker **stops offering `DSMTW_FINALE`**, with a one-line reason rather than a silently missing option |
+| Adding any round while a finale exists | The new round is inserted **immediately before the finale**, never after it. The finale keeps the last position without the master having to think about it |
+| Dragging a round below the finale | Refused — the drop indicator will not appear past the pinned row |
+| Dragging the finale itself | Refused. It has one legal position |
+| Deleting the finale | Allowed like any other round, with the usual loss-naming confirmation. Adding one again is then offered afresh |
+
+- The finale row carries a **📌 marker instead of a drag handle**, so the constraint is visible
+  in the list rather than being a rule you discover by trying.
+- **Insert-before is the important one.** A master with a finished quiz who wants one more
+  ordinary round should get it in the right place by default; requiring them to add-then-drag,
+  when dragging past the finale is refused, would be a dead end.
+- **No points total for the finale row** — its questions award seconds, not points (D51), and
+  showing `0 pts` would read as an authoring mistake.
+
+Pre-flight (§10) still re-checks both constraints. Prevention is the UI's job; verification is
+pre-flight's, because an imported quiz (§14.2) never passed through this editor.
 
 ---
 
@@ -278,7 +304,7 @@ then fails silently in front of the room.
   browser and projects from another, the guarantee doesn't transfer. In practice it's the
   same machine and usually the same browser, and this is still far stronger than a MIME
   check.
-- **Pre-flight (§9) cannot re-verify playability** — it runs server-side and can only
+- **Pre-flight (§10) cannot re-verify playability** — it runs server-side and can only
   re-hash the file. So upload-time verification and the §7.1 main-screen preview are the
   two things that actually confirm media works; together they cover it end to end.
 
@@ -383,13 +409,101 @@ wrong on the projector without ever noticing.
   values, so this can be opened later without a migration.
 - **Uneven columns are allowed** (data model §4.3) but flagged, because a master
   building incrementally has legitimately-unfinished columns *and* a master who thinks
-  they're done has a mistake. Same warning, and pre-flight (§9) is where it becomes a
+  they're done has a mistake. Same warning, and pre-flight (§10) is where it becomes a
   decision.
 - `[edit ▾]` on a category header: rename, reorder, delete (with its tiles, confirmed).
 
 ---
 
-## 9. Pre-flight check
+## 9. Round editor — `DSMTW_FINALE` (D50)
+
+A finale round is a list of keyword questions plus two numbers that decide how the round
+feels. Mechanics in PRD 1 §8.8.
+
+```
+← Pub Quiz #4      Round 6 · Finale                              [⋯]
+
+  📌 Pinned as the last round. A quiz can have at most one finale (§6.1).
+
+  Points → seconds     [ 2 ] points = 1 second
+                       A team on 340 pts starts with 170s.
+                       Your quiz is worth 1920 pts — a strong team ≈ 480s.
+
+  Penalty per keyword  [ 20 ] s off every other team
+                       Set at game setup too, once you know how many teams play.
+
+  Questions                          3 of ~5 suggested   [+ Add question]
+  ⠿ 1  What do you know about Michael Jackson?     5 keywords   ✓
+  ⠿ 2  What do you know about the Eiffel Tower?    4 keywords   ⚠
+  ⠿ 3  What do you know about penicillin?          5 keywords   ✓
+
+  ⚠ For 4 teams at 20s, about 5 questions are usually needed to get
+    down to one survivor. You have 3.        [assume 4 teams ▾]
+```
+
+- **The conversion rate is shown working, not just entered.** Three numbers do that: what a
+  concrete score converts to, the quiz's total available points, and what a strong team would
+  therefore start with. A rate entered blind is the single easiest way to produce a finale
+  that ends in one question or drags for twenty minutes.
+- **The penalty is authored here but re-offered at game setup**, because the right value
+  depends on how many teams play — known only then (D54). The note says so, so the master
+  doesn't assume this is their only chance.
+- **`5 keywords` is shown per row** with the readiness marker, since "did I finish that one?"
+  is the question a master has while scanning.
+- The positional constraint is stated **at the top of the editor**, not buried in pre-flight.
+
+#### The suggested question count (D58)
+
+A finale that runs out of questions with three teams alive ends on "most seconds wins", which
+is a flat finish to the round the whole quiz builds toward. So the editor computes how many
+questions are plausibly needed and says so.
+
+- **`3 of ~5 suggested` sits on the Questions header**, where the master is already looking
+  while adding them.
+- **Team count is an assumption here**, since teams don't exist until game setup — hence
+  `[assume 4 teams ▾]`, defaulting to a typical count and remembered per quiz. Game setup
+  recomputes it against the real teams (§11.1).
+- **The number moves as the penalty changes**, which is the point: dropping the penalty from
+  20 s to 5 s takes the suggestion from 5 questions to 17 (conventions §8.1). That
+  relationship is not something a master will intuit.
+- **A shortfall is a warning, never a block.** Over-supplying questions is free — the round
+  ends at one survivor whatever is left over — so the honest advice is "add a few more than
+  you think", and the master may still know their room better than the model.
+- The estimate **ignores turn time**, which drains banks further, so it errs high on purpose.
+
+### 9.1 The keyword question sheet
+
+```
+┌─ Question 2 of 3 ───────────────── [↑ ↓] [✕] ─┐
+│  Prompt                                        │
+│  [What do you know about the Eiffel Tower?   ]  │
+│                                                │
+│  Keywords — exactly 5                          │
+│  1  [Gustave Eiffel              ]  2 words    │
+│  2  [1889                        ]  1 word     │
+│  3  [324 metres                  ]  2 words    │
+│  4  [wrought iron                ]  2 words    │
+│  5  [                            ]  ⚠ required │
+│                                                │
+│  ℹ The room sees blurred word shapes until you │
+│    mark each one — "wrought iron" shows as two │
+│    blurred words of 7 and 4 letters.          │
+└────────────────────────────────────────────────┘
+```
+
+- **Exactly five slots, always rendered.** Not an add/remove list: the count is fixed (I17),
+  so five slots with an empty one flagged is clearer than a list that can be the wrong length.
+- **The word/letter shape is echoed back as you type.** This is what the room will see (D53),
+  and it changes authoring decisions — a master may pick `"iron"` over `"wrought iron"` once
+  they realise how much the two-word shape gives away. Showing it is the difference between an
+  informed choice and a surprise on the projector.
+- No answer-method selector: a finale question is always `KEYWORDS` (I18), stated as a fact
+  rather than a disabled control — same reasoning as the Jeopardy tile sheet (§8).
+- `masterNotes` and attachments work as anywhere else.
+
+---
+
+## 10. Pre-flight check
 
 Run when `[Play]` is pressed, and available any time from the quiz editor. This exists
 because of §1.1: the master is fifteen minutes from doors open, and **the moment to
@@ -418,6 +532,23 @@ accepted answers (I5), a multiple-choice question without exactly one correct op
 (I4), an empty prompt, a `DO` question with no scoring mode, an attachment whose file is
 missing or whose checksum no longer matches (data model §8).
 
+**`DSMTW_FINALE` adds four**, all of which would otherwise surface mid-finale:
+
+| Check | Why it's an error, not a warning |
+| --- | --- |
+| Exactly 5 keywords per question (I17) | A 4-keyword question silently changes the round's arithmetic |
+| At most one finale round (I20) | Two finales is undefined — points can only be spent once |
+| The finale is the **last** round (I20) | Points convert to seconds and are consumed; any round after it has nothing to score |
+| `secondsPerPoint` set and > 0 | A zero rate gives every team zero seconds and ends the round instantly |
+
+Plus two warnings worth having:
+
+- **A conversion rate that gives the top team under 60 seconds**, which almost certainly means
+  the rate is inverted.
+- **Fewer questions than the suggested count** (D58) for the assumed team count — *"6 questions
+  is usually enough for 4 teams; you have 3"*. A warning rather than an error, because the
+  round still ends legally, just flatly.
+
 **Warnings** are judgement calls: uneven Jeopardy columns, empty tiles, a round with no
 questions, a single accepted answer on a free-text question, a question with a timer
 under 5 seconds.
@@ -434,7 +565,7 @@ the room waiting for a song that will not play.
 
 ---
 
-## 10. Game setup
+## 11. Game setup
 
 Reached from `[Play]`. Creates a game and deep-copies the quiz (data model §7).
 
@@ -462,12 +593,44 @@ New game from "Pub Quiz #4"
   taken colours are marked as such rather than disabled — a master may genuinely want a
   near-match.
 - **Team names default to `Team 1…n`** so a master can create the game *now* and rename
-  later; renaming works at any time, including after the game finishes (§12).
+  later; renaming works at any time, including after the game finishes (§13).
 - **Player language** is the D29 per-game default, with the note making clear it is a
   default and not a lock.
 - The code is generated on creation and shown next; it is not something the master picks.
 
-### 10.1 Adding a team after the game has started (O5)
+### 11.1 Finale settings, if the quiz has one
+
+Shown only when the quiz ends in a `DSMTW_FINALE`, because the penalty's correct value depends
+on the team count that is being decided on this very screen (D54).
+
+```
+  This quiz ends with a finale.        4 teams playing
+
+  Penalty per keyword   [ 20 ] s
+        With 4 teams, 5 keywords can remove up to 300s.
+        ⚠ At 8 teams and 20s, a single question can end the round.
+
+  Points → seconds      2 points = 1 second        (from the quiz)
+```
+
+- **The arithmetic updates as teams are added or removed.** That is the whole reason this
+  control is here rather than only in authoring.
+- **The suggested question count is recomputed against the real teams and their real scores**
+  (D58) — this is the only place it can be exact, since it depends on both the team count and
+  the actual banks:
+
+```
+  Finale round has 6 questions.
+  ✓ About 5 are usually needed for these 4 teams at 20s.
+```
+
+  If it falls short, the warning names the shortfall and offers **`[Lower the penalty]`** as
+  well as pointing at the editor — raising the drain per question is often the easier fix at
+  five minutes to doors than writing three more keyword questions.
+- Writes a `FINALE_CONFIGURED` event rather than editing the game copy, which I16 forbids —
+  so it stays adjustable for as long as the game is in `SETUP`.
+
+### 11.2 Adding a team after the game has started (O5)
 
 A table arriving during round 1 is normal in a pub, and PRD 1 explicitly does not block
 late joins. So `[+ Add team]` stays available at every status, from both this surface and
@@ -510,7 +673,7 @@ Add a team mid-game?
 
 ---
 
-## 11. Game detail (`/admin/games/:gameId`)
+## 12. Game detail (`/admin/games/:gameId`)
 
 The hub for one game, before, during and after.
 
@@ -548,11 +711,11 @@ The hub for one game, before, during and after.
   confirmation states what survives: *"Teams, devices and the join code are kept.
   Questions are refreshed from the template."*
 
-### 11.1 The game overflow menu
+### 12.1 The game overflow menu
 
 | Action | Availability | Notes |
 | --- | --- | --- |
-| Export this game | any status | Quiz + this game only (§13.1) |
+| Export this game | any status | Quiz + this game only (§14.1) |
 | Abandon game | `SETUP` / `LIVE` | Ends it without marking it finished; confirmed, since the room is mid-quiz |
 | Delete game | any status | Confirmed, naming the loss: *"Delete this game, its 9 teams and all 84 answers? The quiz itself is kept."* |
 
@@ -567,12 +730,12 @@ masters assume deleting a game takes its quiz with it, and never clean up.
 
 ---
 
-## 12. Post-game review & correction
+## 13. Post-game review & correction
 
 The reason PRD 1 promises a master can fix a validation mistake. Two views on a finished
-(or live) game, both under §11 once the game has started.
+(or live) game, both under §12 once the game has started.
 
-### 12.1 Round review
+### 13.1 Round review
 
 ```
 Round 2 · Music                                        3 corrections made
@@ -597,7 +760,42 @@ Round 2 · Music                                        3 corrections made
   still running.
 - This is a REST-loaded page, not a pushed view (D39 — it is O(questions × teams)).
 
-### 12.2 Score adjustments
+### 13.2 Finale review
+
+A finale round has no answers, so the §13.1 grid has nothing to show for it. It gets its own
+view — and unlike every other round, **nothing here is editable**: a clock that ran is a fact,
+and re-litigating an elimination after the fact would rewrite a result the room already saw.
+
+```
+Round 6 · Finale                              won by Norfolk & Chance
+
+  Q1  Michael Jackson      Thriller      ● Quizzly
+                           Bad           ● Norfolk
+                           Moonwalk      ● Quizzly
+                           Neverland     ● Quizinart
+                           Billie Jean   — nobody
+
+  Q2  Eiffel Tower         …
+
+  Finalists      started    ended        out
+  ● Norfolk & Chance   145       41       survived
+  ● Quizzly Bears      170        0       21:14
+  ● The Quizinart      155        0       21:02
+  ● Team 4              20        0       20:51
+  ● Late Arrivals        —         —      did not play
+```
+
+- **Keyword-by-keyword, with who got each one.** That is the record of the round, and
+  `— nobody` distinguishes a keyword nobody found from one never reached.
+- **Started / ended seconds per finalist**, because "how close was it?" is the question people
+  ask afterwards, and `145 → 41` answers it.
+- **Read-only, deliberately.** Every other review surface allows correction (§13.1, §13.3); this
+  one cannot, and saying so explicitly is better than a master hunting for an edit affordance.
+  A genuine mis-mark must be fixed **during** the round with `Shift`+`n` (PRD 3 §10.4), because
+  only then can the seconds it charged be returned.
+- Whole seconds throughout (D57).
+
+### 13.3 Score adjustments
 
 ```
 Score adjustments                                    [+ Adjust score]
@@ -616,20 +814,20 @@ it. `game_event` is append-only, so a mistaken `+50` cannot be deleted. The opti
 | Add `SCORE_ADJUSTMENT_REVOKED` | **Chosen.** The projection excludes revoked rows; the log keeps both facts; the UI shows one struck-through line |
 
 So the protocol gains `SCORE_ADJUSTMENT_REVOKED { adjustmentId }` and the projection
-gains `revokedAt` — see §16 O1.
+gains `revokedAt` — see §17 O1.
 
-### 12.3 Team corrections
+### 13.4 Team corrections
 
 Renaming and recolouring a team works **at any time**, including after the game ends
 (protocol §4.1 `TEAM_UPDATED`) — a master who typed "Team 3" all night can fix it before
-exporting. Teams can never be **deleted** from a game (data model §10): it would orphan
+exporting. Teams can never be **deleted** from a game (data model §11): it would orphan
 answers and rewrite scores.
 
 ---
 
-## 13. Export & import
+## 14. Export & import
 
-### 13.1 Export
+### 14.1 Export
 
 ```
 Export "Pub Quiz #4"
@@ -647,7 +845,7 @@ attachments produces a zip that **imports with clearly-marked missing media** ra
 a broken one (protocol §8.1's per-file reporting), which is what makes "just send me the
 questions" viable.
 
-### 13.2 Import
+### 14.2 Import
 
 Drop a `.zip` anywhere on the dashboard, or use `[Import…]`. Validation happens before
 anything is written (protocol §8.3).
@@ -670,7 +868,7 @@ Import "Pub Quiz #4"
 ```
 
 - **Compared by `updatedAt`, not by revision number.** This corrects how I framed D9:
-  with autosaved editing (§14.1) revision counters increment per keystroke, so "rev 7 vs
+  with autosaved editing (§15.1) revision counters increment per keystroke, so "rev 7 vs
   rev 9" is meaningless to a human even though it orders correctly. Dates are what a
   master can reason about; revision remains the machine tiebreak.
 - **The older/newer verdict is spelled out in words.** Two timestamps side by side still
@@ -680,9 +878,9 @@ Import "Pub Quiz #4"
 
 ---
 
-## 14. Authoring behaviour & cross-cutting rules
+## 15. Authoring behaviour & cross-cutting rules
 
-### 14.1 Autosave
+### 15.1 Autosave
 
 All authoring fields autosave on a ~600 ms debounce, with a quiet
 `Saved · 19:04` indicator. No save buttons, no unsaved-changes dialogs.
@@ -692,17 +890,19 @@ The trade-off this creates, and how it's handled:
 | Risk | Handling |
 | --- | --- |
 | Accidental destructive edits | Structural deletes (round, category, question, option) require confirmation naming what is lost. Field edits do not. |
-| `quiz.revision` inflating | Accepted. Revision is machinery for import ordering (§13.2); the UI shows `updatedAt` instead and never surfaces the number. |
-| A half-typed question looking "done" | Readiness markers (§7, §9) are computed live, so incomplete work is visibly incomplete. |
+| `quiz.revision` inflating | Accepted. Revision is machinery for import ordering (§14.2); the UI shows `updatedAt` instead and never surfaces the number. |
+| A half-typed question looking "done" | Readiness markers (§7, §10) are computed live, so incomplete work is visibly incomplete. |
 
-### 14.2 Interaction & content rules
+### 15.2 Interaction & content rules
 
 - **Reordering**: drag via `⠿`, plus `Alt+↑/↓` on a focused row. Drag-only reordering is
-  unusable on a trackpad in a hurry and inaccessible by keyboard.
+  unusable on a trackpad in a hurry and inaccessible by keyboard. **`Alt+↓` on the round
+  above a finale does nothing** — the same constraint as the drag refusal (§6.1), and it must
+  be refused identically by both paths or the keyboard route becomes a way around the rule.
 - **Destructive confirmations name the loss**: *"Delete round 3 'Jeopardy!' and its 25
   questions?"* — never a bare "Are you sure?".
 - **No undo system in v1.** Autosave plus confirmations covers the realistic cases; a
-  general undo stack over a tree this shape is disproportionate. Flagged as §16 O2.
+  general undo stack over a tree this shape is disproportionate. Flagged as §17 O2.
 - **Components come from shadcn/ui** (PRD 1 §6.1), styled through the semantic Tailwind
   tokens in the globals file — never literal colours. This surface has by far the most
   components, so the sheet, dialog, table, select, popover and form primitives here set the
@@ -715,7 +915,7 @@ The trade-off this creates, and how it's handled:
 
 ---
 
-## 15. Settings (`/admin/settings`)
+## 16. Settings (`/admin/settings`)
 
 Small and boring on purpose.
 
@@ -723,7 +923,7 @@ Small and boring on purpose.
 | --- | --- |
 | **Network** | Current address, re-run the §4 picker, re-test reachability |
 | **Language** | Admin interface locale (D13 — per-device, not per-game) |
-| **Sound** | `Mute all quiz sounds` — silences the main screen's buzz and timer audio (PRD 4 §12). Lives here rather than on the projected screen, which has no controls at all; a venue with its own music needs this, and hunting for OS volume mid-quiz is not acceptable |
+| **Sound** | `Mute all quiz sounds` — silences the main screen's buzz and timer audio (PRD 4 §13). Lives here rather than on the projected screen, which has no controls at all; a venue with its own music needs this, and hunting for OS volume mid-quiz is not acceptable |
 | **Storage** | Data directory path, database size, attachment count and total size, **`Reclaim space`** running the orphaned-file reconciliation (data model §8) |
 | **About** | Version, schema version, migration status |
 
@@ -733,22 +933,22 @@ that's the master's disk.
 
 ---
 
-## 16. Open questions
+## 17. Open questions
 
 | # | Question | Recommendation | Affects |
 | --- | --- | --- | --- |
 | ~~O1~~ | ~~Undoing a score adjustment~~ | **Resolved → D41.** `SCORE_ADJUSTMENT_REVOKED` added; projection gains `revokedAt`; revoked rows excluded from totals but never deleted. |
-| ~~O2~~ | ~~Undo beyond confirmations~~ | **Resolved: none in v1.** Autosave plus loss-naming confirmations (§14). A general undo stack over quiz → round → question → option is disproportionate for a single-user local app. |
+| ~~O2~~ | ~~Undo beyond confirmations~~ | **Resolved: none in v1.** Autosave plus loss-naming confirmations (§15). A general undo stack over quiz → round → question → option is disproportionate for a single-user local app. |
 | ~~O3~~ | ~~Tile value deviation~~ | **Resolved: no.** The ladder governs; `question.points` is written from `valueLadder[row]` (§8). Schema permits deviation if it's ever wanted. |
 | ~~O4~~ | ~~Main-screen preview~~ | **Resolved: minimal.** One action opening the real PRD 4 renderer in a mock `OPEN` state at projector type scale (§7.1). |
-| ~~O5~~ | ~~Teams after `GAME_STARTED`~~ | **Resolved: allowed, with a warning dialog that computes what was missed and offers an inline starting score** (§10.1). |
+| ~~O5~~ | ~~Teams after `GAME_STARTED`~~ | **Resolved: allowed, with a warning dialog that computes what was missed and offers an inline starting score** (§11.2). |
 | ~~O6~~ | ~~Unplayable media~~ | **Resolved: verify in-browser at upload.** Off-screen media element confirms playability before upload; no transcoding (§7.1). |
 | ~~O7~~ | ~~Quiz cover image or accent colour~~ | **Resolved in PRD 4 §5: no.** On the projected surface **colour is reserved for team identity** — team colours are the only colour carrying meaning (PRD 1 §9.5) and are palette-constrained for mutual distinguishability. A per-quiz accent would compete with the one thing the audience uses colour to decode. Round intros carry their weight through typography and scale, which is also what survives a bad projector. |
 
 ---
 
-## 17. Next
+## 18. Next
 
-[PRD 3 — master control](./03-master-control.md): the live surface, where §9's
-"play anyway" markers, §12's validation queue and the D35 buzzer loop all have to work
+[PRD 3 — master control](./03-master-control.md): the live surface, where §10's
+"play anyway" markers, §13's validation queue and the D35 buzzer loop all have to work
 under time pressure.

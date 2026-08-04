@@ -280,7 +280,39 @@ reason rather than failing on click (PRD 3 §10.2).
 A break started between rounds, or while a question is `LOCKED`/`REVEALED`/`SCORED`, is
 fine — nothing is waiting on input.
 
-### 4.6 Jeopardy & scores
+### 4.6 `DSMTW_FINALE` (D50)
+
+Every clock in this round is **derived from these timestamps** (D52). There is no timer
+event, no tick event, and no server timer.
+
+| Type | Payload | Notes |
+| --- | --- | --- |
+| `FINALE_CONFIGURED` | `{ secondsPerPoint, penaltySeconds }` | Overrides the authored defaults. Legal only while `SETUP` (D54) — editing `game_round.config` would violate I16 |
+| `FINALISTS_SET` | `{ teamIds[] }` | Master's selection at round open (D55). Minimum 2. Also fixes each finalist's `startingSeconds`, computed from their score at this instant |
+| `TURN_STARTED` | `{ teamId }` | This timestamp starts the team's clock |
+| `TURN_ENDED` | `{ teamId, reason }` | `PASSED` / `ELIMINATED` / `QUESTION_CLOSED`. The interval between start and end is the only thing that charges a team for time |
+| `KEYWORD_MARKED` | `{ gameKeywordId, teamId }` | Correct guess. Charges every *other* remaining finalist `penaltySeconds` |
+| `KEYWORD_UNMARKED` | `{ gameKeywordId }` | Mis-mark correction. Revokes the mark **and the penalties it charged** — the D41 pattern, and here it must reverse time, not just a score |
+| `KEYWORDS_REVEALED` | `{ gameQuestionId }` | Master shows the unguessed ones; creates marks with `teamId: null` |
+| `TEAM_ELIMINATED` | `{ teamId, at }` | Clock reached zero. `at` is the computed instant, not when the request arrived |
+| `FINALE_ENDED` | `{ ranking }` | One finalist left, all eliminated, or questions exhausted. `ranking` is the finalists in finishing order (D51) |
+
+**Two things deliberately absent:**
+
+- **No turn-order event.** Order is *"fewest remaining seconds among finalists still in and
+  not yet passed this question"* — fully derivable, so storing it would be a second source of
+  truth for the same fact.
+- **No clock event.** See D52's formula.
+
+**`TEAM_ELIMINATED` carries `at`** because a team can cross zero while *not* on turn — a
+penalty from someone else's correct guess can do it. The elimination instant is therefore
+computed from the log, not taken from when a client noticed.
+
+**Who sends it.** Control detects zero and posts it — the D8 pattern, where the client
+notices and the server recomputes. The server **recomputes `at` from the log and ignores any
+client-supplied instant**, so a slow or fast browser cannot alter a team's fate.
+
+### 4.7 Jeopardy & scores
 
 | Type | Payload | Notes |
 | --- | --- | --- |
@@ -294,7 +326,7 @@ fine — nothing is waiting on input.
 `PICKER_ASSIGNED` is appended even when it merely confirms the rule, so the log always
 answers "whose pick was it?" without the reader re-deriving the rule.
 
-### 4.7 The two event-sourcing exemptions
+### 4.8 The two event-sourcing exemptions
 
 Both are explicit, narrow, and justified. Nothing else in the play half escapes the log.
 
@@ -355,6 +387,7 @@ type MainScreenView = {
     | { kind: 'LEADERBOARD'; standings: Standing[] }
     | { kind: 'BREAK'; resumesAt: number | null; standings: Standing[] }
     | { kind: 'QUESTION'; question: MainScreenQuestion }
+    | { kind: 'FINALE'; finale: FinaleView }
     | { kind: 'JEOPARDY_BOARD'; board: BoardView; currentPickerTeamId: string | null }
     | { kind: 'FINISHED'; standings: Standing[] }
 }
@@ -365,6 +398,43 @@ type BoardView = {
   categories: { id: string; name: string }[]
   // Values and used-state only. NEVER prompts — data model / PRD 1 §7 invariant 5.
   tiles: { id: string; categoryId: string; points: number; used: boolean }[]
+}
+
+// DSMTW_FINALE (D50). Shared by MAIN_SCREEN and PLAYER - neither may see keyword text
+// before it is marked (PRD 1 section 7 invariant 8).
+type FinaleView = {
+  prompt: string
+  keywords: FinaleKeyword[]
+
+  clocks: {
+    teamId: string
+    name: string
+    colour: string
+    // Seconds at the START of the current turn. Clients count down from turnStartedAt;
+    // the server never pushes a tick (D52).
+    secondsAtTurnStart: number
+    onTurn: boolean
+    eliminated: boolean
+  }[]
+
+  turnStartedAt: number | null      // null between turns - no clock is running
+  currentTeamId: string | null
+  nextTeamId: string | null         // derived: fewest seconds among eligible
+  penaltySeconds: number
+  questionNumber: number
+  questionTotal: number
+}
+
+type FinaleKeyword = {
+  id: string
+  position: number
+
+  // Always present: the blurred shape (D53). "i like cows" -> [1,4,4]
+  wordLengths: number[]
+
+  // Present ONLY once marked or revealed. Absent otherwise - not empty, absent.
+  text?: string
+  teamId?: string | null            // null = revealed unguessed
 }
 
 type MainScreenQuestion = {
@@ -423,6 +493,7 @@ type PlayerView = {
     | { kind: 'BETWEEN_QUESTIONS' }
     | { kind: 'BREAK'; resumesAt: number | null; standings: Standing[] }
     | { kind: 'QUESTION'; question: PlayerQuestion; myAnswer: MyAnswer | null }
+    | { kind: 'FINALE'; finale: FinaleView; iAmFinalist: boolean }
     | { kind: 'JEOPARDY_BOARD'; board: BoardView; currentPickerTeamId: string | null }
     | { kind: 'FINISHED'; standings: Standing[] }
 }
@@ -430,6 +501,9 @@ type PlayerView = {
 type PlayerQuestion = {
   id: string
   prompt: string
+  // No 'KEYWORDS' here by design: a DSMTW_FINALE question is delivered through the
+  // FINALE stage, never through QUESTION (PRD 1 §8.8). Adding it would imply a
+  // finale keyword question can render as an ordinary answerable question.
   answerMethod: 'FREE_TEXT' | 'MULTIPLE_CHOICE' | 'BUZZER' | 'DO'
   media: MediaRef[]                    // images with showOnPlayerDevices only (D27)
   timer: Timer | null
@@ -485,6 +559,8 @@ type MasterControlView = {
     | { kind: 'VALIDATE_QUESTION'; question: QuestionRef; items: ValidationItem[]; remainingQuestions: number }
     | { kind: 'SCORE_DO'; question: DoScoringDetail }
     | { kind: 'BREAK_TIE_FOR_PICK'; tiedTeamIds: string[] }
+    | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[] }
+    | { kind: 'FINALE_TURN'; detail: FinaleTurnDetail }
     | { kind: 'ADVANCE'; suggestion: 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
 
   // Full detail incl. masterNotes, plus every team's answer with its verdict and a
@@ -541,6 +617,7 @@ Referenced by `MasterControlView`. All are O(teams), so D39 holds.
 type MasterQuestionDetail = {
   gameQuestionId: string
   prompt: string
+  // See the note on PlayerQuestion: finale questions arrive as FinaleTurnDetail, not here.
   answerMethod: 'FREE_TEXT' | 'MULTIPLE_CHOICE' | 'BUZZER' | 'DO'
   points: number
   state: 'PENDING' | 'OPEN' | 'LOCKED' | 'REVEALED' | 'SCORED' | 'SKIPPED'
@@ -556,7 +633,7 @@ type MasterQuestionDetail = {
 
   buzzes?: BuzzSummary[]
   lockedOutTeamIds?: string[]
-  failsPreflight?: string             // PRD 2 §9 "play anyway" marker, if any
+  failsPreflight?: string             // PRD 2 §10 "play anyway" marker, if any
 }
 
 type BuzzSummary = {
@@ -582,6 +659,44 @@ type DoScoringDetail = {
   tiePayout: 'SPLIT' | 'FULL'         // WINNER_TAKES_ALL only (D23)
   masterNotes: string | null
   teams: { teamId: string; name: string; colour: string; score: number | null }[]
+}
+
+// attention: PICK_FINALISTS - shown in DESCENDING score order so deselecting the bottom
+// few is a two-second job (D55). `seconds` makes a 0s row visible while choosing (D56).
+type FinalistCandidate = {
+  teamId: string; name: string; colour: string
+  score: number
+  seconds: number
+}
+
+// attention: FINALE_TURN - the most time-pressured screen in the product (PRD 3 section 11).
+// Carries keyword TEXT, which no other audience gets before marking.
+type FinaleTurnDetail = {
+  gameQuestionId: string
+  prompt: string
+  masterNotes: string | null
+  questionNumber: number
+  questionTotal: number
+
+  keywords: {
+    id: string; position: number; text: string        // master always sees the text
+    markedByTeamId: string | null
+    revealed: boolean
+  }[]
+
+  currentTeamId: string
+  nextTeamId: string | null
+  turnStartedAt: number
+  penaltySeconds: number
+
+  clocks: {
+    teamId: string; name: string; colour: string
+    secondsAtTurnStart: number
+    onTurn: boolean; eliminated: boolean
+    passedThisQuestion: boolean
+  }[]
+
+  allRemainingPassed: boolean        // -> offer [Reveal remaining]
 }
 
 // The Jeopardy board WITH prompts — master-only. The MAIN_SCREEN/PLAYER BoardView
@@ -639,6 +754,7 @@ const SENTINELS = {
   masterNotes:   'ZZ_SECRET_MASTER_NOTES_ZZ',
   teamBAnswer:   'ZZ_SECRET_TEAM_B_ANSWER_ZZ',
   unopenedTile:  'ZZ_SECRET_UNOPENED_TILE_PROMPT_ZZ',
+  finaleKeyword: 'ZZ_SECRET_UNMARKED_KEYWORD_ZZ',
 }
 
 // Every (audience × question state) combination, exhaustively.
@@ -661,6 +777,7 @@ for (const state of ['PENDING','OPEN','LOCKED','REVEALED','SCORED'] as const) {
 | Team B's answer | forbidden before `REVEALED` | **always forbidden** | always allowed |
 | Team A's own answer | forbidden before `REVEALED` | always allowed | always allowed |
 | Unopened Jeopardy tile prompt | **always forbidden** | **always forbidden** | always allowed |
+| Unmarked finale keyword text | forbidden until marked/revealed | forbidden until marked/revealed | always allowed |
 | Question prompt | forbidden while `PENDING` | forbidden while `PENDING` | always allowed |
 | `isCorrect` on an option | forbidden before `REVEALED` | forbidden before `REVEALED` | always allowed |
 
@@ -692,7 +809,7 @@ anything.
 | --- | --- | --- |
 | `POST /api/games/join` | `{ code, teamId }` | Returns a fresh `deviceToken`. `409` when the team is at `KWIZ_MAX_DEVICES_PER_TEAM` — the response lists the other teams so the UI can offer them (D20) |
 | `POST /api/games/:gameId/switch-team` | `{ toTeamId }` | Player picked wrong |
-| `POST /api/games/:gameId/draft` | `{ gameQuestionId, text?, selectedOptionId? }` | Debounced ≈500 ms. Upserts `game_answer_draft`, then pushes to the team's other devices (D45). **No event** (§4.7). Rejected once the team has submitted |
+| `POST /api/games/:gameId/draft` | `{ gameQuestionId, text?, selectedOptionId? }` | Debounced ≈500 ms. Upserts `game_answer_draft`, then pushes to the team's other devices (D45). **No event** (§4.8). Rejected once the team has submitted |
 | `POST /api/games/:gameId/submit` | `{ gameQuestionId, text?, selectedOptionId? }` | **Idempotent** — must be safe to retry (§7.3) |
 | `POST /api/games/:gameId/buzz` | `{ gameQuestionId }` | Server timestamps arrival; that is the ordering authority (D35) |
 
@@ -720,6 +837,14 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/break` | `{ durationMs? }` — start or extend the interval. `409` while a question is `OPEN` |
 | `POST /api/games/:gameId/break/end` | `{}` — resume; master-driven only |
 | `POST /api/games/:gameId/picker` | `{ teamId }` — tie-break or override (D30) |
+| `POST /api/games/:gameId/finale/config` | `{ secondsPerPoint, penaltySeconds }` — `SETUP` only |
+| `POST /api/games/:gameId/finale/finalists` | `{ teamIds }` — at round open; minimum 2 |
+| `POST /api/games/:gameId/finale/turn/start` | `{ teamId }` |
+| `POST /api/games/:gameId/finale/turn/pass` | `{}` — ends the current turn |
+| `POST /api/games/:gameId/finale/keywords/:id/mark` | `{}` — idempotent |
+| `POST /api/games/:gameId/finale/keywords/:id/unmark` | `{}` — reverses the mark *and its penalties* |
+| `POST /api/games/:gameId/finale/reveal` | `{ gameQuestionId }` |
+| `POST /api/games/:gameId/finale/eliminate` | `{ teamId }` — server recomputes the instant |
 | `POST /api/games/:gameId/adjust-score` | `{ teamId, delta, reason?, announced }` |
 | `POST /api/games/:gameId/adjustments/:id/revoke` | `{}` — idempotent |
 | `POST /api/games/:gameId/regenerate-code` | `{}` — `SETUP` only |
@@ -833,10 +958,10 @@ is what makes an imported game reviewable and re-derivable on the new machine:
 }
 ```
 
-**Projections and drafts are not exported.** `game_answer`, `game_buzz` and
-`game_score_adjustment` are rebuilt by replaying `events` on import. `game_answer_draft`
+**Projections and drafts are not exported.** `game_answer`, `game_buzz`,
+`game_score_adjustment` and `game_keyword_mark` are rebuilt by replaying `events` on import. `game_answer_draft`
 is dropped: an uncommitted draft is meaningless on a machine the phone that typed it will
-never reach, and it is not derivable from the log by design (§4.7).
+never reach, and it is not derivable from the log by design (§4.8).
 
 Rebuilding on import makes **every import a live test of data model invariant I15**
 (`projection == replay`), and keeps the zip smaller.
@@ -854,7 +979,7 @@ them costs nothing and keeps replay faithful.
 4. ONE transaction:
      insert quiz tree
      insert each game + its copy subtree
-     replay each game's events to rebuild the three projections
+     replay each game's events to rebuild the four projections
 5. move attachment files into place (skip any whose checksum already exists)
 ```
 

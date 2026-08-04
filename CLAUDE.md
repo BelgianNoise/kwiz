@@ -12,21 +12,33 @@ written. If you are implementing, start from §2.
 ## 1. Where the truth lives
 
 Read [`docs/prd/01-main.md`](docs/prd/01-main.md) first — its **decision log (PRD 1 §5)** is the
-single most useful page in the repo. 48 decisions, each with rationale and a "revisit if".
+single most useful page in the repo. 58 decisions, each with rationale and a "revisit if".
 Cite them as `D14`, `D35` etc.
 
 | Doc | Answers |
 | --- | --- |
 | [prd/01-main.md](docs/prd/01-main.md) | Goals, non-goals, trust model, **decision log**, architecture, confidentiality rules, domain model, styling, testing bar |
-| [spec/data-model.md](docs/spec/data-model.md) | Drizzle schema, all 21 tables, invariants I1–I16, deletion rules |
+| [spec/data-model.md](docs/spec/data-model.md) | Drizzle schema, all 24 tables, invariants I1–I22, deletion rules |
 | [spec/protocol.md](docs/spec/protocol.md) | SSE contract, event catalogue, **per-audience payload shapes**, export zip format |
+| [spec/conventions.md](docs/spec/conventions.md) | **Concrete values**: toolchain, code alphabet, team palette hex, error codes, timing constants, i18n keys, MIME allowlist, definition of done |
 | [prd/02-config.md](docs/prd/02-config.md) | Landing, authoring, Jeopardy board builder, pre-flight, export/import, game setup, review |
-| [prd/03-master-control.md](docs/prd/03-master-control.md) | Live control desk: attention model, validation, buzzer loop, `DO` scoring |
+| [prd/03-master-control.md](docs/prd/03-master-control.md) | Live control desk: attention model, validation, buzzer loop, `DO` scoring, the finale desk |
 | [prd/04-main-screen.md](docs/prd/04-main-screen.md) | Projected screen: legibility limits, stage designs, reveal choreography |
 | [prd/05-player.md](docs/prd/05-player.md) | Phone: join, answer methods, buzzer, reliability |
 
-**The two specs in `docs/spec/` are normative.** Where a surface PRD disagrees with them,
+**The three specs in `docs/spec/` are normative.** Where a surface PRD disagrees with them,
 the spec wins. Where you disagree with a decision, say so — don't silently deviate.
+
+Two working documents, neither normative — they go stale as work lands, the specs don't:
+
+| Doc | Purpose |
+| --- | --- |
+| [`docs/build-order.md`](docs/build-order.md) | **What** to build, in what order — ten sequential slices |
+| [`docs/agent-workflow.md`](docs/agent-workflow.md) | **How** to execute a slice: orient → build → verify → regress → report |
+
+**If you are implementing, read `agent-workflow.md` before starting and re-read its §4–§5
+before declaring a slice done.** Regression and handoff are the two phases most often
+skipped and the two that matter most in a chained dispatch.
 
 ---
 
@@ -107,7 +119,24 @@ The sole exception is the master submitting on a team's behalf (D47).
 UUIDv7 primary keys everywhere. Two teams may share a name. Ordering is an explicit
 `position` column — never id order, insertion order, or `createdAt`.
 
-### 2.8 Check secure-context before using a browser API on a player surface
+### 2.8 A finale keyword's text is absent, not blurred
+
+`DSMTW_FINALE` (PRD 1 §8.8) shows unguessed keywords as blurred word shapes. **Blurring
+transmitted text is a leak** — devtools reads it. The payload carries `wordLengths` only
+(`"i like cows"` → `[1,4,4]`); `text` appears once the keyword is marked or revealed (D53,
+§7 invariant 8).
+
+`wordLengths` is **stored on write**, so a payload filter never loads `text` at all for an
+unmarked keyword — the difference between a rule and a guarantee.
+
+### 2.9 Every finale clock is derived, never ticked
+
+`remaining = startingSeconds − Σ turn durations − penalties − (now − currentTurnStart)`.
+
+No server timer, no tick event (D52). Clients count down from `turnStartedAt`. A restart
+mid-turn recovers every clock exactly, which is the same property D4 buys everywhere else.
+
+### 2.10 Check secure-context before using a browser API on a player surface
 
 The LAN deployment is **plain HTTP**, so `navigator.wakeLock`, `getUserMedia`, Clipboard
 `writeText` and Service Workers are `undefined` there (PRD 1 §6.10). `localhost` — the
@@ -190,6 +219,18 @@ Drizzle ORM + `better-sqlite3`. Full schema in [data model](docs/spec/data-model
 - All input zod-validated at the boundary. Actions return `{ok}` or a **typed** error —
   never a generic failure, because clients branch on it (protocol §7.3).
 
+### zod
+
+- **Define the schema, infer the type** — `z.infer<typeof schema>`. Never hand-write an
+  interface beside a schema: they drift silently, and the compiler is satisfied by both.
+- Required at every boundary, and at two places that are easy to miss: **`game_event.payload`
+  on replay** (not only on append — the log outlives every deployment, so a payload an
+  older build wrote must fail loudly rather than corrupt a projection), and **env config**
+  (`KWIZ_MAX_DEVICES_PER_TEAM=abc` must stop the server at boot, not become `NaN`).
+- **Not** on internal `domain` function arguments, outbound SSE payloads, or Drizzle query
+  results — parse once at the boundary and pass the typed value inward. Full list of where
+  it is and isn't wanted: [conventions §10](docs/spec/conventions.md).
+
 ---
 
 ## 6. Testing
@@ -209,6 +250,11 @@ Must be tested — each is invisible until it's embarrassing, or destroys data:
 - Projection == replay (invariant I15)
 
 Not worth testing: presentational components, layout, styling.
+
+**A journey-based E2E suite is built after the surfaces exist** (D49, build-order slice 9) —
+22 scenarios from the documented flows, including a **network-level sentinel assertion** that
+no secret crosses the wire to a player. That is not a contradiction of "coverage is not the
+goal": D18 is about unit coverage, E2E is about whether the wiring works.
 
 **A large mock is a design signal, not a testing problem.** If a test needs an elaborate
 mock of a database, request or stream, the logic belongs in `packages/domain` as a pure
@@ -261,9 +307,19 @@ pnpm install
 pnpm dev                  # Next.js dev server
 pnpm build && pnpm start  # production; prompts for pending migrations
 pnpm db:generate          # Drizzle Kit — generate a migration from schema changes
-pnpm test                 # unit tests
-pnpm typecheck
+pnpm test                 # Vitest
+pnpm lint                 # oxlint
+pnpm format               # oxfmt --write .
+pnpm typecheck            # tsc --noEmit
+pnpm check                # all of the above — the gate a slice must pass
 ```
+
+Node 24, pnpm workspaces, Vitest, oxlint + oxfmt. Full toolchain and the reasoning in
+[conventions §1](docs/spec/conventions.md).
+
+**oxlint enforces two of §2's rules mechanically**, not by convention: a
+`packages/domain` file importing Drizzle or Next **fails lint**, and `any` is an error in
+`domain` and `db`. Don't weaken those overrides.
 
 Config via env, read once at boot through one typed module (PRD 1 §6.8): `PORT`,
 `KWIZ_DATA_DIR`, `KWIZ_MAX_DEVICES_PER_TEAM`, `KWIZ_AUTO_MIGRATE`, `KWIZ_MAX_UPLOAD_MB`.

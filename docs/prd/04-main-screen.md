@@ -77,7 +77,7 @@ The audience must never see application furniture.
 - The language switcher appears **only** on mouse movement, then fades (PRD 1 §9.4).
 - **Nothing on this screen is scrollable.** If content doesn't fit, the design is wrong
   — content is fitted (§2.4) or split across beats, never scrolled.
-- Errors are calm and wordless where possible (§13).
+- Errors are calm and wordless where possible (§14).
 
 ### 2.4 Text is fitted, not sized
 
@@ -88,7 +88,7 @@ So prompt text is **fitted to its box** — scaled down within a clamped range u
 fits, rather than set at a fixed size. Two rules:
 
 - The clamp floor is §2.1's **4vh absolute minimum**. Text that would need to go smaller
-  than that does not get smaller: it is a content problem, and PRD 2 §9's pre-flight
+  than that does not get smaller: it is a content problem, and PRD 2 §10's pre-flight
   warns about over-long prompts at authoring time instead.
 - Fitting is **deterministic and layout-only** — same string, same box, same result. No
   animation of the fit, or text visibly jumps on every re-render.
@@ -109,6 +109,7 @@ sidebar. Each stage owns the whole safe area.
 | `JEOPARDY_BOARD` | Between tiles in a Jeopardy round | §9 |
 | `LEADERBOARD` | Between rounds, or on demand (PRD 3 §10.1) | §10 |
 | `BREAK` | The interval | §11 |
+| `FINALE` | The `DSMTW_FINALE` round | §12 |
 | `FINISHED` | The game has ended | §10.2 |
 
 **Why no persistent frame:** at §2.1's size budget, a header costs 10–15% of the vertical
@@ -404,7 +405,7 @@ one first, which would break the mapping to what teams saw while answering.
 - **Values are the largest element**, since that's what teams call out ("Music for 300").
   Category names are smaller and set in caps.
 - **Category names must fit without truncation.** At 5 categories on a 16:9 screen each
-  column is ~18% of width, so authoring-side length matters — PRD 2 §9's pre-flight warns
+  column is ~18% of width, so authoring-side length matters — PRD 2 §10's pre-flight warns
   on category names that will not fit here.
 - Uneven columns (data model §4.3) render as short columns. No filler.
 - **Tile prompts never appear on this screen** until the tile is opened — PRD 1 §7
@@ -467,6 +468,32 @@ share it — D32 all the way to the end.
 The final leaderboard then **stays up indefinitely**. People photograph it, and the
 screen has nothing better to do.
 
+#### After a `DSMTW_FINALE` — two tabs (D51)
+
+When the game ended with a finale, the ranking came from survival, not points. Points still
+happened, though, and they are still interesting — so the screen carries **two tabs**, master-
+switchable from control:
+
+```
+   ┌─ RESULT ─┬─ POINTS ─┐
+   │ 1 ● Norfolk & Chance    survived  41s left
+   │ 2 ● Quizzly Bears       out 21:14
+   │ 3 ● The Quizinart       out 21:02
+   │ 4 ● Team 4              out 20:51
+   │ ─────────────────────────────────────────
+   │ 5 ● Late Arrivals       did not play the finale
+```
+
+- **`RESULT` is the default and decides the game.** Survival order, with the winner's
+  remaining seconds shown because "won with 41 seconds left" is the story.
+- **`POINTS` shows the pre-finale totals** — the leaderboard as it stood when points were
+  converted. Useful, and often the team that scored highest is *not* the one that won, which
+  is worth letting the room see.
+- **Non-finalists sit below the finalists**, ranked among themselves by points, labelled so
+  nobody reads their position as an elimination.
+- Tabs are on the projected screen but **switched from control**, since this surface has no
+  controls (§2.3).
+
 ---
 
 ## 11. `BREAK` — the interval
@@ -495,6 +522,7 @@ broken.
 - **The same countdown appears on every player device** (PRD 5). The projector is the
   screen people have walked away from; the phone in their pocket is the one that actually
   reaches them.
+- **`m:ss` here, unlike the finale's whole seconds** (D57). A break is minutes long and nobody is doing arithmetic on it; `4:37` is the natural reading. The finale's format exists for subtraction, which does not apply here.
 - **`resumesAt` is an absolute server timestamp** — same principle as question timers (D7),
   so a screen that connects halfway through the break shows the correct remaining time
   rather than restarting the countdown.
@@ -503,13 +531,90 @@ broken.
   with D8 — nothing in this product auto-advances the game.
 - **Standings sit beneath**, because they're what people want to look at during a break
   anyway, and **the join code returns** — a break is exactly when a late arrival has time
-  to join (§15 O2).
+  to join (§16 O2).
 
 ---
 
-## 12. Sound
+## 12. `FINALE` (D50)
 
-Sound follows the same rule as motion (§14): **it carries a message or it doesn't exist.**
+The climax, and the busiest this screen ever gets: five keyword tiles, a clock per finalist,
+and whose turn it is — all at §2.1's size floor.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  What do you know about Michael Jackson?          Q3 / 6    │
+│                                                            │
+│   1  ████████                                              │
+│   2  Thriller                          ● Quizzly           │
+│   3  ██████  ████                                          │
+│   4  Moonwalk                          ● Norfolk           │
+│   5  ████  ████████                                        │
+│                                                            │
+│   ● NORFOLK & CHANCE   84   ← guessing                     │
+│   ● Quizzly 138   ● Quizinart 155   ● Team 4 91            │
+│   ● Late Arrivals  OUT                                     │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 12.1 The blurred tiles (D53)
+
+**The payload never contains an unmarked keyword's text** — only `wordLengths`. So a tile is
+*drawn* from that shape rather than being blurred text:
+
+- `"Thriller"` → one block, 8 characters wide
+- `"i like cows"` → **three blocks**, 1 / 4 / 4 wide, with real word gaps
+
+That per-word structure is the point: the room can see it's a three-word phrase with a
+one-letter first word, which is a genuine and fair hint. Rendering one long bar would throw
+that away, and rendering the real text blurred would leak it to anyone with devtools.
+
+On marking, the tile **crossfades from blocks to the text** with the crediting team's name
+and colour beside it. Revealed-unguessed tiles resolve the same way but with no team — the
+absence is the point, so they get no marker rather than a placeholder one.
+
+### 12.2 Clocks
+
+- **The team on turn is on its own line, larger, in its colour**, with `← guessing`. That
+  team's clock is the one the room is watching.
+- **Every other finalist's clock is on one strip below.** All of them, always — a team about
+  to be eliminated by someone else's correct guess is the tensest thing on screen and must be
+  visible.
+- **Whole seconds, never `m:ss`** (D57). A room watching a 20-second penalty land needs to see `84` become `64`, not perform a base-60 conversion. It is also the largest legible format at §2.1's scale — two or three digits rather than four glyphs and a colon.
+- **Counted down client-side from `turnStartedAt`** (D52). The server pushes no ticks; a
+  reconnect mid-turn resumes at the right number because the arithmetic is in the payload.
+- **Between turns nothing ticks.** All clocks hold, and the `← guessing` marker disappears —
+  the room can see that the handover isn't costing anyone.
+- **Eliminated teams read `OUT`**, greyed, and stay listed. Removing the row would erase the
+  drama of who has already gone.
+- **Under 15 seconds a clock pulses.** Colour alone is unreliable at §2.2's contrast (this is
+  the same reasoning as §7's timer, at a threshold suited to a bank of seconds rather than a
+  question timer).
+
+### 12.3 The penalty moment
+
+When a keyword is marked, every other finalist loses time. That must be *seen*, or the room
+cannot follow why a clock jumped:
+
+- The marked tile resolves to text.
+- **Every other clock flashes and visibly subtracts** — a brief `−20s` beside each, then the
+  new value. Counting down smoothly would hide the size of the hit; a jump with a label shows
+  it.
+- Eliminated teams don't flash. They've stopped paying.
+
+### 12.4 Elimination
+
+A clock reaching zero gets a moment of its own: the team's name at hero scale, in colour,
+`OUT` beneath it, held briefly before the screen returns to the turn.
+
+This is worth the interruption for two reasons. It is one of the few genuinely dramatic beats
+in a quiz, and elimination can happen **off-turn** — a penalty can take a waiting team to
+zero — so without an announcement the room would just notice a row had greyed out.
+
+---
+
+## 13. Sound
+
+Sound follows the same rule as motion (§15): **it carries a message or it doesn't exist.**
 
 | Sound | When | Why it earns its place |
 | --- | --- | --- |
@@ -525,14 +630,14 @@ with it, dates quickly, and is the first thing a master asks to switch off.
 - **Both sounds depend on §4.1's arming.** If audio was never unlocked they fail silently
   — which is the right failure, but it is also why §4.1 confirms `♪ sound ready` before
   the quiz starts.
-- **A global mute lives in PRD 2 §15 settings**, not on this screen. A venue with its own
+- **A global mute lives in PRD 2 §16 settings**, not on this screen. A venue with its own
   music needs it, and hunting for OS volume mid-quiz is not acceptable.
 - Sounds are **short and unbranded** — a tone, not a jingle. This screen is in someone
   else's pub.
 
 ---
 
-## 13. Failure and edge states
+## 14. Failure and edge states
 
 The governing rule: **the room must never see a technical failure.** They will read a
 scary message as "the quiz is broken", and the master then spends five minutes on
@@ -550,7 +655,7 @@ reassurance.
 
 ---
 
-## 14. Motion
+## 15. Motion
 
 Motion on this surface has one purpose: **making a change noticeable to someone who was
 looking at their phone** (§1.1).
@@ -566,11 +671,11 @@ looking at their phone** (§1.1).
 
 ---
 
-## 15. Open questions
+## 16. Question log
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| ~~O1~~ | ~~Sound effects~~ | **Resolved → §12.** Buzz and timer-expiry only — sounds that carry a message. No reveal sting. Global mute in PRD 2 §15. |
+| ~~O1~~ | ~~Sound effects~~ | **Resolved → §13.** Buzz and timer-expiry only — sounds that carry a message. No reveal sting. Global mute in PRD 2 §15. |
 | ~~O2~~ | ~~Persistent join code~~ | **Resolved: no.** Shown on `WAITING`, `LEADERBOARD` and `BREAK` only. A permanent code is chrome (§2.3) costing §2.1 budget on every stage, and the master can toggle the leaderboard on demand (PRD 3 §10.1). |
 | ~~O3~~ | ~~Break stage~~ | **Resolved: yes, with a master-set countdown** (§11). Absolute `resumesAt`; reaching zero does not auto-resume. |
 | ~~O4~~ | ~~Fullscreen/kiosk~~ | **Resolved: §4.1 covers it.** One click arms audio and fullscreen together. If fullscreen is exited mid-game, re-arm silently on the next click — never show the room a prompt. |
@@ -579,7 +684,7 @@ looking at their phone** (§1.1).
 
 ---
 
-## 16. Next
+## 17. Next
 
 [PRD 5 — the player device](./05-player.md): the last surface. Where D43's submission
 finality, D44's select-then-submit, D45's shared drafts and the buzzer's one-tap
