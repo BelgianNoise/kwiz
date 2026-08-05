@@ -26,8 +26,29 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
 
 ## Checks
 
-<!-- Slice 0 appends the first rows below this line. Format:
+<!-- Format:
 
 ### After slice N
 - [ ] a specific, observable thing
 -->
+
+### After slice 0 — scaffold
+
+- [ ] `pnpm install` on a clean clone succeeds with **no compilation step** and no C++
+      toolchain present (conventions §1.1). `node_modules/.pnpm/better-sqlite3@*/…/build`
+      must not exist — only `prebuilds/`.
+- [ ] `pnpm check` is green: format, lint, `process.env` guard, typecheck, tests.
+- [ ] `pnpm build` completes with **no warnings**.
+- [ ] `pnpm dev` serves, and `/` redirects to `/en`.
+- [ ] `/en` and `/nl` both render, each with a matching `<html lang>`.
+- [ ] Dutch copy is actually Dutch on `/nl` — not an English fallback.
+- [ ] **Browser console is clean** on both locales (React DevTools notices and HMR logs
+      excepted).
+- [ ] Tailwind is *applied*, not merely present: `text-muted-foreground` computes to the
+      same colour as the `--muted-foreground` token.
+- [ ] Body font resolves to the system stack — **no network request for a font file**, since
+      the app must build and run offline.
+- [ ] **D17:** a request to `/` with `Accept-Language: nl` still lands on `/en`.
+- [ ] **PRD 1 §9.4 step 2:** a request to `/` carrying `NEXT_LOCALE=nl` lands on `/nl`, and
+      an unrecognised cookie value falls back to `/en`.
+- [ ] An explicit segment beats the cookie: `/en` with `NEXT_LOCALE=nl` renders English.

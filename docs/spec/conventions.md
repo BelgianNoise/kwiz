@@ -24,7 +24,7 @@ here, not in a PRD. PRDs explain *why*; this file says *what*.
 | Validation | **zod** | Every boundary. No exceptions |
 | IDs | **`uuid`** (`v7`) | `import { v7 as uuidv7 } from 'uuid'` |
 | i18n | **next-intl** | §6 |
-| Components | **shadcn/ui** + Tailwind | PRD 1 §10 |
+| Components | **shadcn/ui** + Tailwind | PRD 1 §9.1 |
 | Screen wake | **`nosleep.js`** | Player devices only (D48) |
 | E2E | **Playwright** | Multi-context, mobile emulation, network control, tracing (D49). Built in build-order slice 9 |
 
@@ -69,9 +69,17 @@ noise.
   "rules": {
     "no-console": "warn",
     "eqeqeq": "error",
-    "no-floating-promises": "error",
-    "typescript/no-explicit-any": "warn"
+    "typescript/no-explicit-any": "warn",
+
+    // Next.js uses the automatic JSX runtime, so React is never in scope by design
+    "react/react-in-jsx-scope": "off",
+    // `import './globals.css'` is how an App Router layout loads styles
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
   },
+  "ignorePatterns": [
+    "node_modules", ".next", "dist", "coverage", "data",
+    "test-results", "playwright-report", "**/*.d.ts"
+  ],
   "overrides": [
     {
       // §1.4 — the architectural rules, enforced
@@ -89,10 +97,36 @@ noise.
     {
       "files": ["packages/db/**"],
       "rules": { "typescript/no-explicit-any": "error" }
+    },
+    {
+      "files": ["scripts/**"],
+      "rules": { "no-console": "off" }   // these scripts report to a terminal
     }
   ]
 }
 ```
+
+**oxlint has no type-aware rules.** `no-floating-promises`, `no-misused-promises` and
+`await-thenable` all need a TypeScript program, which oxlint does not build, and it does not
+implement them under any name. An earlier draft of this file listed
+`no-floating-promises: error`; it was silently doing nothing. Floating promises are
+therefore **not mechanically caught** anywhere in this project — worth knowing when
+reviewing `appendAndProject()` and the SSE writers, which are where an unawaited promise
+would actually hurt.
+
+**oxlint accepts an unknown rule name silently** — no warning, no error, exit code 0. A typo
+in the block above, or a rule renamed in a future oxlint, degrades an architectural
+guarantee into a decorative line of JSON with nothing to reveal it. This is why §1.4's rules
+have a test rather than only a config (see below).
+
+### 1.3.1 oxfmt
+
+`.oxfmtrc.json` pins the house style — no semicolons, single quotes, width 90, trailing
+commas — which is the style the code samples throughout these documents already use.
+
+Two non-default options are on because they remove a whole class of review comment:
+`sortImports` and `sortTailwindcss`. **Markdown is excluded**: oxfmt would reflow the prose
+in `docs/`, and these documents are hand-wrapped.
 
 ### 1.4 Lint rules that encode architecture
 
@@ -103,29 +137,48 @@ enforced mechanically rather than trusted, and should be:
 | --- | --- |
 | `packages/domain` is pure (CLAUDE.md §2.1) | `no-restricted-imports` above. A domain file importing Drizzle or Next now **fails lint** |
 | No `any` in `domain` or `db` | `no-explicit-any: error` in those overrides only |
-| No `process.env` outside the config module | Grep check in CI: `process.env` may appear only in `packages/config/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
+| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint`. `process.env` may appear only in `packages/config/src/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
 
 If oxlint's `no-restricted-imports` proves insufficient, a ~20-line CI script asserting
 the same thing is an acceptable substitute. **Do not downgrade it to a comment.**
 
+**All three are covered by `scripts/architecture-rules.test.ts`**, which writes a file that
+violates each rule, runs the real linter over it, and asserts the violation is reported as an
+*error*. Given that oxlint ignores unknown rule names in silence (§1.3), reading the config
+back proves nothing — only running it does. The fixtures are deliberately **not gitignored**:
+oxlint always honours `.gitignore` and its `--no-ignore` flag only disables `.eslintignore`,
+so an ignored fixture would never be linted and the test would pass while proving nothing.
+
 ### 1.5 Scripts
+
+Defined at the **workspace root**, fanning out to the packages. `dev`/`build`/`start` and
+`db:generate` are thin wrappers over the package that owns them (`next dev` lives in
+`apps/web`, `drizzle-kit generate` in `packages/db`), so there is one place to run
+everything from.
 
 ```jsonc
 {
-  "dev":        "next dev",
-  "build":      "next build",
-  "start":      "next start",          // prompts for pending migrations (D14)
-  "test":       "vitest run",
-  "test:watch": "vitest",
-  "typecheck":  "tsc --noEmit",
-  "lint":       "oxlint",
-  "format":     "oxfmt --write .",
-  "check":      "oxfmt --check . && oxlint && tsc --noEmit && vitest run",
-  "db:generate": "drizzle-kit generate",
-  "e2e":         "playwright test",
-  "e2e:ui":      "playwright test --ui"
+  "dev":          "pnpm --filter @kwiz/web dev",
+  "build":        "pnpm --filter @kwiz/web build",
+  "start":        "pnpm --filter @kwiz/web start",   // prompts for pending migrations (D14)
+  "test":         "vitest run",
+  "test:watch":   "vitest",
+  "typecheck":    "tsc --noEmit -p tsconfig.tools.json && pnpm -r typecheck",
+  "lint":         "oxlint && pnpm lint:env",
+  "lint:env":     "node scripts/check-no-process-env.mjs",   // §1.4's third rule
+  "format":       "oxfmt --write .",
+  "format:check": "oxfmt --check .",
+  "check":        "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+  "db:generate":  "pnpm --filter @kwiz/db db:generate",
+  "e2e":          "playwright test",
+  "e2e:ui":       "playwright test --ui"
 }
 ```
+
+`typecheck` runs each package's own `tsc --noEmit` — a single root project cannot serve both
+the packages and a Next.js app, which needs `jsx: preserve`, its own `lib` and the `next`
+plugin. `tsconfig.tools.json` covers the root-level files (`vitest.config.ts`, `scripts/`)
+that no package owns.
 
 `pnpm check` is the single command a slice must pass before it is done (§11). It excludes
 `e2e` deliberately — the browser suite is slower and needs a running server, so it runs as

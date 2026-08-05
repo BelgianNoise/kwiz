@@ -1,0 +1,27 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# conventions §1.1 — the check slice 0 must not defer.
+#
+# better-sqlite3 has a binding.gyp, so pnpm offers to run node-gyp against it. We say no
+# on purpose: v13 ships N-API prebuilds in the tarball (prebuilds/win32-x64.node and seven
+# others), so it loads with no compilation and therefore no C++ toolchain on a quiz
+# master's laptop. Setting this to `true` would silently reintroduce exactly the install
+# fragility §1.1 exists to prevent — if a future version drops the prebuilds, the correct
+# response is §1.1's documented fallback (pin the Node major, or swap to `node:sqlite`),
+# not enabling the compile.
+#
+# esbuild needs its script to place the platform binary that Vitest runs on.
+#
+# @swc/core and @parcel/watcher are Next.js dependencies that resolve their native halves
+# through platform-specific optional packages, so they need no build step either. Keeping
+# them false is what makes the whole install compile-free rather than only better-sqlite3.
+allowBuilds:
+  '@parcel/watcher': false
+  '@swc/core': false
+  better-sqlite3: false
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - better-sqlite3@13.0.3
