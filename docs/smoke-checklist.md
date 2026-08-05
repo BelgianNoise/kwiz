@@ -62,3 +62,20 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
 - [ ] CI is green on **both** matrix platforms, not just Linux (conventions §1.6) — the
       `better-sqlite3` prebuild is per-platform, so a Linux-only pass proves nothing about the
       laptop the quiz runs on.
+
+### After slice 1 — schema & migrations
+
+- [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.
+- [ ] The generated SQL still carries `CREATE UNIQUE INDEX game_active_code_idx … WHERE status IN
+      ('SETUP','LIVE')`. Losing the `WHERE` would silently exhaust the code space.
+- [ ] Deleting `data/kwiz.db` and starting up **creates and migrates silently** — no prompt,
+      because nothing can be lost.
+- [ ] Starting against a database with a pending migration **prompts**, and a timestamped file
+      appears in `data/backups/` **before** the question is asked.
+- [ ] Declining leaves the database untouched and still pending.
+- [ ] `KWIZ_AUTO_MIGRATE=1` applies without prompting but **still writes the backup**.
+- [ ] With pending work, no TTY and no flag, the server **refuses to start** and names
+      `KWIZ_AUTO_MIGRATE=1` in the message.
+- [ ] The column-parity guard fails if you delete a column from one side of a shared factory —
+      worth breaking on purpose once, since it is the only thing standing between a routine
+      schema change and silent data loss in games.
