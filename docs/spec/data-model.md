@@ -97,6 +97,12 @@ Binding for every table.
 | **JSON columns** | `text({ mode: 'json' })`, **always** paired with a zod schema parsed at the boundary. A JSON column without a validator is a bug. |
 | **Naming** | `snake_case` in SQL, `camelCase` in TS, mapped explicitly. |
 | **Points** | Integers only. No decimals anywhere in scoring (D24). |
+| **Index callbacks** | `sqliteTable`'s third parameter returns an **array**, not an object. Drizzle marks the object form `@deprecated` — *"will only accept an array"*. The index name string already carries the intent the object key used to. |
+
+**`text({ enum: [...] })` generates no `CHECK` constraint** — verified against Drizzle 0.45.2,
+which emits a plain `text NOT NULL`. The union is a TypeScript-only guarantee, which has two
+consequences worth knowing: a bad value written by raw SQL is not caught by the database, and
+**widening an enum needs no migration at all** (§11).
 
 ### 2.1 Connection setup
 
@@ -227,9 +233,9 @@ export const round = sqliteTable('round', {
   id:     text('id').primaryKey().$defaultFn(uuidv7),
   quizId: text('quiz_id').notNull().references(() => quiz.id, { onDelete: 'cascade' }),
   ...roundColumns(),
-}, (t) => ({
-  quizPosition: index('round_quiz_position_idx').on(t.quizId, t.position),
-}))
+}, (t) => [
+  index('round_quiz_position_idx').on(t.quizId, t.position),
+])
 ```
 
 `config` is the extension point for new round types (PRD 1 §8.3), zod-validated per `type`:
@@ -258,9 +264,9 @@ export const jeopardyCategory = sqliteTable('jeopardy_category', {
   id:      text('id').primaryKey().$defaultFn(uuidv7),
   roundId: text('round_id').notNull().references(() => round.id, { onDelete: 'cascade' }),
   ...categoryColumns(),
-}, (t) => ({
-  roundPosition: index('jeopardy_category_round_position_idx').on(t.roundId, t.position),
-}))
+}, (t) => [
+  index('jeopardy_category_round_position_idx').on(t.roundId, t.position),
+])
 ```
 
 The board is **not** a stored grid — it is `categories × questions`, laid out by
@@ -277,9 +283,9 @@ export const questionKeyword = sqliteTable('question_keyword', {
   id:         text('id').primaryKey().$defaultFn(uuidv7),
   questionId: text('question_id').notNull().references(() => question.id, { onDelete: 'cascade' }),
   ...keywordColumns(),
-}, (t) => ({
-  question: index('question_keyword_question_idx').on(t.questionId, t.position),
-}))
+}, (t) => [
+  index('question_keyword_question_idx').on(t.questionId, t.position),
+])
 ```
 
 **`wordLengths` is stored, not computed at read time.** Deriving it in the payload filter
@@ -299,10 +305,10 @@ export const question = sqliteTable('question', {
   categoryId: text('category_id').references(() => jeopardyCategory.id, { onDelete: 'cascade' }),
 
   ...questionColumns(),
-}, (t) => ({
-  roundPosition:    index('question_round_position_idx').on(t.roundId, t.position),
-  categoryPosition: index('question_category_position_idx').on(t.categoryId, t.position),
-}))
+}, (t) => [
+  index('question_round_position_idx').on(t.roundId, t.position),
+  index('question_category_position_idx').on(t.categoryId, t.position),
+])
 ```
 
 Notes on the shared columns:
@@ -327,9 +333,9 @@ export const acceptedAnswer = sqliteTable('accepted_answer', {
   id:         text('id').primaryKey().$defaultFn(uuidv7),
   questionId: text('question_id').notNull().references(() => question.id, { onDelete: 'cascade' }),
   ...acceptedAnswerColumns(),
-}, (t) => ({
-  question: index('accepted_answer_question_idx').on(t.questionId, t.position),
-}))
+}, (t) => [
+  index('accepted_answer_question_idx').on(t.questionId, t.position),
+])
 ```
 
 - **`FREE_TEXT`** — auto-matched lowercase+trim against *any* row (D22).
@@ -348,9 +354,9 @@ export const questionOption = sqliteTable('question_option', {
   id:         text('id').primaryKey().$defaultFn(uuidv7),
   questionId: text('question_id').notNull().references(() => question.id, { onDelete: 'cascade' }),
   ...optionColumns(),
-}, (t) => ({
-  question: index('question_option_question_idx').on(t.questionId, t.position),
-}))
+}, (t) => [
+  index('question_option_question_idx').on(t.questionId, t.position),
+])
 ```
 
 > **`isCorrect` is the most dangerous column in this schema.** It must never reach a
@@ -370,10 +376,10 @@ export const attachment = sqliteTable('attachment', {
   questionId: text('question_id').notNull().references(() => question.id, { onDelete: 'cascade' }),
   ...attachmentColumns(),
   createdAt:  integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (t) => ({
-  question: index('attachment_question_idx').on(t.questionId, t.position),
-  checksum: index('attachment_checksum_idx').on(t.checksum),   // drives file GC (§8)
-}))
+}, (t) => [
+  index('attachment_question_idx').on(t.questionId, t.position),
+  index('attachment_checksum_idx').on(t.checksum),   // drives file GC (§8)
+])
 ```
 
 `originalName` is **display metadata only** and never used to build a path.
@@ -407,9 +413,9 @@ export const gameRound = sqliteTable('game_round', {
   gameId:   text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
   sourceId: text('source_id').references(() => round.id, { onDelete: 'set null' }),
   ...roundColumns(),
-}, (t) => ({
-  gamePosition: index('game_round_game_position_idx').on(t.gameId, t.position),
-}))
+}, (t) => [
+  index('game_round_game_position_idx').on(t.gameId, t.position),
+])
 
 export const gameJeopardyCategory = sqliteTable('game_jeopardy_category', {
   id:          text('id').primaryKey().$defaultFn(uuidv7),
@@ -417,9 +423,9 @@ export const gameJeopardyCategory = sqliteTable('game_jeopardy_category', {
   gameRoundId: text('game_round_id').notNull().references(() => gameRound.id, { onDelete: 'cascade' }),
   sourceId:    text('source_id').references(() => jeopardyCategory.id, { onDelete: 'set null' }),
   ...categoryColumns(),
-}, (t) => ({
-  roundPosition: index('game_jeopardy_category_round_position_idx').on(t.gameRoundId, t.position),
-}))
+}, (t) => [
+  index('game_jeopardy_category_round_position_idx').on(t.gameRoundId, t.position),
+])
 
 export const gameQuestion = sqliteTable('game_question', {
   id:              text('id').primaryKey().$defaultFn(uuidv7),
@@ -428,48 +434,48 @@ export const gameQuestion = sqliteTable('game_question', {
   gameCategoryId:  text('game_category_id').references(() => gameJeopardyCategory.id, { onDelete: 'cascade' }),
   sourceId:        text('source_id').references(() => question.id, { onDelete: 'set null' }),
   ...questionColumns(),
-}, (t) => ({
-  roundPosition:    index('game_question_round_position_idx').on(t.gameRoundId, t.position),
-  categoryPosition: index('game_question_category_position_idx').on(t.gameCategoryId, t.position),
-  byGame:           index('game_question_game_idx').on(t.gameId),
-}))
+}, (t) => [
+  index('game_question_round_position_idx').on(t.gameRoundId, t.position),
+  index('game_question_category_position_idx').on(t.gameCategoryId, t.position),
+  index('game_question_game_idx').on(t.gameId),
+])
 
 export const gameAcceptedAnswer = sqliteTable('game_accepted_answer', {
   id:             text('id').primaryKey().$defaultFn(uuidv7),
   gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
   gameQuestionId: text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
   ...acceptedAnswerColumns(),
-}, (t) => ({
-  question: index('game_accepted_answer_question_idx').on(t.gameQuestionId, t.position),
-}))
+}, (t) => [
+  index('game_accepted_answer_question_idx').on(t.gameQuestionId, t.position),
+])
 
 export const gameQuestionOption = sqliteTable('game_question_option', {
   id:             text('id').primaryKey().$defaultFn(uuidv7),
   gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
   gameQuestionId: text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
   ...optionColumns(),
-}, (t) => ({
-  question: index('game_question_option_question_idx').on(t.gameQuestionId, t.position),
-}))
+}, (t) => [
+  index('game_question_option_question_idx').on(t.gameQuestionId, t.position),
+])
 
 export const gameQuestionKeyword = sqliteTable('game_question_keyword', {
   id:             text('id').primaryKey().$defaultFn(uuidv7),
   gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
   gameQuestionId: text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
   ...keywordColumns(),
-}, (t) => ({
-  question: index('game_question_keyword_question_idx').on(t.gameQuestionId, t.position),
-}))
+}, (t) => [
+  index('game_question_keyword_question_idx').on(t.gameQuestionId, t.position),
+])
 
 export const gameAttachment = sqliteTable('game_attachment', {
   id:             text('id').primaryKey().$defaultFn(uuidv7),
   gameId:         text('game_id').notNull().references(() => game.id, { onDelete: 'cascade' }),
   gameQuestionId: text('game_question_id').notNull().references(() => gameQuestion.id, { onDelete: 'cascade' }),
   ...attachmentColumns(),
-}, (t) => ({
-  question: index('game_attachment_question_idx').on(t.gameQuestionId, t.position),
-  checksum: index('game_attachment_checksum_idx').on(t.checksum),   // file GC (§8)
-}))
+}, (t) => [
+  index('game_attachment_question_idx').on(t.gameQuestionId, t.position),
+  index('game_attachment_checksum_idx').on(t.checksum),   // file GC (§8)
+])
 ```
 
 > **No `sourceId` on `game_accepted_answer`, `game_question_option`, or
@@ -514,14 +520,14 @@ export const game = sqliteTable('game', {
   createdAt:  integer('created_at',  { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
   startedAt:  integer('started_at',  { mode: 'timestamp_ms' }),
   finishedAt: integer('finished_at', { mode: 'timestamp_ms' }),
-}, (t) => ({
+}, (t) => [
   // Codes are unique only among joinable games (PRD 1 §8.10) so finished codes recycle.
   // A partial unique index expresses this exactly; a plain unique constraint would
   // exhaust the code space over time.
-  activeCode: uniqueIndex('game_active_code_idx').on(t.code)
+  uniqueIndex('game_active_code_idx').on(t.code)
     .where(sql`status IN ('SETUP','LIVE')`),
-  quizStatus: index('game_quiz_status_idx').on(t.sourceQuizId, t.status),
-}))
+  index('game_quiz_status_idx').on(t.sourceQuizId, t.status),
+])
 ```
 
 ### 6.2 `game_team`
@@ -547,9 +553,9 @@ export const gameTeam = sqliteTable('game_team', {
   eliminatedAt: integer('eliminated_at', { mode: 'timestamp_ms' }),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (t) => ({
-  gamePosition: index('game_team_game_position_idx').on(t.gameId, t.position),
-}))
+}, (t) => [
+  index('game_team_game_position_idx').on(t.gameId, t.position),
+])
 ```
 
 Team names are **not** unique within a game (PRD 1 §8.2) — two teams may genuinely pick
@@ -572,10 +578,10 @@ export const gameDevice = sqliteTable('game_device', {
 
   firstSeenAt: integer('first_seen_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
   lastSeenAt:  integer('last_seen_at',  { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (t) => ({
-  token: uniqueIndex('game_device_token_idx').on(t.deviceToken),
-  team:  index('game_device_team_idx').on(t.gameId, t.teamId),
-}))
+}, (t) => [
+  uniqueIndex('game_device_token_idx').on(t.deviceToken),
+  index('game_device_team_idx').on(t.gameId, t.teamId),
+])
 ```
 
 `lastSeenAt` is the **only** column in the play half updated in place rather than
@@ -600,9 +606,9 @@ export const gameEvent = sqliteTable('game_event', {
   payload: text('payload', { mode: 'json' }).$type<GameEventPayload>().notNull(),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (t) => ({
-  gameSeq: uniqueIndex('game_event_game_seq_idx').on(t.gameId, t.seq),
-}))
+}, (t) => [
+  uniqueIndex('game_event_game_seq_idx').on(t.gameId, t.seq),
+])
 ```
 
 **Append-only.** No code may `UPDATE` or `DELETE` here. Correcting a misjudged answer or
@@ -690,12 +696,12 @@ export const gameAnswer = sqliteTable('game_answer', {
 
   pointsAwarded: integer('points_awarded').notNull().default(0),
   validatedAt:   integer('validated_at', { mode: 'timestamp_ms' }),
-}, (t) => ({
-  oneAnswerPerTeam: uniqueIndex('game_answer_unique_idx').on(t.gameId, t.gameQuestionId, t.teamId),
-  byQuestion:       index('game_answer_question_idx').on(t.gameQuestionId),
+}, (t) => [
+  uniqueIndex('game_answer_unique_idx').on(t.gameId, t.gameQuestionId, t.teamId),
+  index('game_answer_question_idx').on(t.gameQuestionId),
   // Drives the validation queue: "everything in this game still needing me".
-  pending:          index('game_answer_pending_idx').on(t.gameId, t.verdict),
-}))
+  index('game_answer_pending_idx').on(t.gameId, t.verdict),
+])
 ```
 
 **A `FREE_TEXT` answer never auto-resolves to `AUTO_WRONG`.** A non-match becomes
@@ -735,9 +741,9 @@ export const gameBuzz = sqliteTable('game_buzz', {
       'NOT_FIRST',  // arrived after the lock; recorded, never adjudicated
     ],
   }).notNull(),
-}, (t) => ({
-  byQuestion: index('game_buzz_question_idx').on(t.gameQuestionId, t.receivedAt),
-}))
+}, (t) => [
+  index('game_buzz_question_idx').on(t.gameQuestionId, t.receivedAt),
+])
 ```
 
 The **lockout set is not stored** — it is derived (`teams with a DENIED buzz on this
@@ -766,10 +772,10 @@ export const gameKeywordMark = sqliteTable('game_keyword_mark', {
   // pattern, and it matters here because a wrongly-marked keyword also charged every other
   // team a penalty that must be reversed.
   revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
-}, (t) => ({
-  oneMarkPerKeyword: uniqueIndex('game_keyword_mark_unique_idx').on(t.gameKeywordId),
-  byQuestion:        index('game_keyword_mark_question_idx').on(t.gameQuestionId),
-}))
+}, (t) => [
+  uniqueIndex('game_keyword_mark_unique_idx').on(t.gameKeywordId),
+  index('game_keyword_mark_question_idx').on(t.gameQuestionId),
+])
 ```
 
 `teamId` is **nullable on purpose**: a revealed-but-unguessed keyword still gets a row, so
@@ -792,9 +798,9 @@ export const gameAnswerDraft = sqliteTable('game_answer_draft', {
     .references(() => gameQuestionOption.id, { onDelete: 'set null' }),
 
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.gameQuestionId, t.teamId] }),
-}))
+}, (t) => [
+  primaryKey({ columns: [t.gameQuestionId, t.teamId] }),
+])
 ```
 
 **Upserted directly, never event-sourced.** A draft is not a game fact: keystroke
@@ -831,9 +837,9 @@ export const gameScoreAdjustment = sqliteTable('game_score_adjustment', {
   revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-}, (t) => ({
-  byTeam: index('game_score_adjustment_team_idx').on(t.gameId, t.teamId),
-}))
+}, (t) => [
+  index('game_score_adjustment_team_idx').on(t.gameId, t.teamId),
+])
 ```
 
 Adjustments are a **separate line** from question points, never folded into
@@ -993,16 +999,16 @@ validation.
 | **I10** | At most one `game_buzz` per `(game, question)` has `outcome = 'AWAITING'`. |
 | **I11** | `game_device` count per `(gameId, teamId)` ≤ `KWIZ_MAX_DEVICES_PER_TEAM` (D20). |
 | **I12** | `question.timerMs` is null or > 0. Zero is not "no timer"; null is. |
+| **I13** | A game-copy subtree is structurally identical to its source at copy time — same counts, positions, and shared-column values at every level (§7.2). |
+| **I14** | `game_answer.selectedOptionId`, when set, belongs to that answer's `gameQuestionId`. A real FK guarantees existence but not *which question* it belongs to. |
+| **I15** | Every projection table's contents equal a replay of `game_event` for that game — verified by rebuild-and-compare. |
+| **I16** | No row in any game-copy table is ever `UPDATE`d. Copy rows are written by the creation transaction and may only be **replaced wholesale** by a §7.1 re-sync, which is refused unless `status = 'SETUP'` and no answers or buzzes exist. |
 | **I17** | A `DSMTW_FINALE` question has **exactly 5** `question_keyword` rows, positions 0–4 (D50). |
 | **I18** | `answerMethod = 'KEYWORDS'` **iff** the round's `type = 'DSMTW_FINALE'`. No other method is legal there, and `KEYWORDS` is illegal anywhere else. |
 | **I19** | `keyword.wordLengths` equals the per-word character counts of `keyword.text`, recomputed on every write (D53). A stale shape is a hint that lies. |
 | **I20** | At most one `DSMTW_FINALE` round per quiz, and its `position` is the highest in the quiz (PRD 1 §8.8). |
 | **I21** | `game_keyword_mark.teamId` is null **only** for a keyword revealed unguessed; a mark created by the master marking a guess always carries a team. |
 | **I22** | A team with `eliminatedAt` set accrues no further penalty and takes no further turn. Its clock is frozen at zero. |
-| **I13** | A game-copy subtree is structurally identical to its source at copy time — same counts, positions, and shared-column values at every level (§7.2). |
-| **I14** | `game_answer.selectedOptionId`, when set, belongs to that answer's `gameQuestionId`. A real FK guarantees existence but not *which question* it belongs to. |
-| **I15** | Every projection table's contents equal a replay of `game_event` for that game — verified by rebuild-and-compare. |
-| **I16** | No row in any game-copy table is ever `UPDATE`d. Copy rows are written by the creation transaction and may only be **replaced wholesale** by a §7.1 re-sync, which is refused unless `status = 'SETUP'` and no answers or buzzes exist. |
 
 **I15 is the keystone.** It is what makes projections safe to treat as derived, and the
 one test that catches a reducer and a writer drifting apart.
@@ -1043,9 +1049,10 @@ Specific to this schema:
 - **Adding an event type needs no migration** — `game_event.type` is a plain string by
   design (§6.4).
 - **Adding a round type or answer method needs no migration** — settings live in
-  zod-validated `config` JSON. Adding a *value* to a `text({enum})` column does mean a
-  check-constraint change if one was generated; prefer widening in a dedicated
-  migration.
+  zod-validated `config` JSON. Adding a *value* to a `text({enum})` column needs no migration
+  either: Drizzle generates no `CHECK` constraint for it (§2), so the change is
+  TypeScript-only. The flip side is that the database will not reject a bad value, so the
+  zod schema at the boundary is the only guard.
 - **A migration changing projection shape must be paired with a rebuild**, since
   existing rows were written by the old reducer:
   `DELETE FROM <projection> WHERE game_id = ?` then replay. Safe precisely because
