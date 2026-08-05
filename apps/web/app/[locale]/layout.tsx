@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
-import { setRequestLocale } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
 
@@ -34,10 +33,11 @@ export default async function LocaleLayout({
   // A backstop, not the main path: `proxy.ts` rewrites an unrecognised first segment to
   // `/en/<segment>`, so `/de/play/ABC123` 404s as an unknown route before reaching here.
   // The guard stays because Next types this param as a bare `string`, and narrowing it is
-  // what makes `setRequestLocale` and `lang` below safe.
+  // what makes `lang` below safe.
+  //
+  // Nothing primes next-intl here: `i18n/request.ts` reads the segment itself through
+  // `next/root-params`, which is what replaced the deprecated `setRequestLocale`.
   if (!hasLocale(routing.locales, locale)) notFound()
-
-  setRequestLocale(locale)
 
   return (
     <html lang={locale} suppressHydrationWarning>

@@ -53,9 +53,6 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
 - **No zip library is chosen for `@kwiz/export`.** conventions §1's dependency table names
   none, and slice 0 had no reason to pick. Whoever implements protocol §8 flags the addition
   per agent-workflow §3.4.
-- **`/[locale]` renders dynamically despite `generateStaticParams`.** Irrelevant for a LAN app
-  that is dynamic throughout, so it was not chased; noted in case someone later expects
-  prerendering.
 - **pnpm 11 has a supply-chain release-age gate** and auto-wrote a `minimumReleaseAgeExclude`
   entry for `better-sqlite3@13.0.3`. Left as generated; a future version bump will need the
   same acknowledgement.
@@ -122,6 +119,16 @@ in play yet (agent-workflow §4.5).
   `proxy.ts`**. next-intl still *writes* `NEXT_LOCALE`, so only the read side is ours.
   **If you touch `proxy.ts`, re-run the resolution-order probe** — all three steps are rows in
   the slice-0 smoke checklist.
+- **The locale reaches next-intl through `next/root-params`, not `setRequestLocale`.** Next 16
+  generates a typed `locale()` accessor from the `app/[locale]` segment, and next-intl
+  deprecated the older `requestLocale` + `setRequestLocale` pair in favour of it. `i18n/request.ts`
+  reads the segment itself, so **a layout never has to prime anything** — if you add a surface,
+  do not reintroduce a `setRequestLocale` call. Switching also made the routes properly
+  prerendered (`● /en`, `● /nl`) where `setRequestLocale` had left them dynamic.
+- **`next/root-params` is untyped until the first build.** Its real types are generated into
+  `.next/types/root-params.d.ts`; before that Next ships a shorthand ambient declaration, so
+  `locale()` is `any` rather than a compile error. On a fresh clone, run `pnpm build` once
+  before trusting editor types there.
 - `messages/nl.ts` is typed `: Messages` from `en.ts`, so **a key present in English and
   missing in Dutch is a compile error**. `global.d.ts` registers `AppConfig`, so `t()` keys are
   checked too — a typo is a build failure, not a raw key on a projector.
