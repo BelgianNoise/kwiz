@@ -1,18 +1,54 @@
 /**
- * `@kwiz/db` — Drizzle schema, migrations and repositories.
+ * `@kwiz/db` — Drizzle schema, migrations and the one writer.
  *
- * Three groups of tables with different mutability rules (data model §2): template
- * (mutable), game-copy (write-once), play (event-sourced + projections). They are not
- * interchangeable and must not be mixed.
+ * Three groups of tables with different mutability rules (data model §1): template (mutable),
+ * game-copy (write-once, I16), play (event-sourced + projections). They are not interchangeable
+ * and must not be mixed.
  *
- * The play half has exactly one writer — `appendAndProject()` — which appends to
- * `game_event` and updates the projection in the same transaction (CLAUDE.md §2.2). If you
+ * The play half has exactly one writer — {@link appendAndProject} — which appends to
+ * `game_event` and updates the projections in the same transaction (CLAUDE.md §2.2). If you
  * find yourself wanting to `UPDATE game_answer`, the change you want is an event.
- *
- * `better-sqlite3` and `drizzle-orm` are declared here in slice 0 so the scaffold's
- * install actually exercises conventions §1.1 — a dependency added in slice 1 would move
- * that risk to the slice least able to absorb it.
- *
- * The schema arrives in build-order slice 1.
  */
-export {}
+
+export * from './schema'
+
+export {
+  applyPragmas,
+  closeDatabase,
+  dataPaths,
+  getDatabase,
+  openDatabase,
+  type DataPaths,
+  type KwizDatabase,
+  type KwizDb,
+  type KwizSchema,
+  type KwizTx,
+} from './client'
+
+export {
+  GAME_EVENT_TYPES,
+  gameEventPayloadSchemas,
+  isGameEventType,
+  type GameEvent,
+  type GameEventPayload,
+  type GameEventType,
+} from './events/payload'
+
+export { EventPayloadError, parseGameEvent, parseStoredEvent } from './events/parse'
+
+export { appendAndProject, latestSeq, readLog, type AppendResult } from './append'
+
+export { applyProjection, recomputeScore } from './projections'
+
+export {
+  backupDatabase,
+  isFreshDatabase,
+  migrateAtBoot,
+  MigrationConsentUnavailableError,
+  pendingMigrations,
+  type BootMigrationOptions,
+  type MigrationOutcome,
+  type PendingMigration,
+} from './migrate'
+
+export { SHARED_COLUMN_GROUPS, sharedColumnParity, type ParityMismatch } from './parity'

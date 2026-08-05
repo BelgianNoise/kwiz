@@ -1001,7 +1001,7 @@ validation.
 | **I12** | `question.timerMs` is null or > 0. Zero is not "no timer"; null is. |
 | **I13** | A game-copy subtree is structurally identical to its source at copy time — same counts, positions, and shared-column values at every level (§7.2). |
 | **I14** | `game_answer.selectedOptionId`, when set, belongs to that answer's `gameQuestionId`. A real FK guarantees existence but not *which question* it belongs to. |
-| **I15** | Every projection table's contents equal a replay of `game_event` for that game — verified by rebuild-and-compare. |
+| **I15** | Every projection table's contents equal a replay of `game_event` for that game — verified by rebuild-and-compare. Equality of **content**, not of surrogate keys: a rebuild regenerates any row id left to a column default. Consequently, **an id a later event references must be carried in the event that creates the row** (`BUZZ_RECEIVED.buzzId`, `SCORE_ADJUSTED.adjustmentId`), or the rebuild orphans the reference — see protocol §4.7. |
 | **I16** | No row in any game-copy table is ever `UPDATE`d. Copy rows are written by the creation transaction and may only be **replaced wholesale** by a §7.1 re-sync, which is refused unless `status = 'SETUP'` and no answers or buzzes exist. |
 | **I17** | A `DSMTW_FINALE` question has **exactly 5** `question_keyword` rows, positions 0–4 (D50). |
 | **I18** | `answerMethod = 'KEYWORDS'` **iff** the round's `type = 'DSMTW_FINALE'`. No other method is legal there, and `KEYWORDS` is illegal anywhere else. |

@@ -57,7 +57,13 @@ export const gameEventPayloadSchemas = {
     name: z.string().min(1).optional(),
     colour: colour.optional(),
   }),
-  DEVICE_JOINED: z.strictObject({ deviceId: id, teamId }),
+  /**
+   * Carries `deviceToken` because the projection has to *create* the row, and there is nowhere
+   * else it could come from without a second writer into the play half. No new exposure: the
+   * log sits on the same disk as `game_device`, and the token is device continuity rather than
+   * authentication (PRD 1 §4).
+   */
+  DEVICE_JOINED: z.strictObject({ deviceId: id, teamId, deviceToken: z.string().min(1) }),
   DEVICE_SWITCHED_TEAM: z.strictObject({
     deviceId: id,
     fromTeamId: teamId,
@@ -178,8 +184,17 @@ export const gameEventPayloadSchemas = {
     teamId,
     reason: z.enum(['RULE', 'TIE_BREAK', 'MASTER_OVERRIDE']),
   }),
-  /** Any time, any amount, may be negative (D15). `announced: false` hides the banner (D25). */
+  /**
+   * Any time, any amount, may be negative (D15). `announced: false` hides the banner (D25).
+   *
+   * **Carries its own `adjustmentId`** — the row id, minted by the caller rather than by the
+   * column default. `SCORE_ADJUSTMENT_REVOKED` refers to it, and a projection rebuild (§11) with
+   * a generated id would hand the row a new one and orphan every revocation, silently restoring
+   * points a master took away. Any projection id a later event references must live in the log;
+   * `BUZZ_RECEIVED.buzzId` is the same rule.
+   */
   SCORE_ADJUSTED: z.strictObject({
+    adjustmentId: id,
     teamId,
     delta: z.number().int(),
     reason: z.string().optional(),
