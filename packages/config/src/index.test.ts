@@ -45,13 +45,11 @@ describe('parseConfig', () => {
   })
 
   it('reports every failure at once, not one per restart', () => {
-    try {
-      parseConfig({ PORT: 'x', KWIZ_MAX_UPLOAD_MB: 'y' })
-      expect.unreachable('should have thrown')
-    } catch (error) {
-      expect((error as ConfigError).message).toContain('PORT')
-      expect((error as ConfigError).message).toContain('KWIZ_MAX_UPLOAD_MB')
-    }
+    const parse = () => parseConfig({ PORT: 'x', KWIZ_MAX_UPLOAD_MB: 'y' })
+
+    expect(parse).toThrow(ConfigError)
+    expect(parse).toThrow(/PORT/)
+    expect(parse).toThrow(/KWIZ_MAX_UPLOAD_MB/)
   })
 
   it('rejects a fractional or out-of-range port', () => {

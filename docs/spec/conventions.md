@@ -18,7 +18,7 @@ here, not in a PRD. PRDs explain *why*; this file says *what*.
 | Package manager | **pnpm** workspaces | `pnpm-workspace.yaml` at root |
 | Framework | **Next.js**, App Router, TypeScript `strict` | |
 | Tests | **Vitest** | §1.2 |
-| Lint | **oxlint** | §1.3 — configured to *enforce* architectural rules, not just style |
+| Lint | **oxlint** + `oxlint-tsgolint` | §1.3 — configured to *enforce* architectural rules, not just style. The second package is the type-aware backend, without which the promise rules silently do nothing |
 | Format | **oxfmt** | §1.3 |
 | DB | **Drizzle ORM** + `better-sqlite3` | data model §2.1 |
 | Validation | **zod** | Every boundary. No exceptions |
@@ -71,6 +71,11 @@ noise.
     "eqeqeq": "error",
     "typescript/no-explicit-any": "warn",
 
+    // Type-aware — see below. An unawaited write is a lost event or a stalled stream
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+
     // Next.js uses the automatic JSX runtime, so React is never in scope by design
     "react/react-in-jsx-scope": "off",
     // `import './globals.css'` is how an App Router layout loads styles
@@ -106,18 +111,28 @@ noise.
 }
 ```
 
-**oxlint has no type-aware rules.** `no-floating-promises`, `no-misused-promises` and
-`await-thenable` all need a TypeScript program, which oxlint does not build, and it does not
-implement them under any name. An earlier draft of this file listed
-`no-floating-promises: error`; it was silently doing nothing. Floating promises are
-therefore **not mechanically caught** anywhere in this project — worth knowing when
-reviewing `appendAndProject()` and the SSE writers, which are where an unawaited promise
-would actually hurt.
+**The three promise rules are type-aware, and type-aware rules are off unless asked for.**
+They need a TypeScript program, which oxlint builds only under `--type-aware` and only with
+the `oxlint-tsgolint` package present. That is why `pnpm lint` is `oxlint --type-aware` rather
+than plain `oxlint` — **without the flag these three rules report nothing and say nothing
+about why.**
+
+An unawaited promise is the failure this buys, and it is silent by construction: a dropped
+`appendAndProject()` loses an event, a dropped SSE write stalls one client, and neither
+throws. `no-misused-promises` covers the same defect in disguise — `xs.forEach(async …)`,
+or a promise where a `void` return was expected.
+
+> Expect `no-misused-promises` to have something to say about React event handlers from
+> slice 4 onwards: `onClick={async () => …}` returns a promise where `void` is expected. The
+> fix is `onClick={() => { void handle() }}`, which is better anyway — it makes the
+> deliberately-unhandled promise visible at the call site instead of implicit.
 
 **oxlint accepts an unknown rule name silently** — no warning, no error, exit code 0. A typo
 in the block above, or a rule renamed in a future oxlint, degrades an architectural
-guarantee into a decorative line of JSON with nothing to reveal it. This is why §1.4's rules
-have a test rather than only a config (see below).
+guarantee into a decorative line of JSON with nothing to reveal it. An earlier draft of this
+file specified `no-floating-promises` without the plugin prefix or the flag, and it did
+nothing for exactly that reason. This is why §1.4's rules have a test rather than only a
+config (see below).
 
 ### 1.3.1 oxfmt
 
@@ -163,8 +178,8 @@ everything from.
   "start":        "pnpm --filter @kwiz/web start",   // prompts for pending migrations (D14)
   "test":         "vitest run",
   "test:watch":   "vitest",
-  "typecheck":    "tsc --noEmit -p tsconfig.tools.json && pnpm -r typecheck",
-  "lint":         "oxlint && pnpm lint:env",
+  "typecheck":    "tsc --noEmit && pnpm -r typecheck",
+  "lint":         "oxlint --type-aware && pnpm lint:env",   // the flag is load-bearing, §1.3
   "lint:env":     "node scripts/check-no-process-env.mjs",   // §1.4's third rule
   "format":       "oxfmt --write .",
   "format:check": "oxfmt --check .",
@@ -177,8 +192,11 @@ everything from.
 
 `typecheck` runs each package's own `tsc --noEmit` — a single root project cannot serve both
 the packages and a Next.js app, which needs `jsx: preserve`, its own `lib` and the `next`
-plugin. `tsconfig.tools.json` covers the root-level files (`vitest.config.ts`, `scripts/`)
-that no package owns.
+plugin. The root `tsconfig.json` covers the files no package owns (`vitest.config.ts`,
+`scripts/`), and **must be named exactly that**: editors and `oxlint --type-aware` both
+resolve the nearest `tsconfig.json` per file, so a descriptive name like `tsconfig.tools.json`
+leaves them on inferred defaults — which shows up as `process` being undefined in `scripts/`
+while `pnpm typecheck` passes.
 
 ### 1.6 Continuous integration
 

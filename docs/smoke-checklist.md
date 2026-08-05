@@ -38,6 +38,10 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
       toolchain present (conventions §1.1). `node_modules/.pnpm/better-sqlite3@*/…/build`
       must not exist — only `prebuilds/`.
 - [ ] `pnpm check` is green: format, lint, `process.env` guard, typecheck, tests.
+- [ ] `pnpm lint` produces **zero output**, warnings included. A tolerated warning is a
+      warning nobody will read later.
+- [ ] `pnpm lint` still carries `--type-aware`, without which the three promise rules
+      silently do nothing (conventions §1.3).
 - [ ] `pnpm build` completes with **no warnings**.
 - [ ] `pnpm dev` serves, and `/` redirects to `/en`.
 - [ ] `/en` and `/nl` both render, each with a matching `<html lang>`.

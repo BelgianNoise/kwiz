@@ -10,8 +10,8 @@
     "start": "pnpm --filter @kwiz/web start",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.tools.json && pnpm -r typecheck",
-    "lint": "oxlint && pnpm lint:env",
+    "typecheck": "tsc --noEmit && pnpm -r typecheck",
+    "lint": "oxlint --type-aware && pnpm lint:env",
     "lint:env": "node scripts/check-no-process-env.mjs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -24,6 +24,7 @@
     "@types/node": "^26.1.2",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",
+    "oxlint-tsgolint": "7.0.2001",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },

@@ -12,6 +12,13 @@
     "eqeqeq": "error",
     "typescript/no-explicit-any": "warn",
 
+    // Type-aware (oxlint --type-aware, backed by oxlint-tsgolint). An unawaited write is a
+    // lost event in appendAndProject or a stalled SSE stream — both silent.
+    "typescript/no-floating-promises": "error",
+    // The same bug in disguise: `xs.forEach(async …)` and `if (promise)`
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+
     // Next.js uses the automatic JSX runtime, so React is never in scope by design.
     "react/react-in-jsx-scope": "off",
 

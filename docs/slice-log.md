@@ -65,19 +65,45 @@ Two things came with it that are easy to mistake for decoration:
 Verified by wiping every `node_modules`, reinstalling with `--frozen-lockfile`, and running all
 five steps in order — not just by trusting the YAML. The workflow is also schema-validated.
 
+### Floating promises are enforced after all (conventions §1.3)
+
+The first slice-0 report said nothing mechanically caught a floating promise, and that oxlint
+had no type-aware rules. **That was wrong**, and worth correcting because it would have led
+someone to bolt typescript-eslint on beside oxlint for no reason.
+
+oxlint 1.77 does have type-aware rules — they are simply **off unless you ask**, needing both
+the `--type-aware` flag and the `oxlint-tsgolint` package. Now enabled as errors:
+
+| Rule | Catches |
+| --- | --- |
+| `typescript/no-floating-promises` | a dropped `appendAndProject()` or SSE write |
+| `typescript/no-misused-promises` | `xs.forEach(async …)`, a promise where `void` was expected |
+| `typescript/await-thenable` | `await` on a non-promise |
+
+**`pnpm lint` is `oxlint --type-aware`, and the flag is load-bearing** — without it these three
+report nothing *and say nothing about why*. `scripts/architecture-rules.test.ts` therefore
+asserts both that they fire with the flag and that they are silent without it, so nobody
+"simplifies" the script back to plain `oxlint`.
+
+**New dependency, flagged per agent-workflow §3.4:** `oxlint-tsgolint` (dev only, root). It is
+the type-aware backend and nothing already present can do this. It ships platform binaries as
+optional dependencies for all six mainstream targets — including both CI matrix platforms — so
+it needs no compilation, consistent with conventions §1.1.
+
+**Expect noise from `no-misused-promises` in slices 4–7**: `onClick={async () => …}` returns a
+promise where `void` is expected. The fix is `onClick={() => { void handle() }}`, which is
+better regardless — it makes a deliberately unhandled promise visible at the call site. Do not
+switch the rule off to avoid typing that.
+
 ### Raised, not resolved
 
-- **Nothing mechanically catches a floating promise.** This is the price of oxlint over
-  typescript-eslint, and it lands exactly where it hurts: `appendAndProject()` (slice 1) and
-  the SSE writers (slice 3), where an unawaited write is a lost event or a stalled stream.
-  Options are to accept it and review by hand, or add typescript-eslint solely for that rule.
-  **Not decided — worth a decision before slice 3.**
 - **No zip library is chosen for `@kwiz/export`.** conventions §1's dependency table names
   none, and slice 0 had no reason to pick. Whoever implements protocol §8 flags the addition
   per agent-workflow §3.4.
-- **No README.** `CLAUDE.md` covers everything an agent needs, but a human cloning this
-  repo gets no hint that it wants Node 24 and corepack. Cheap to add; not a build-order
-  deliverable, so it was not.
+- **No README, deliberately deferred.** `CLAUDE.md` covers everything an agent needs. A human
+  README waits until the surfaces exist so it can carry screenshots — so it belongs with
+  build-order slice 8 or 10, not here. It still needs to say that the repo wants Node 24 and
+  corepack, since `engineStrict` reports that only after someone has already tried.
 - **pnpm 11 has a supply-chain release-age gate** and auto-wrote a `minimumReleaseAgeExclude`
   entry for `better-sqlite3@13.0.3`. Left as generated; a future version bump will need the
   same acknowledgement.

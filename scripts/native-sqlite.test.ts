@@ -59,7 +59,11 @@ describe('the prebuilt binary works', () => {
     close: () => void
   }
 
-  const Database = requireFromDb('better-sqlite3') as new (path: string) => Connection
+  // Annotated rather than asserted. `require` of an untyped CJS module yields `any`, and
+  // assigning it to a typed binding avoids the `as` that `no-unsafe-type-assertion` flags.
+  // better-sqlite3 ships no types of its own, and `@types/better-sqlite3` still targets v9
+  // against our v13 — whether to add it is slice 1's call, when Drizzle needs the real ones.
+  const Database: new (path: string) => Connection = requireFromDb('better-sqlite3')
 
   const open = (): Connection => {
     const db = new Database(':memory:')
