@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  // The root-level files no package owns. It must be named `tsconfig.json` rather than
+  // something more descriptive: editors and `oxlint --type-aware` both resolve the *nearest
+  // `tsconfig.json`* for a file, and with only `tsconfig.base.json` here they fell back to
+  // inferred defaults — which is why `process` looked undefined in `scripts/` even though
+  // `pnpm typecheck` passed.
+  //
+  // Files under `apps/` and `packages/` resolve to their own tsconfig, not this one.
+  "include": ["vitest.config.ts", "scripts/**/*.ts"]
+}

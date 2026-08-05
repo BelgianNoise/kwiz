@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+
+  "semi": false,
+  "singleQuote": true,
+  "jsxSingleQuote": false,
+  "printWidth": 90,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "arrowParens": "always",
+  "insertFinalNewline": true,
+
+  "sortImports": true,
+  "sortTailwindcss": true,
+
+  "ignorePatterns": ["pnpm-lock.yaml", "data", "**/*.md"]
+}

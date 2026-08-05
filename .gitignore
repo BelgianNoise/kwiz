@@ -1,0 +1,42 @@
+# Runtime data — the database, attachments and backups. Never committed
+# (agent-workflow §7, CLAUDE.md §3).
+data/
+
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build output
+dist/
+*.tsbuildinfo
+
+#
+# NOTE: `*.arch-fixture.ts` is deliberately NOT ignored here.
+#
+# scripts/architecture-rules.test.ts writes those files, lints them and deletes them. They
+# cannot be gitignored, because oxlint always honours .gitignore and `--no-ignore` only
+# disables .eslintignore — an ignored fixture is simply never linted, and the test would
+# pass while proving nothing. They are excluded from tsconfig instead, and a leaked one
+# fails `pnpm lint` visibly rather than being silently committed.
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+.playwright/
+
+# Local env overrides. Config is env-driven (PRD 1 §6.8); real values are never committed.
+.env
+.env.local
+.env.*.local
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

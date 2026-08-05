@@ -1,0 +1,71 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn",
+    "style": "off"
+  },
+  "plugins": ["typescript", "react", "jsx-a11y", "import"],
+  "rules": {
+    "no-console": "warn",
+    "eqeqeq": "error",
+    "typescript/no-explicit-any": "warn",
+
+    // Type-aware (oxlint --type-aware, backed by oxlint-tsgolint). An unawaited write is a
+    // lost event in appendAndProject or a stalled SSE stream — both silent.
+    "typescript/no-floating-promises": "error",
+    // The same bug in disguise: `xs.forEach(async …)` and `if (promise)`
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+
+    // Next.js uses the automatic JSX runtime, so React is never in scope by design.
+    "react/react-in-jsx-scope": "off",
+
+    // `import './globals.css'` is a side-effect import and the intended way to load
+    // styles in an App Router layout.
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
+  },
+  "ignorePatterns": [
+    "node_modules",
+    ".next",
+    "dist",
+    "coverage",
+    "data",
+    "test-results",
+    "playwright-report",
+    "**/*.d.ts"
+  ],
+  "overrides": [
+    {
+      "files": ["packages/domain/**"],
+      "rules": {
+        "typescript/no-explicit-any": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              "*drizzle*",
+              "*better-sqlite3*",
+              "next/*",
+              "next",
+              "@kwiz/db",
+              "node:fs",
+              "node:http",
+              "fs",
+              "http"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/db/**"],
+      "rules": { "typescript/no-explicit-any": "error" }
+    },
+    {
+      "files": ["scripts/**"],
+      "rules": { "no-console": "off" }
+    }
+  ]
+}

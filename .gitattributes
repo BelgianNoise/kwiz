@@ -1,0 +1,24 @@
+# Normalise line endings regardless of anyone's `core.autocrlf`.
+#
+# Not cosmetic: `oxfmt --check` is part of `pnpm check`, so a CRLF checkout on a Windows
+# machine or CI runner would fail the gate for a reason that has nothing to do with the code.
+* text=auto eol=lf
+
+# Generated, and noisy in review.
+pnpm-lock.yaml -diff linguist-generated
+
+# Never touched by the text filters.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.mp3 binary
+*.m4a binary
+*.wav binary
+*.ogg binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.db binary
+*.node binary

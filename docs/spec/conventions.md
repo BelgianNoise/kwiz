@@ -18,13 +18,13 @@ here, not in a PRD. PRDs explain *why*; this file says *what*.
 | Package manager | **pnpm** workspaces | `pnpm-workspace.yaml` at root |
 | Framework | **Next.js**, App Router, TypeScript `strict` | |
 | Tests | **Vitest** | §1.2 |
-| Lint | **oxlint** | §1.3 — configured to *enforce* architectural rules, not just style |
+| Lint | **oxlint** + `oxlint-tsgolint` | §1.3 — configured to *enforce* architectural rules, not just style. The second package is the type-aware backend, without which the promise rules silently do nothing |
 | Format | **oxfmt** | §1.3 |
 | DB | **Drizzle ORM** + `better-sqlite3` | data model §2.1 |
 | Validation | **zod** | Every boundary. No exceptions |
 | IDs | **`uuid`** (`v7`) | `import { v7 as uuidv7 } from 'uuid'` |
 | i18n | **next-intl** | §6 |
-| Components | **shadcn/ui** + Tailwind | PRD 1 §10 |
+| Components | **shadcn/ui** + Tailwind | PRD 1 §9.1 |
 | Screen wake | **`nosleep.js`** | Player devices only (D48) |
 | E2E | **Playwright** | Multi-context, mobile emulation, network control, tracing (D49). Built in build-order slice 9 |
 
@@ -69,9 +69,22 @@ noise.
   "rules": {
     "no-console": "warn",
     "eqeqeq": "error",
-    "no-floating-promises": "error",
-    "typescript/no-explicit-any": "warn"
+    "typescript/no-explicit-any": "warn",
+
+    // Type-aware — see below. An unawaited write is a lost event or a stalled stream
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+
+    // Next.js uses the automatic JSX runtime, so React is never in scope by design
+    "react/react-in-jsx-scope": "off",
+    // `import './globals.css'` is how an App Router layout loads styles
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
   },
+  "ignorePatterns": [
+    "node_modules", ".next", "dist", "coverage", "data",
+    "test-results", "playwright-report", "**/*.d.ts"
+  ],
   "overrides": [
     {
       // §1.4 — the architectural rules, enforced
@@ -89,10 +102,46 @@ noise.
     {
       "files": ["packages/db/**"],
       "rules": { "typescript/no-explicit-any": "error" }
+    },
+    {
+      "files": ["scripts/**"],
+      "rules": { "no-console": "off" }   // these scripts report to a terminal
     }
   ]
 }
 ```
+
+**The three promise rules are type-aware, and type-aware rules are off unless asked for.**
+They need a TypeScript program, which oxlint builds only under `--type-aware` and only with
+the `oxlint-tsgolint` package present. That is why `pnpm lint` is `oxlint --type-aware` rather
+than plain `oxlint` — **without the flag these three rules report nothing and say nothing
+about why.**
+
+An unawaited promise is the failure this buys, and it is silent by construction: a dropped
+`appendAndProject()` loses an event, a dropped SSE write stalls one client, and neither
+throws. `no-misused-promises` covers the same defect in disguise — `xs.forEach(async …)`,
+or a promise where a `void` return was expected.
+
+> Expect `no-misused-promises` to have something to say about React event handlers from
+> slice 4 onwards: `onClick={async () => …}` returns a promise where `void` is expected. The
+> fix is `onClick={() => { void handle() }}`, which is better anyway — it makes the
+> deliberately-unhandled promise visible at the call site instead of implicit.
+
+**oxlint accepts an unknown rule name silently** — no warning, no error, exit code 0. A typo
+in the block above, or a rule renamed in a future oxlint, degrades an architectural
+guarantee into a decorative line of JSON with nothing to reveal it. An earlier draft of this
+file specified `no-floating-promises` without the plugin prefix or the flag, and it did
+nothing for exactly that reason. This is why §1.4's rules have a test rather than only a
+config (see below).
+
+### 1.3.1 oxfmt
+
+`.oxfmtrc.json` pins the house style — no semicolons, single quotes, width 90, trailing
+commas — which is the style the code samples throughout these documents already use.
+
+Two non-default options are on because they remove a whole class of review comment:
+`sortImports` and `sortTailwindcss`. **Markdown is excluded**: oxfmt would reflow the prose
+in `docs/`, and these documents are hand-wrapped.
 
 ### 1.4 Lint rules that encode architecture
 
@@ -103,29 +152,81 @@ enforced mechanically rather than trusted, and should be:
 | --- | --- |
 | `packages/domain` is pure (CLAUDE.md §2.1) | `no-restricted-imports` above. A domain file importing Drizzle or Next now **fails lint** |
 | No `any` in `domain` or `db` | `no-explicit-any: error` in those overrides only |
-| No `process.env` outside the config module | Grep check in CI: `process.env` may appear only in `packages/config/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
+| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint` — locally and in CI (§1.6). `process.env` may appear only in `packages/config/src/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
 
 If oxlint's `no-restricted-imports` proves insufficient, a ~20-line CI script asserting
 the same thing is an acceptable substitute. **Do not downgrade it to a comment.**
 
+**All three are covered by `scripts/architecture-rules.test.ts`**, which writes a file that
+violates each rule, runs the real linter over it, and asserts the violation is reported as an
+*error*. Given that oxlint ignores unknown rule names in silence (§1.3), reading the config
+back proves nothing — only running it does. The fixtures are deliberately **not gitignored**:
+oxlint always honours `.gitignore` and its `--no-ignore` flag only disables `.eslintignore`,
+so an ignored fixture would never be linted and the test would pass while proving nothing.
+
 ### 1.5 Scripts
+
+Defined at the **workspace root**, fanning out to the packages. `dev`/`build`/`start` and
+`db:generate` are thin wrappers over the package that owns them (`next dev` lives in
+`apps/web`, `drizzle-kit generate` in `packages/db`), so there is one place to run
+everything from.
 
 ```jsonc
 {
-  "dev":        "next dev",
-  "build":      "next build",
-  "start":      "next start",          // prompts for pending migrations (D14)
-  "test":       "vitest run",
-  "test:watch": "vitest",
-  "typecheck":  "tsc --noEmit",
-  "lint":       "oxlint",
-  "format":     "oxfmt --write .",
-  "check":      "oxfmt --check . && oxlint && tsc --noEmit && vitest run",
-  "db:generate": "drizzle-kit generate",
-  "e2e":         "playwright test",
-  "e2e:ui":      "playwright test --ui"
+  "dev":          "pnpm --filter @kwiz/web dev",
+  "build":        "pnpm --filter @kwiz/web build",
+  "start":        "pnpm --filter @kwiz/web start",   // prompts for pending migrations (D14)
+  "test":         "vitest run",
+  "test:watch":   "vitest",
+  "typecheck":    "tsc --noEmit && pnpm -r typecheck",
+  "lint":         "oxlint --type-aware && pnpm lint:env",   // the flag is load-bearing, §1.3
+  "lint:env":     "node scripts/check-no-process-env.mjs",   // §1.4's third rule
+  "format":       "oxfmt --write .",
+  "format:check": "oxfmt --check .",
+  "check":        "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+  "db:generate":  "pnpm --filter @kwiz/db db:generate",
+  "e2e":          "playwright test",
+  "e2e:ui":       "playwright test --ui"
 }
 ```
+
+`typecheck` runs each package's own `tsc --noEmit` — a single root project cannot serve both
+the packages and a Next.js app, which needs `jsx: preserve`, its own `lib` and the `next`
+plugin. The root `tsconfig.json` covers the files no package owns (`vitest.config.ts`,
+`scripts/`), and **must be named exactly that**: editors and `oxlint --type-aware` both
+resolve the nearest `tsconfig.json` per file, so a descriptive name like `tsconfig.tools.json`
+leaves them on inferred defaults — which shows up as `process` being undefined in `scripts/`
+while `pnpm typecheck` passes.
+
+### 1.6 Continuous integration
+
+`.github/workflows/ci.yml`, on pushes to `main`, on every pull request, and manually.
+
+Node comes from `.nvmrc` and pnpm from `packageManager` via corepack, so **CI has no version
+of its own to drift** — the pins live with the repo. Install is `--frozen-lockfile`, which also
+fails when the lockfile and the manifests have diverged.
+
+The steps are `pnpm check` plus `pnpm build`, **listed individually rather than as one
+`check`**, so a red run names what broke on the summary page instead of making someone open
+the log.
+
+**The matrix is `ubuntu-latest` and `windows-latest`, and that is not thoroughness for its own
+sake.** Three things in this repo are platform-sensitive:
+
+- `better-sqlite3` resolves a **different prebuild per platform** (§1.1), and the guarantee is
+  per-platform or it is nothing.
+- `scripts/architecture-rules.test.ts` spawns the linter as a subprocess, which behaves
+  differently on Windows.
+- Kwiz is hosted on a quiz master's laptop, which is at least as likely to be Windows as not.
+
+`fail-fast: false`, so the second platform still reports when the first fails.
+
+**`.gitattributes` (`* text=auto eol=lf`) is load-bearing here**, not tidiness: `oxfmt --check`
+is part of the gate, so a CRLF checkout on a Windows runner would fail CI for a reason
+unrelated to the code.
+
+The **Playwright suite gets its own job in build-order slice 9** — it needs a running server
+and is much slower, so it must not gate every typecheck.
 
 `pnpm check` is the single command a slice must pass before it is done (§11). It excludes
 `e2e` deliberately — the browser suite is slower and needs a running server, so it runs as
