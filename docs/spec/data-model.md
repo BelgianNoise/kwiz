@@ -1041,6 +1041,26 @@ into game-scoped tables.
 Per D14 and PRD 1 §6.7: Drizzle Kit generated, plain SQL, committed, forward-only,
 prompted on boot with a pre-migration backup.
 
+### 11.1 How the boot prompt is actually built
+
+D14 needs three things Drizzle's `migrate()` does not give on its own — it applies everything
+and returns `void`. Verified against drizzle-orm 0.45.2:
+
+| Need | Mechanism |
+| --- | --- |
+| List pending **without touching the database** | `readMigrationFiles({ migrationsFolder })` from `drizzle-orm/migrator`, returning `{ folderMillis, hash, sql[] }` per migration |
+| Tell a fresh database from an existing one | A fresh file has **no tables at all**. `__drizzle_migrations` is created by the first `migrate()`, so its absence *plus* no user tables means "fresh" — create and migrate silently |
+| Know what is already applied | The `__drizzle_migrations` table, holding `hash` and `created_at`, where `created_at` **is** the migration's `folderMillis` |
+
+`migrate()` is **idempotent** — a second call applies nothing — so the prompt path can call it
+without re-checking.
+
+> **Compute "pending" the same way the migrator does**, by `folderMillis > max(created_at)`,
+> not by hash-set difference. Drizzle applies migrations *newer than the last applied
+> timestamp*; a hash comparison would disagree with it for a migration committed with an
+> out-of-order timestamp, and a prompt that lists different work than the migrator performs is
+> worse than no prompt.
+
 Specific to this schema:
 
 - **Never hand-edit an applied migration.** Add a new one.
