@@ -43,6 +43,28 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
 - **Added conventions §1.3.1** documenting `.oxfmtrc.json`, and a note in §1.4 that the three
   architectural rules are covered by a test.
 
+### CI (added after the initial slice-0 report, conventions §1.6)
+
+`.github/workflows/ci.yml` runs format, lint (including the `process.env` guard), typecheck,
+test and build on a **`ubuntu-latest` + `windows-latest` matrix**. Node comes from `.nvmrc`
+and pnpm from `packageManager`, so CI has no versions of its own to drift from the repo's.
+
+Two things came with it that are easy to mistake for decoration:
+
+- **`.gitattributes` with `* text=auto eol=lf`.** `oxfmt --check` gates CI, so a CRLF checkout
+  on the Windows runner would fail for a reason unrelated to any code.
+- **`scripts/native-sqlite.test.ts`**, which asserts a prebuild exists for the current
+  platform, that `better-sqlite3/build/` does **not** (so node-gyp never ran), and that the
+  binary actually loads and enforces a foreign key. This is what makes conventions §1.1 a
+  standing guarantee instead of something verified once by hand. **If it ever fails, apply
+  §1.1's fallback — pin the Node major, or move to `node:sqlite` — do not set
+  `allowBuilds.better-sqlite3: true` to make it pass.** It is also the reason the matrix has
+  two operating systems: the prebuild is per-platform, so a Linux-only pipeline proves nothing
+  about the laptop the quiz runs on.
+
+Verified by wiping every `node_modules`, reinstalling with `--frozen-lockfile`, and running all
+five steps in order — not just by trusting the YAML. The workflow is also schema-validated.
+
 ### Raised, not resolved
 
 - **Nothing mechanically catches a floating promise.** This is the price of oxlint over
@@ -53,11 +75,6 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
 - **No zip library is chosen for `@kwiz/export`.** conventions §1's dependency table names
   none, and slice 0 had no reason to pick. Whoever implements protocol §8 flags the addition
   per agent-workflow §3.4.
-- **There is no CI, and two documents assume there is one.** conventions §1.4 describes the
-  `process.env` rule as a "grep check in CI", and build-order slice 9 calls for "a CI step
-  running `pnpm e2e`". Right now `pnpm check` is a local gate only. For a self-hosted app
-  that may never have a pipeline that is a legitimate choice — but it should be a choice,
-  not an omission. **Not decided.**
 - **No README.** `CLAUDE.md` covers everything an agent needs, but a human cloning this
   repo gets no hint that it wants Node 24 and corepack. Cheap to add; not a build-order
   deliverable, so it was not.

@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run has nothing left to tell us.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # Kwiz is hosted on a quiz master's laptop, which is as likely to be Windows as anything
+    # else, and conventions §1.1's whole concern is install fragility per platform. A
+    # Linux-only pipeline would not exercise better-sqlite3's per-platform prebuild, and would
+    # miss the process-spawning in scripts/architecture-rules.test.ts, which behaves
+    # differently on Windows.
+    name: check · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Report both platforms rather than hiding the second failure behind the first.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    defaults:
+      run:
+        # bash on every runner, so `$GITHUB_OUTPUT` and paths behave identically. Without it
+        # the Windows job runs PowerShell and the cache step needs separate syntax.
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads .nvmrc, so the pinned Node major has exactly one source of truth (§1).
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # pnpm comes from `packageManager` in package.json, so the version is pinned with the
+      # repo rather than configured here.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Report toolchain
+        run: |
+          echo "node  $(node --version)"
+          echo "pnpm  $(pnpm --version)"
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      # --frozen-lockfile also fails if the lockfile and the manifests have drifted, which is
+      # the failure a reviewer most wants surfaced.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Each gate is its own step so a red run says *what* broke on the summary page.
+      # Together these are `pnpm check`.
+      - name: Format
+        run: pnpm format:check
+
+      # Also runs scripts/check-no-process-env.mjs — conventions §1.4's third architectural
+      # rule, the one oxlint cannot express.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Includes the conventions §1.1 no-compilation guard and the architectural-rule
+      # enforcement tests, both of which are platform-sensitive.
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # The Playwright suite is build-order slice 9. It gets its own job then — it needs a running
+  # server and is far slower, so it must not gate every typecheck (conventions §1.5).

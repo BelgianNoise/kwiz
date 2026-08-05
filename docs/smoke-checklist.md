@@ -55,3 +55,6 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
 - [ ] `pnpm typecheck` passes on a tree with **no `.next/`** — i.e. before anything is built.
 - [ ] Installing with a deliberately impossible `engines.node` is **refused**, not warned
       about (`engineStrict`).
+- [ ] CI is green on **both** matrix platforms, not just Linux (conventions §1.6) — the
+      `better-sqlite3` prebuild is per-platform, so a Linux-only pass proves nothing about the
+      laptop the quiz runs on.

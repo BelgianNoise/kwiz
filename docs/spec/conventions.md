@@ -137,7 +137,7 @@ enforced mechanically rather than trusted, and should be:
 | --- | --- |
 | `packages/domain` is pure (CLAUDE.md §2.1) | `no-restricted-imports` above. A domain file importing Drizzle or Next now **fails lint** |
 | No `any` in `domain` or `db` | `no-explicit-any: error` in those overrides only |
-| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint`. `process.env` may appear only in `packages/config/src/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
+| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint` — locally and in CI (§1.6). `process.env` may appear only in `packages/config/src/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
 
 If oxlint's `no-restricted-imports` proves insufficient, a ~20-line CI script asserting
 the same thing is an acceptable substitute. **Do not downgrade it to a comment.**
@@ -179,6 +179,36 @@ everything from.
 the packages and a Next.js app, which needs `jsx: preserve`, its own `lib` and the `next`
 plugin. `tsconfig.tools.json` covers the root-level files (`vitest.config.ts`, `scripts/`)
 that no package owns.
+
+### 1.6 Continuous integration
+
+`.github/workflows/ci.yml`, on pushes to `main`, on every pull request, and manually.
+
+Node comes from `.nvmrc` and pnpm from `packageManager` via corepack, so **CI has no version
+of its own to drift** — the pins live with the repo. Install is `--frozen-lockfile`, which also
+fails when the lockfile and the manifests have diverged.
+
+The steps are `pnpm check` plus `pnpm build`, **listed individually rather than as one
+`check`**, so a red run names what broke on the summary page instead of making someone open
+the log.
+
+**The matrix is `ubuntu-latest` and `windows-latest`, and that is not thoroughness for its own
+sake.** Three things in this repo are platform-sensitive:
+
+- `better-sqlite3` resolves a **different prebuild per platform** (§1.1), and the guarantee is
+  per-platform or it is nothing.
+- `scripts/architecture-rules.test.ts` spawns the linter as a subprocess, which behaves
+  differently on Windows.
+- Kwiz is hosted on a quiz master's laptop, which is at least as likely to be Windows as not.
+
+`fail-fast: false`, so the second platform still reports when the first fails.
+
+**`.gitattributes` (`* text=auto eol=lf`) is load-bearing here**, not tidiness: `oxfmt --check`
+is part of the gate, so a CRLF checkout on a Windows runner would fail CI for a reason
+unrelated to the code.
+
+The **Playwright suite gets its own job in build-order slice 9** — it needs a running server
+and is much slower, so it must not gate every typecheck.
 
 `pnpm check` is the single command a slice must pass before it is done (§11). It excludes
 `e2e` deliberately — the browser suite is slower and needs a running server, so it runs as
