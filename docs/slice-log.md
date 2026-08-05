@@ -28,9 +28,10 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
 - **conventions §1 cited "PRD 1 §10" for shadcn/Tailwind.** Styling is PRD 1 **§9.1**; §10 is
   Export & import. Corrected. (The two `PRD 1 §10` references in protocol §8 are right — they
   really do mean Export & import.)
-- **conventions §1.3 specified `no-floating-promises: error`, which was doing nothing.**
-  oxlint builds no TypeScript program and implements no type-aware rules under any name.
-  Removed from the config and the doc. See "Raised" below — this leaves a real gap.
+- **conventions §1.3 specified `no-floating-promises: error`, which was doing nothing.** It was
+  named without its `typescript/` prefix and without `--type-aware`, and oxlint ignores an
+  unknown rule name in silence. Now correctly configured and enforced — see "Floating promises
+  are enforced after all" below for what it took.
 - **conventions §1.3's config block was incomplete as written.** It now also carries
   `ignorePatterns`, a `scripts/**` override for `no-console`, `react/react-in-jsx-scope: off`
   (Next uses the automatic JSX runtime) and `import/no-unassigned-import` allowing `*.css`
@@ -38,7 +39,7 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
   warnings.
 - **conventions §1.5's scripts assumed a single-package repo.** `typecheck` fans out with
   `pnpm -r typecheck` because one root project cannot serve both the packages and a Next app;
-  `tsconfig.tools.json` covers the root files no package owns. `lint` now also runs the
+  the root `tsconfig.json` covers the files no package owns. `lint` now also runs the
   `process.env` guard, and `format:check` was added so `check` can compose them.
 - **Added conventions §1.3.1** documenting `.oxfmtrc.json`, and a note in §1.4 that the three
   architectural rules are covered by a test.
