@@ -52,3 +52,6 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
 - [ ] **PRD 1 §9.4 step 2:** a request to `/` carrying `NEXT_LOCALE=nl` lands on `/nl`, and
       an unrecognised cookie value falls back to `/en`.
 - [ ] An explicit segment beats the cookie: `/en` with `NEXT_LOCALE=nl` renders English.
+- [ ] `pnpm typecheck` passes on a tree with **no `.next/`** — i.e. before anything is built.
+- [ ] Installing with a deliberately impossible `engines.node` is **refused**, not warned
+      about (`engineStrict`).

@@ -25,3 +25,14 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - better-sqlite3@13.0.3
+
+# Refuse to install on the wrong Node major instead of failing later, confusingly.
+#
+# `engines` in package.json is advisory on its own, and this setting has to live *here*:
+# `engine-strict=true` in `.npmrc` only produces a warning under pnpm 11, which is worse
+# than nothing because it reads like enforcement.
+#
+# The version genuinely matters — better-sqlite3 resolves a bundled prebuild per platform
+# (conventions §1.1) and `next/root-params` is Next 16 on Node 24. A contributor on Node 22
+# should be told at install time, not by a native module failing three slices later.
+engineStrict: true

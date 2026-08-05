@@ -53,6 +53,14 @@ Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps
 - **No zip library is chosen for `@kwiz/export`.** conventions §1's dependency table names
   none, and slice 0 had no reason to pick. Whoever implements protocol §8 flags the addition
   per agent-workflow §3.4.
+- **There is no CI, and two documents assume there is one.** conventions §1.4 describes the
+  `process.env` rule as a "grep check in CI", and build-order slice 9 calls for "a CI step
+  running `pnpm e2e`". Right now `pnpm check` is a local gate only. For a self-hosted app
+  that may never have a pipeline that is a legitimate choice — but it should be a choice,
+  not an omission. **Not decided.**
+- **No README.** `CLAUDE.md` covers everything an agent needs, but a human cloning this
+  repo gets no hint that it wants Node 24 and corepack. Cheap to add; not a build-order
+  deliverable, so it was not.
 - **pnpm 11 has a supply-chain release-age gate** and auto-wrote a `minimumReleaseAgeExclude`
   entry for `better-sqlite3@13.0.3`. Left as generated; a future version bump will need the
   same acknowledgement.
@@ -108,6 +116,16 @@ in play yet (agent-workflow §4.5).
   class lists. Run `pnpm format` before `pnpm check` rather than fighting the diff. It ignores
   `**/*.md`, because it would otherwise reflow the hand-wrapped prose in `docs/`.
 - **`middleware.ts` is `proxy.ts` in Next 16.** The old name still works but warns.
+- **`engineStrict: true` lives in `pnpm-workspace.yaml`, not `.npmrc`.** Under pnpm 11,
+  `engine-strict=true` in `.npmrc` downgrades to a *warning*, which is worse than absent
+  because it reads like enforcement. From the workspace file it hard-fails with the wanted
+  and actual versions. Verified by temporarily demanding Node `>=99`.
+- **Every `shadcn add` needs a `pnpm format` afterwards.** The generator emits
+  prettier-default style — semicolons, double quotes — which fails `oxfmt --check` and so
+  fails `pnpm check`. Nothing is broken; run `pnpm format`. Verified end to end in this slice
+  by generating a Button, formatting, and passing the full gate, then reverting it (an unused
+  component and an unflagged `radix-ui` dependency would have been a stub for slice 4). The
+  CLI needs `pnpm dlx`, not `pnpm exec`, and must run from `apps/web`.
 - **`noUncheckedIndexedAccess` is on.** Array access yields `T | undefined`. This is deliberate
   and most valuable in slice 2's finale arithmetic; do not switch it off to save a few
   non-null assertions.
