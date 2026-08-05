@@ -295,7 +295,7 @@ event, no tick event, and no server timer.
 | `KEYWORD_UNMARKED` | `{ gameKeywordId }` | Mis-mark correction. Revokes the mark **and the penalties it charged** — the D41 pattern, and here it must reverse time, not just a score |
 | `KEYWORDS_REVEALED` | `{ gameQuestionId }` | Master shows the unguessed ones; creates marks with `teamId: null` |
 | `TEAM_ELIMINATED` | `{ teamId, at }` | Clock reached zero. `at` is the computed instant, not when the request arrived |
-| `FINALE_ENDED` | `{ ranking }` | One finalist left, all eliminated, or questions exhausted. `ranking` is the finalists in finishing order (D51) |
+| `FINALE_ENDED` | `{ ranking: teamId[][] }` | One finalist left, all eliminated, or questions exhausted. `ranking` is **an array of rank groups**, best first — not a flat list, because simultaneous elimination shares a rank (D51, PRD 1 §8.8). A single survivor is `[[winner], [runnerUp], …]`; the degenerate all-out case is one group with every finalist in it and no winner |
 
 **Two things deliberately absent:**
 
