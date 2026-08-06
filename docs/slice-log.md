@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 2 — `packages/domain`: the rules
 
-**Status:** complete · `pnpm check` green · 300 tests · **the whole game is playable in tests, with
+**Status:** complete · `pnpm check` green · 316 tests · lint silent · **the whole game is playable in tests, with
 no server and no UI**
 
 **Built:** `constants.ts`, `answers.ts` (D22), `question-state.ts` (PRD 1 §7.1), `state.ts`,
