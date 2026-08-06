@@ -393,11 +393,13 @@ export function wordLengths(keyword: string): number[] {
       .trim()
       .split(/\s+/)
       .filter(Boolean)
-      // conventions §8 pins this exact implementation, and it must match wherever authoring
-      // computes the stored value (I19) or the tiles stop matching the text they resolve to.
-      // Code points, not graphemes: an emoji counts as several. A real limitation, accepted for
-      // pub-quiz keywords, and changing it would change every already-stored `wordLengths`.
-      // oxlint-disable-next-line typescript/no-misused-spread
-      .map((word) => [...word].length)
+      // `Array.from`, not `word.length`: code points, so an accented character counts once
+      // rather than twice. Identical semantics to conventions §8's `[...word].length` without
+      // spreading a string, which `no-misused-spread` rightly objects to.
+      //
+      // Code points are still not graphemes — an emoji counts as several. A real limitation,
+      // accepted for pub-quiz keywords, and it must match wherever authoring computes the stored
+      // value (I19) or the tiles stop matching the text they resolve to.
+      .map((word) => Array.from(word).length)
   )
 }

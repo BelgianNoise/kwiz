@@ -212,7 +212,11 @@ function stageKind(state: GameState): StageKind {
     ? findQuestion(state.content, state.currentQuestionId)
     : undefined
 
-  if (question) {
+  // A skipped question stays `currentQuestionId` — the master went around it — but it is done, so
+  // it must not be presented as an open question accepting answers (D46). Falling through lands on
+  // the round intro, which is what the room should see while the master moves on.
+  const play = question ? state.questions.get(question.id) : undefined
+  if (question && play && play.state !== 'SKIPPED') {
     const round = roundOf(state.content, question.id)
     if (round?.type === 'DSMTW_FINALE') return 'FINALE'
     return 'QUESTION'
@@ -229,6 +233,11 @@ function stageKind(state: GameState): StageKind {
 /** The state a question is *presented* in. `PENDING` and `SKIPPED` never reach the room. */
 type VisibleQuestionState = 'OPEN' | 'LOCKED' | 'REVEALED' | 'SCORED'
 
+/**
+ * `PENDING` and `SKIPPED` are unreachable here: `stageKind` only yields `QUESTION` for a current
+ * question, which cannot be `PENDING`, and explicitly excludes `SKIPPED`. The fallback exists so
+ * the type is total, not because either state is expected.
+ */
 const visibleState = (play: QuestionPlayState): VisibleQuestionState =>
   play.state === 'PENDING' || play.state === 'SKIPPED' ? 'OPEN' : play.state
 
@@ -332,6 +341,10 @@ function mainScreenStage(state: GameState, now: number): MainScreenView['stage']
         question: mainScreenQuestion(question, play, now),
       }
     }
+    default:
+      // `stageKind` is exhaustive; `default` rather than a trailing return, which reads as a
+      // missing case.
+      return { kind: 'LEADERBOARD', standings: standings(state) }
   }
 }
 
@@ -444,6 +457,21 @@ export interface MyAnswer {
   submittedAt: number | null
 }
 
+/**
+ * A team's in-progress draft for one question, keyed by `gameQuestionId`.
+ *
+ * Drafts are **not events** (protocol §4.8) — keystroke timing is not reproducible by replay — so
+ * they cannot come from `GameState`. They are passed in instead, which keeps this layer pure while
+ * making D45 impossible to forget: shared drafts are a *parameter* of the player view, not
+ * something a caller has to remember to merge in afterwards.
+ */
+export interface DraftAnswer {
+  text: string | null
+  optionId: string | null
+}
+
+export type DraftLookup = ReadonlyMap<string, DraftAnswer>
+
 export interface PlayerView {
   team: TeamPublic
   otherTeams: TeamPublic[]
@@ -458,7 +486,13 @@ export interface PlayerView {
     | { kind: 'FINISHED'; standings: Standing[] }
 }
 
-export function toPlayerView(state: GameState, teamId: string, now: number): PlayerView {
+export function toPlayerView(
+  state: GameState,
+  teamId: string,
+  now: number,
+  /** The team's drafts (D45). Omitted means none — never means "do not share them". */
+  drafts: DraftLookup = new Map(),
+): PlayerView {
   const me = state.teams.get(teamId)
 
   return {
@@ -470,11 +504,16 @@ export function toPlayerView(state: GameState, teamId: string, now: number): Pla
       .sort((a, b) => a.position - b.position)
       .map(teamPublic),
     locale: state.content.defaultPlayerLocale,
-    stage: playerStage(state, teamId, now),
+    stage: playerStage(state, teamId, now, drafts),
   }
 }
 
-function playerStage(state: GameState, teamId: string, now: number): PlayerView['stage'] {
+function playerStage(
+  state: GameState,
+  teamId: string,
+  now: number,
+  drafts: DraftLookup,
+): PlayerView['stage'] {
   const kind = stageKind(state)
 
   switch (kind) {
@@ -516,12 +555,14 @@ function playerStage(state: GameState, teamId: string, now: number): PlayerView[
       return {
         kind: 'QUESTION',
         question: playerQuestion(question, play, teamId, now),
-        myAnswer: myAnswer(play, teamId),
+        myAnswer: myAnswer(play, teamId, drafts.get(question.id)),
       }
     }
+    default:
+      // `stageKind` is exhaustive; `default` rather than a trailing return, which reads as a
+      // missing case.
+      return { kind: 'BETWEEN_QUESTIONS' }
   }
-  // Unreachable: `stageKind` is exhaustive.
-  return { kind: 'BETWEEN_QUESTIONS' }
 }
 
 function playerQuestion(
@@ -583,15 +624,36 @@ function playerQuestion(
  * Shared across **all** of the team's devices (D45), including the draft, so two devices cannot
  * diverge — and `submitted` locks the input on every one of them at once (D43).
  */
-function myAnswer(play: QuestionPlayState, teamId: string): MyAnswer | null {
+function myAnswer(
+  play: QuestionPlayState,
+  teamId: string,
+  draft: DraftAnswer | undefined,
+): MyAnswer | null {
   const mine = play.answers.get(teamId)
-  if (!mine) return null
-  return {
-    text: mine.text,
-    optionId: mine.selectedOptionId,
-    submitted: !mine.isDraft,
-    submittedAt: mine.submittedAt,
+
+  // A submission wins over a draft: submission is final (D43), so once one exists the draft is
+  // stale by definition and `submitted: true` locks the input on every device at once.
+  if (mine) {
+    return {
+      text: mine.text,
+      optionId: mine.selectedOptionId,
+      submitted: !mine.isDraft,
+      submittedAt: mine.submittedAt,
+    }
   }
+
+  // No submission yet, so the draft is what every one of the team's devices should show — that is
+  // what stops two phones diverging (D45).
+  if (draft) {
+    return {
+      text: draft.text,
+      optionId: draft.optionId,
+      submitted: false,
+      submittedAt: null,
+    }
+  }
+
+  return null
 }
 
 // ─── MASTER_CONTROL ───

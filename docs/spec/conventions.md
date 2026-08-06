@@ -469,8 +469,12 @@ identically everywhere or the tiles will not match the answer they resolve to.
 // packages/domain — the single implementation. Stored on write (data model §4.3.1),
 // never recomputed in a payload filter.
 export const wordLengths = (keyword: string): number[] =>
-  keyword.trim().split(/\s+/).filter(Boolean).map((w) => [...w].length)
+  keyword.trim().split(/\s+/).filter(Boolean).map((w) => Array.from(w).length)
 ```
+
+**`Array.from(w)`, not `[...w]`** — identical semantics (both iterate code points), but spreading a
+string trips `no-misused-spread`, and a suppression next to the one function that must stay
+byte-identical everywhere is a poor trade for two saved characters.
 
 | Keyword | Shape | Renders as |
 | --- | --- | --- |

@@ -53,22 +53,37 @@ that is a second source of truth for the same fact.
   read the text they are supposed to mark. The sentinel test caught it. Added per protocol §5.5;
   it is the one place keyword text is transmitted before marking.
 
+### A real bug found while closing the gaps
+
+**A skipped question was still being presented as an open one.** `QUESTION_SKIPPED` leaves
+`currentQuestionId` set — the master went around it — so the stage resolver kept yielding
+`QUESTION`, and since `SKIPPED` has no visible state of its own it rendered as **`OPEN`**: a dead
+question that looked like it was still taking answers, on both the projector and every phone.
+
+Fixed in `stageKind`, and it is now two tests: the stage falls back to the round intro, and the
+skipped prompt appears in neither audience's payload. I had flagged the `PENDING`/`SKIPPED` → `OPEN`
+fallback as "a smell" in the first pass; it was not a smell, it was a bug.
+
 ### Raised, not resolved
 
-- **Drafts are not in `GameState`.** `MyAnswer.text` comes from a submitted answer only, so D45's
-  cross-device draft sharing is not yet observable. That is correct for this layer — a draft is not
-  an event (protocol §4.8) and lives in `game_answer_draft` — but **slice 3 must merge the draft
-  table into `toPlayerView`**, or two devices on one team will not see each other typing.
 - **`suggestedPicker` returns a suggestion; nothing appends `PICKER_ASSIGNED`.** That is an action's
   job (slice 3). The log is supposed to answer "whose pick was it?" without re-deriving the rule, so
-  the action must append it even when it merely confirms the suggestion.
-- **11 lint warnings remain**, all `no-unsafe-type-assertion`: `JSON.parse` in tests returns `any`,
-  and two casts in `events/parse.ts` are needed to narrow a validated payload back to its variant.
-  Not silenced, because a suppression would be a worse lie than a visible warning.
-- **One suppression, deliberate.** `[...word].length` in `wordLengths` trips `no-misused-spread`.
-  conventions §8 pins that exact implementation and it must match wherever authoring computes the
-  stored value (I19), so changing it would change every already-stored shape. Code points, not
-  graphemes — an emoji counts as several. A real limitation, accepted for pub-quiz keywords.
+  **the action must append it even when it merely confirms the suggestion.**
+
+Everything else raised in the first pass is now closed:
+
+- **Drafts** are a parameter of `toPlayerView` (`DraftLookup`, keyed by `gameQuestionId`) rather than
+  a note for slice 3 to remember. Domain stays pure — it receives a plain map — but D45 is now
+  impossible to forget, because a caller that ignores drafts is visibly ignoring an argument. A
+  submission supersedes a draft, since submission is final (D43).
+- **Lint is silent**, warnings included. The two casts that genuinely cannot be avoided —
+  `Object.keys` narrowing in `payload.ts`, and re-pairing a validated payload with its variant in
+  `parse.ts` — carry a one-line disable stating why. `describe()` now uses `instanceof z.ZodError`
+  rather than asserting a shape, and the tests assign from `JSON.parse` instead of asserting.
+- **The `no-misused-spread` suppression is gone.** `Array.from(w).length` iterates code points
+  exactly as `[...w].length` did, so the stored `wordLengths` are unchanged and conventions §8 was
+  updated to match. Code points are still not graphemes — an emoji counts as several — which remains
+  a documented limitation rather than a suppressed warning.
 
 ### Next agent should know
 
@@ -77,9 +92,12 @@ that is a second source of truth for the same fact.
 - **The sentinel test is the enforcement, and it has a complement.** It asserts each secret does
   appear *once permitted* — without that, a filter returning nothing would satisfy the forbidden
   table trivially. **Add a sentinel when you add a secret.**
-- **`visibleState` maps `PENDING`/`SKIPPED` to `OPEN`** for the room's benefit, and it is only ever
-  reached for the *current* question — which cannot be `PENDING`. If you make a non-current question
-  renderable, revisit that, because invariant 6 depends on it.
+- **`toPlayerView` takes a `DraftLookup`.** Pass the team's drafts from `game_answer_draft` or two
+  devices on one team will not see each other typing (D45). Omitting it means *no drafts*, never
+  "do not share them" — there is a test asserting exactly that distinction.
+- **`visibleState`'s `PENDING`/`SKIPPED` fallback is unreachable by design.** `stageKind` only yields
+  `QUESTION` for the current question, which cannot be `PENDING`, and it now explicitly excludes
+  `SKIPPED`. If you make a non-current question renderable, revisit both — invariant 6 depends on it.
 - `FINALE_ENDED.ranking` is **stored as given**, while `finaleRanking(state)` derives the same thing.
   The action should append what the deriver produced; they must not disagree.
 

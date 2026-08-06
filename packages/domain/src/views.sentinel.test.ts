@@ -342,9 +342,9 @@ describe('the Jeopardy board carries no prompt key at all', () => {
   it.each(['MAIN_SCREEN', 'PLAYER_A'] as const)(
     '%s board tiles have no `prompt`',
     (audience) => {
-      const view = JSON.parse(serialise(audience, withBoard)) as {
+      const view: {
         stage: { kind: string; board?: { tiles: Record<string, unknown>[] } }
-      }
+      } = JSON.parse(serialise(audience, withBoard))
       expect(view.stage.kind).toBe('JEOPARDY_BOARD')
       for (const tile of view.stage.board?.tiles ?? []) {
         expect(Object.keys(tile)).not.toContain('prompt')
@@ -369,9 +369,8 @@ describe('finale keyword text', () => {
   it('is absent — not empty, absent — while unmarked', () => {
     seq = 0
     const state = reduce(content, log([...openFinale]))
-    const view = JSON.parse(serialise('MAIN_SCREEN', state)) as {
-      stage: { finale?: { keywords: Record<string, unknown>[] } }
-    }
+    const view: { stage: { finale?: { keywords: Record<string, unknown>[] } } } =
+      JSON.parse(serialise('MAIN_SCREEN', state))
 
     const keyword = view.stage.finale?.keywords[0]
     expect(keyword).toBeDefined()
@@ -440,9 +439,8 @@ describe('option correctness', () => {
   it.each(['MAIN_SCREEN', 'PLAYER_A'] as const)(
     '%s options carry no isCorrect flag',
     (audience) => {
-      const view = JSON.parse(serialise(audience, openMc())) as {
-        stage: { question?: { options?: Record<string, unknown>[] } }
-      }
+      const view: { stage: { question?: { options?: Record<string, unknown>[] } } } =
+        JSON.parse(serialise(audience, openMc()))
       const options = view.stage.question?.options ?? []
       expect(options.length).toBe(2)
       for (const option of options) {

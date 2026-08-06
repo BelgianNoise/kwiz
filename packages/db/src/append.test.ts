@@ -14,6 +14,16 @@ import {
 } from './schema'
 import { freshTestDatabase, seedGame, type SeededGame } from './test-support'
 
+/**
+ * Deliberately malformed events, for the paths that must reject them. Typed as `GameEvent` through
+ * a function boundary rather than an inline assertion — the invalidity is the fixture's purpose, so
+ * it should be stated once, here, and not look like a mistake at each call site.
+ */
+const malformed = (type: string, payload: unknown): GameEvent =>
+  // The invalidity IS the fixture: these events exist to be rejected.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  ({ type, payload }) as unknown as GameEvent
+
 let database: KwizDatabase
 let seed: SeededGame
 
@@ -97,7 +107,7 @@ describe('appendAndProject — atomicity (property 3)', () => {
       appendAndProject(database, seed.gameId, [
         { type: 'GAME_STARTED', payload: {} },
         // teamId is not optional, so this fails validation *inside* the transaction.
-        { type: 'TEAM_UPDATED', payload: {} } as unknown as GameEvent,
+        malformed('TEAM_UPDATED', {}),
       ]),
     ).toThrow(EventPayloadError)
 
@@ -147,9 +157,7 @@ describe('appendAndProject — atomicity (property 3)', () => {
 
   it('rejects an unknown event type', () => {
     expect(() =>
-      appendAndProject(database, seed.gameId, [
-        { type: 'NOT_AN_EVENT', payload: {} } as unknown as GameEvent,
-      ]),
+      appendAndProject(database, seed.gameId, [malformed('NOT_AN_EVENT', {})]),
     ).toThrow(/Unknown event type/)
   })
 })

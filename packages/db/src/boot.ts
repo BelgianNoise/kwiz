@@ -73,7 +73,7 @@ export async function bootDatabase(): Promise<BootResult> {
     database,
     migrationsFolder: MIGRATIONS_FOLDER,
     autoMigrate: config.KWIZ_AUTO_MIGRATE,
-    interactive: process.stdin.isTTY === true,
+    interactive: process.stdin.isTTY ?? false,
     backup: async () => {
       backupPath = await backupDatabase(database, paths.backups, new Date())
       return backupPath
@@ -86,7 +86,6 @@ export async function bootDatabase(): Promise<BootResult> {
 
 /** One line describing what happened, for the boot log. */
 export function describeOutcome(outcome: MigrationOutcome): string {
-  // eslint-disable-next-line no-useless-assignment -- exhaustive switch, see the final return
   switch (outcome.kind) {
     case 'UP_TO_DATE':
       return 'database up to date'
@@ -94,7 +93,7 @@ export function describeOutcome(outcome: MigrationOutcome): string {
       return `database created — ${outcome.applied.length} migration(s) applied`
     case 'APPLIED':
       return `${outcome.applied.length} migration(s) applied (backup: ${outcome.backupPath})`
-    case 'DECLINED':
+    default:
       return `migrations declined — ${outcome.pending.length} still pending; every surface must show the "database needs migrating" screen`
   }
 }
