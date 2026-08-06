@@ -61,6 +61,16 @@ Four, and three were found only by writing the code that had to obey them:
 
 ### Next agent should know
 
+- **`bootDatabase()` in `src/boot.ts` is the entry slice 3 calls** — it opens the configured
+  database and settles migrations before anything serves a request, returning the outcome rather
+  than deciding. `DECLINED` is not a crash: the server boots and every surface must render the
+  "database needs migrating" screen (§6.7).
+- **Do not add a CLI that runs package source directly with `node`.** I tried, and it fails:
+  Node's ESM resolver wants full filenames, so every extensionless relative import across the
+  workspace is an `ERR_MODULE_NOT_FOUND`. Fixing it means either `.ts` extensions repo-wide or a
+  loader dependency, and neither is worth it — the bundler resolves these fine, which is how the
+  real entry point reaches this code. `boot.test.ts` covers the behaviour against a real
+  directory instead.
 - **`appendAndProject` is the only way to write the play half.** It validates, appends and
   projects in one transaction and returns `seqs`; broadcast happens *after* commit, which is why
   it pushes nothing itself.
