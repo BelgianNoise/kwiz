@@ -12,6 +12,77 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 2 — `packages/domain`: the rules
+
+**Status:** complete · `pnpm check` green · 300 tests · **the whole game is playable in tests, with
+no server and no UI**
+
+**Built:** `constants.ts`, `answers.ts` (D22), `question-state.ts` (PRD 1 §7.1), `state.ts`,
+`reduce.ts` over all 40 event types, `derive.ts` (everything deliberately not stored), `views.ts`
+(the three filters + `attention`), and the protocol §6.2 sentinel leak test.
+
+### The layering bug slice 1 left, fixed first
+
+`packages/domain` may not import `@kwiz/db` — oxlint enforces it — but the **event catalogue, the
+enum vocabulary and the content-config schemas were all in db**, and every domain function is
+defined over exactly those events. Keeping them there would have forced a duplicate union in
+domain, which is the drift the single-writer design exists to prevent. Moved to `@kwiz/domain`; db
+imports them and no longer re-exports them. All 97 db tests passed unaltered, so the move was
+behaviour-neutral.
+
+**`@kwiz/domain` now owns the vocabulary; `@kwiz/db` owns persistence.** Do not move it back.
+
+### The design that matters most
+
+**`reduce(content, events)`** — `content` is the game-copy subtree, which is *not* in the log and
+never could be: a question's prompt is not something that happened. Separating it is what keeps the
+reducer a pure function of two inputs. There is **no clock inside it**: every timestamp comes from
+the event that carried it, so a replay is byte-identical and every test is a literal array.
+
+**`derive.ts` holds what is not stored** (§1.1) — lockout set, timer pause, standings, Jeopardy turn
+order, every finale clock. If you find yourself adding a field to `GameState` for one of these,
+that is a second source of truth for the same fact.
+
+### Spec deviations
+
+- **PRD 1 §7.1 draws `BUZZED` as a state box.** The canonical type has six states and no such
+  member: a buzzed question stays `OPEN`. Noted inline, because modelling it as a state would turn
+  D35's deny → reopen loop into a cycle in the state machine rather than what it is — repeated
+  buzzes against one unchanged question.
+- **`FinaleTurnDetail` carried no keywords in my first pass**, which left the master with no way to
+  read the text they are supposed to mark. The sentinel test caught it. Added per protocol §5.5;
+  it is the one place keyword text is transmitted before marking.
+
+### Raised, not resolved
+
+- **Drafts are not in `GameState`.** `MyAnswer.text` comes from a submitted answer only, so D45's
+  cross-device draft sharing is not yet observable. That is correct for this layer — a draft is not
+  an event (protocol §4.8) and lives in `game_answer_draft` — but **slice 3 must merge the draft
+  table into `toPlayerView`**, or two devices on one team will not see each other typing.
+- **`suggestedPicker` returns a suggestion; nothing appends `PICKER_ASSIGNED`.** That is an action's
+  job (slice 3). The log is supposed to answer "whose pick was it?" without re-deriving the rule, so
+  the action must append it even when it merely confirms the suggestion.
+- **11 lint warnings remain**, all `no-unsafe-type-assertion`: `JSON.parse` in tests returns `any`,
+  and two casts in `events/parse.ts` are needed to narrow a validated payload back to its variant.
+  Not silenced, because a suppression would be a worse lie than a visible warning.
+- **One suppression, deliberate.** `[...word].length` in `wordLengths` trips `no-misused-spread`.
+  conventions §8 pins that exact implementation and it must match wherever authoring computes the
+  stored value (I19), so changing it would change every already-stored shape. Code points, not
+  graphemes — an emoji counts as several. A real limitation, accepted for pub-quiz keywords.
+
+### Next agent should know
+
+- **`toMainScreenView` / `toPlayerView` / `toMasterControlView` take `now`**, because a running timer
+  and a finale clock are functions of it. Pass the request instant; never read a clock inside domain.
+- **The sentinel test is the enforcement, and it has a complement.** It asserts each secret does
+  appear *once permitted* — without that, a filter returning nothing would satisfy the forbidden
+  table trivially. **Add a sentinel when you add a secret.**
+- **`visibleState` maps `PENDING`/`SKIPPED` to `OPEN`** for the room's benefit, and it is only ever
+  reached for the *current* question — which cannot be `PENDING`. If you make a non-current question
+  renderable, revisit that, because invariant 6 depends on it.
+- `FINALE_ENDED.ranking` is **stored as given**, while `finaleRanking(state)` derives the same thing.
+  The action should append what the deriver produced; they must not disagree.
+
 ## Slice 1 — `packages/db`: schema & migrations
 
 **Status:** complete · `pnpm check` green · 87 tests
