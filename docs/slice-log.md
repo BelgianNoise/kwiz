@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 2 — `packages/domain`: the rules
 
-**Status:** complete · `pnpm check` green · 316 tests · lint silent · **the whole game is playable in tests, with
+**Status:** complete · `pnpm check` green · 323 tests · lint silent · **the whole game is playable in tests, with
 no server and no UI**
 
 **Built:** `constants.ts`, `answers.ts` (D22), `question-state.ts` (PRD 1 §7.1), `state.ts`,
@@ -63,6 +63,27 @@ question that looked like it was still taking answers, on both the projector and
 Fixed in `stageKind`, and it is now two tests: the stage falls back to the round intro, and the
 skipped prompt appears in neither audience's payload. I had flagged the `PENDING`/`SKIPPED` → `OPEN`
 fallback as "a smell" in the first pass; it was not a smell, it was a bug.
+
+### The drift slice 1 predicted, found and closed
+
+Slice 1 left auto-grading out of `applyProjection` because `normaliseAnswer` did not exist yet, and
+recorded it as "incomplete in one specific way, not wrong". Once slice 2 added the matcher, that note
+became a **live drift**: `packages/domain`'s reducer graded a `FREE_TEXT` match to `AUTO_CORRECT`
+with points, while `packages/db`'s projection still wrote `PENDING` with zero.
+
+The symptom would have been nasty and confusing rather than loud — **master control calling a team
+correct and scoring while the review grid still called the answer pending**, from the same log.
+
+`applyProjection` now calls `@kwiz/domain`'s `gradeFreeText` / `gradeMultipleChoice`, never a local
+copy, and `projection-parity.test.ts` runs one identical event list through **both** halves and
+compares verdicts, points and scores across seven scenarios — auto-correct, near-miss, master
+reversal, skip, adjustment and revocation, two teams graded differently, and a D47 proxy re-answer.
+
+**Verified the guard has teeth**: making the writer always return `PENDING` fails 5 of its 7 cases.
+
+Its fixture drives **everything** through the log — hence `seedGame(db, { withTeams: false })` plus
+`TEAM_ADDED` events. Seeding rows directly is fine elsewhere, but two halves comparing different
+histories would agree about nothing and pass.
 
 ### Raised, not resolved
 

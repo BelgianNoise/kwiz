@@ -1,15 +1,23 @@
-import type { GameEvent } from '@kwiz/domain'
+import {
+  gradeFreeText,
+  gradeMultipleChoice,
+  verdictAwardsPoints,
+  type AnswerVerdict,
+  type GameEvent,
+} from '@kwiz/domain'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 
 import type { KwizTx } from './client'
 import {
   game,
+  gameAcceptedAnswer,
   gameAnswer,
   gameBuzz,
   gameDevice,
   gameKeywordMark,
   gameQuestion,
   gameQuestionKeyword,
+  gameQuestionOption,
   gameScoreAdjustment,
   gameTeam,
 } from './schema'
@@ -23,12 +31,12 @@ import {
  * *only* in the in-memory projection (§1.1), because persisting a derivable fact creates a
  * second source of truth for it.
  *
- * **Not yet handled: auto-grading.** A `FREE_TEXT` or `MULTIPLE_CHOICE` submission's verdict is
- * computed from the submission plus the accepted answers (protocol §4), which needs
- * `normaliseAnswer` and the matcher from `packages/domain` — build-order slice 2. Until then a
- * submission projects as `PENDING`, which is `game_answer`'s documented default (§6.5) and the
- * correct pre-grading state, so nothing here is wrong; it is incomplete in one specific way,
- * recorded in the slice log.
+ * **Auto-grading calls `@kwiz/domain`'s matcher, never a local copy.** A `FREE_TEXT` or
+ * `MULTIPLE_CHOICE` verdict is computed from the submission plus the accepted answers (protocol
+ * §4), and `packages/domain`'s reducer computes exactly the same thing for the pushed views. Two
+ * implementations would drift, and the symptom would be nasty: master control calling a team
+ * correct and scoring while the review screen still calls it pending. `projection-parity.test.ts`
+ * asserts the two agree.
  */
 export function applyProjection(
   tx: KwizTx,
@@ -136,6 +144,7 @@ export function applyProjection(
 
     case 'ANSWER_SUBMITTED': {
       const p = event.payload
+      const graded = autoGrade(tx, p.gameQuestionId, p.text, p.selectedOptionId)
       tx.insert(gameAnswer)
         .values({
           gameId,
@@ -148,10 +157,12 @@ export function applyProjection(
           isDraft: p.fromDraft,
           submittedAt: at,
           enteredByMaster: p.enteredByMaster,
+          verdict: graded.verdict,
+          pointsAwarded: graded.pointsAwarded,
         })
         .onConflictDoUpdate({
-          // The one legitimate overwrite is the master answering for a team (D47). It resets
-          // the verdict, because the answer genuinely changed. First-write-wins for *players*
+          // The one legitimate overwrite is the master answering for a team (D47). It re-grades
+          // from scratch, because the answer genuinely changed. First-write-wins for *players*
           // (D43) is enforced by the action, before any event is appended.
           target: [gameAnswer.gameId, gameAnswer.gameQuestionId, gameAnswer.teamId],
           set: {
@@ -160,8 +171,8 @@ export function applyProjection(
             isDraft: p.fromDraft,
             submittedAt: at,
             enteredByMaster: p.enteredByMaster,
-            verdict: 'PENDING',
-            pointsAwarded: 0,
+            verdict: graded.verdict,
+            pointsAwarded: graded.pointsAwarded,
             validatedAt: null,
           },
         })
@@ -373,6 +384,54 @@ export function applyProjection(
 }
 
 // ─── helpers ───
+
+/**
+ * The verdict and points a submission resolves to on its own, via `@kwiz/domain`'s matcher.
+ *
+ * A `FREE_TEXT` non-match lands on `PENDING`, **never** `AUTO_WRONG` (D22): the machine may only
+ * ever be right, because a human is standing right there. `BUZZER` and `DO` are never auto-graded —
+ * nothing was typed.
+ */
+function autoGrade(
+  tx: KwizTx,
+  gameQuestionId: string,
+  text: string | undefined,
+  selectedOptionId: string | undefined,
+): { verdict: AnswerVerdict; pointsAwarded: number } {
+  const question = tx
+    .select({ answerMethod: gameQuestion.answerMethod, points: gameQuestion.points })
+    .from(gameQuestion)
+    .where(eq(gameQuestion.id, gameQuestionId))
+    .get()
+  if (!question) return { verdict: 'PENDING', pointsAwarded: 0 }
+
+  let verdict: AnswerVerdict = 'PENDING'
+
+  if (question.answerMethod === 'FREE_TEXT') {
+    const accepted = tx
+      .select({ text: gameAcceptedAnswer.text })
+      .from(gameAcceptedAnswer)
+      .where(eq(gameAcceptedAnswer.gameQuestionId, gameQuestionId))
+      .all()
+      .map((row) => row.text)
+    verdict = gradeFreeText(text, accepted)
+  } else if (question.answerMethod === 'MULTIPLE_CHOICE') {
+    const correct = tx
+      .select({ id: gameQuestionOption.id })
+      .from(gameQuestionOption)
+      .where(
+        and(
+          eq(gameQuestionOption.gameQuestionId, gameQuestionId),
+          eq(gameQuestionOption.isCorrect, true),
+        ),
+      )
+      .get()
+    // A question with no correct option is a pre-flight failure (I4), not something to guess at.
+    verdict = correct ? gradeMultipleChoice(selectedOptionId, correct.id) : 'PENDING'
+  }
+
+  return { verdict, pointsAwarded: verdictAwardsPoints(verdict) ? question.points : 0 }
+}
 
 function questionPoints(tx: KwizTx, gameQuestionId: string): number {
   const row = tx
