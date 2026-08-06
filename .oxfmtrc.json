@@ -13,5 +13,14 @@
   "sortImports": true,
   "sortTailwindcss": true,
 
-  "ignorePatterns": ["pnpm-lock.yaml", "data", "**/*.md"]
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "data",
+    "**/*.md",
+
+    // drizzle-kit owns these: the SQL, the snapshot it diffs against, and the journal it
+    // appends to. Reformatting them churns every `db:generate` and edits artifacts a tool
+    // rewrites — migrations are committed and forward-only (data model §11), never touched.
+    "packages/db/migrations/**"
+  ]
 }

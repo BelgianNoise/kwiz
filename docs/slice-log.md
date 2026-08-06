@@ -12,6 +12,84 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 1 — `packages/db`: schema & migrations
+
+**Status:** complete · `pnpm check` green · 87 tests
+
+**Built:** all **24 tables** (drizzle-kit confirms the count) via the §3 shared factories; zod
+validators for every JSON column; the 40-type `game_event` payload union validated on append
+*and* replay; the connection module with all four pragmas; the first migration; D14's boot
+prompt; `appendAndProject`; and the §7.2 column-parity guard.
+
+### Spec deviations — all fixed in the same change
+
+Four, and three were found only by writing the code that had to obey them:
+
+- **Drizzle's object-form index callback is `@deprecated.**` All 23 table definitions in the data
+  model used it. Since §0 says the Drizzle definitions *are* the specification, following it
+  faithfully would have written the whole schema against a dead API. Converted to the array form.
+- **`SCORE_ADJUSTMENT_REVOKED` referenced an id that `SCORE_ADJUSTED` never recorded.** A
+  projection rebuild (§11) replays into empty tables, so the adjustment came back with a fresh
+  uuid and **every revocation silently stopped matching — restoring points a master had taken
+  away.** `SCORE_ADJUSTED` now carries its own row id, as `BUZZ_RECEIVED` already did.
+- **Projection timestamps came from the write clock.** `game_score_adjustment.createdAt` and
+  `game_team.createdAt` used the column default, so a rebuild stamped *now* and rewrote when
+  things happened. Both generalised into a rule in protocol §4.7 and I15.
+- **`DEVICE_JOINED` could not project the row it creates**: the payload had no `deviceToken`, and
+  only `lastSeenAt` is exempt from the log, so `game_device` could never be written by the sole
+  writer. Added to the payload — no new exposure, since the log is on the same disk as the table.
+- **`FINALE_ENDED { ranking }` was a flat list**, which cannot express the shared rank PRD 1 §8.8
+  requires for simultaneous elimination. Now `teamId[][]`, rank groups best first.
+- Also: `text({ enum })` generates **no** `CHECK` constraint (so widening one needs no migration,
+  and the database will not reject a bad value); the invariant table was reordered into I1–I22;
+  and §11.1 now records how D14's prompt is assembled.
+
+### Raised, not resolved
+
+- **Auto-grading is absent, and that is a build-order boundary rather than an oversight.** A
+  `FREE_TEXT` or `MULTIPLE_CHOICE` verdict is computed from the submission plus the accepted
+  answers (protocol §4), which needs `normaliseAnswer` and the matcher — build-order **slice 2**.
+  Until then a submission projects as `PENDING`, which is `game_answer`'s documented default
+  (§6.5) and the correct pre-grading state. **Incomplete in one specific way, not wrong**, and
+  the I15 rebuild test will catch it the moment slice 2's grading and the projection disagree.
+- **`@types/better-sqlite3` is at 9.6.0 against our v13.** Diffed the surfaces: the only gap is
+  `Database.explain`, a debug helper. Fine, but a v13-aware types release is worth taking.
+- **No `createGame` / `resyncGame` yet** (§7, §7.1). build-order does not put them in slice 1 and
+  nothing needs them until slice 4, but the column-parity guard exists to protect the copy
+  function they will contain — so whoever writes it should spread `SHARED_COLUMN_GROUPS` rather
+  than hand-listing fields, which makes the guard pass by construction.
+
+### Next agent should know
+
+- **`bootDatabase()` in `src/boot.ts` is the entry slice 3 calls** — it opens the configured
+  database and settles migrations before anything serves a request, returning the outcome rather
+  than deciding. `DECLINED` is not a crash: the server boots and every surface must render the
+  "database needs migrating" screen (§6.7).
+- **Do not add a CLI that runs package source directly with `node`.** I tried, and it fails:
+  Node's ESM resolver wants full filenames, so every extensionless relative import across the
+  workspace is an `ERR_MODULE_NOT_FOUND`. Fixing it means either `.ts` extensions repo-wide or a
+  loader dependency, and neither is worth it — the bundler resolves these fine, which is how the
+  real entry point reaches this code. `boot.test.ts` covers the behaviour against a real
+  directory instead.
+- **`appendAndProject` is the only way to write the play half.** It validates, appends and
+  projects in one transaction and returns `seqs`; broadcast happens *after* commit, which is why
+  it pushes nothing itself.
+- **`freshTestDatabase()` in `src/test-support.ts`** gives an in-memory database with the real
+  migrations applied, and `seedGame()` the minimum tree (game → round → question → two teams).
+  Use them; there is no reason to fake a database when one costs a function call.
+  `MIGRATIONS_FOLDER` is absolute on purpose — a relative path resolves against the *process*
+  cwd, which is the workspace root when vitest runs from there.
+- **`seedGame` generates a unique code per game.** A hardcoded one cannot seed two `SETUP` games:
+  the partial unique index rejects the second, correctly. That caught me, and it is now its own
+  test in `schema/game.test.ts`.
+- **`replay.test.ts` is I15, the keystone.** It wipes the projections and replays through the
+  *same* `applyProjection`. If you add a projection effect, that test is what proves a rebuild
+  still matches — and it is where both id/timestamp bugs above surfaced.
+- **`oxfmt` ignores `packages/db/migrations/**`.** Those are drizzle-kit's own artifacts; the
+  first `db:generate` had it rewriting the snapshot and journal.
+- Migrations are **forward-only and committed**. Never hand-edit an applied one; add a new one. A
+  column added to a shared factory generates changes to **two** tables, which is expected.
+
 ## Slice 0 — Scaffold
 
 **Status:** complete · `pnpm check` green · `pnpm build` clean, no warnings

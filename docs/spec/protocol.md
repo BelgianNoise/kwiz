@@ -189,7 +189,7 @@ Storing a derivable fact creates a second source of truth for it.
 | `CODE_REGENERATED` | `{ code }` | `SETUP` only (data model Q3) |
 | `TEAM_ADDED` | `{ teamId, name, colour, position }` | |
 | `TEAM_UPDATED` | `{ teamId, name?, colour? }` | Rename/recolour at any time, including after the game ends |
-| `DEVICE_JOINED` | `{ deviceId, teamId }` | Refused beyond `KWIZ_MAX_DEVICES_PER_TEAM` (D20) |
+| `DEVICE_JOINED` | `{ deviceId, teamId, deviceToken }` | Refused beyond `KWIZ_MAX_DEVICES_PER_TEAM` (D20). **Carries the token** because the projection *creates* the `game_device` row — only `lastSeenAt` is exempt from the log (§4.8), so there is nowhere else it could come from without a second writer into the play half. No new exposure: the log is on the same disk as the table, and the token is continuity rather than authentication (PRD 1 §4) |
 | `DEVICE_SWITCHED_TEAM` | `{ deviceId, fromTeamId, toTeamId }` | A player who picked the wrong team |
 | `GAME_STARTED` | `{}` | `SETUP → LIVE`. Does **not** stop further joins (PRD 1 flow step 10) |
 | `GAME_FINISHED` | `{}` | |
@@ -295,7 +295,7 @@ event, no tick event, and no server timer.
 | `KEYWORD_UNMARKED` | `{ gameKeywordId }` | Mis-mark correction. Revokes the mark **and the penalties it charged** — the D41 pattern, and here it must reverse time, not just a score |
 | `KEYWORDS_REVEALED` | `{ gameQuestionId }` | Master shows the unguessed ones; creates marks with `teamId: null` |
 | `TEAM_ELIMINATED` | `{ teamId, at }` | Clock reached zero. `at` is the computed instant, not when the request arrived |
-| `FINALE_ENDED` | `{ ranking }` | One finalist left, all eliminated, or questions exhausted. `ranking` is the finalists in finishing order (D51) |
+| `FINALE_ENDED` | `{ ranking: teamId[][] }` | One finalist left, all eliminated, or questions exhausted. `ranking` is **an array of rank groups**, best first — not a flat list, because simultaneous elimination shares a rank (D51, PRD 1 §8.8). A single survivor is `[[winner], [runnerUp], …]`; the degenerate all-out case is one group with every finalist in it and no winner |
 
 **Two things deliberately absent:**
 
@@ -320,11 +320,25 @@ client-supplied instant**, so a slow or fast browser cannot alter a team's fate.
 | `BREAK_ENDED` | `{}` | Master resumes. **Never automatic** — the countdown reaching zero changes nothing on the server (consistent with D8). Re-sending `BREAK_STARTED` during a break is how a break is **extended**: it supersedes `resumesAt` |
 | `SCOREBOARD_TOGGLED` | `{ shown }` | Master pushes the leaderboard to the main screen mid-round (O4). Cleared automatically when the next question opens |
 | `PICKER_ASSIGNED` | `{ teamId, reason: 'RULE' \| 'TIE_BREAK' \| 'MASTER_OVERRIDE' }` | Needed because tie-breaks are master-arbitrated and overrides exist (D30) — those are decisions, not derivations |
-| `SCORE_ADJUSTED` | `{ teamId, delta, reason?, announced }` | Any time, any amount (D15). `announced: false` suppresses the banner only (D25) |
+| `SCORE_ADJUSTED` | `{ adjustmentId, teamId, delta, reason?, announced }` | Any time, any amount (D15). `announced: false` suppresses the banner only (D25). **Carries its own row id**, minted by the caller — see the rule below |
 | `SCORE_ADJUSTMENT_REVOKED` | `{ adjustmentId }` | Undo of a mistaken adjustment (D41). Sets `revokedAt`; the row stays and the total excludes it. Revoking an already-revoked adjustment is a no-op |
 
 `PICKER_ASSIGNED` is appended even when it merely confirms the rule, so the log always
 answers "whose pick was it?" without the reader re-deriving the rule.
+
+> **Any projection row id that a later event references must be carried in the event that
+> creates the row.** `BUZZ_RECEIVED.buzzId` and `SCORE_ADJUSTED.adjustmentId` both exist for this
+> reason, and it is not stylistic: a projection rebuild (data model §11) replays the log into
+> empty tables, so an id left to a column default comes back **different**. The revocation would
+> then match nothing and silently restore points a master had taken away — a rebuild quietly
+> changing a score is exactly what I15 exists to make impossible.
+>
+> Row ids nothing refers to — `game_answer`, `game_keyword_mark` — may keep the default, and I15
+> is therefore equality of *content*, not of surrogate keys.
+>
+> **The same applies to timestamps.** A projection row's `createdAt` must be written from its
+> event's `createdAt`, never from `new Date()` at write time — a column default stamps *now*, so
+> a rebuild would silently rewrite when everything happened.
 
 ### 4.8 The two event-sourcing exemptions
 
