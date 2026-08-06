@@ -1,7 +1,6 @@
+import { ANSWER_METHODS, ATTACHMENT_KINDS, ROUND_TYPES } from '@kwiz/domain'
+import type { QuestionConfig, RoundConfig, WordLengths } from '@kwiz/domain'
 import { integer, text } from 'drizzle-orm/sqlite-core'
-
-import { ANSWER_METHODS, ATTACHMENT_KINDS, ROUND_TYPES } from './enums'
-import type { QuestionConfig, RoundConfig, WordLengths } from './json'
 
 /**
  * data model §3 — the columns seven template tables share with their game-scoped twin.

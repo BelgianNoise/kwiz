@@ -1,7 +1,7 @@
+import type { GameEvent } from '@kwiz/domain'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 
 import type { KwizTx } from './client'
-import type { GameEvent } from './events/payload'
 import {
   game,
   gameAnswer,

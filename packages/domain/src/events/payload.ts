@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { TIE_PAYOUTS } from '../schema/enums'
+import { TIE_PAYOUTS } from '../vocabulary'
 
 /**
  * protocol §4 — every `game_event.type` and its payload schema.

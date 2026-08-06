@@ -1,8 +1,8 @@
+import type { GameEvent } from '@kwiz/domain'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appendAndProject, readLog } from './append'
 import type { KwizDatabase } from './client'
-import type { GameEvent } from './events/payload'
 import { applyProjection } from './projections'
 import {
   gameAnswer,

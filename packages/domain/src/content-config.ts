@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
-import { DO_SCORING_MODES, TIE_PAYOUTS, type AnswerMethod, type RoundType } from './enums'
+import {
+  DO_SCORING_MODES,
+  TIE_PAYOUTS,
+  type AnswerMethod,
+  type RoundType,
+} from './vocabulary'
 
 /**
  * Every JSON column's validator. data model §2: **a JSON column without a validator is a

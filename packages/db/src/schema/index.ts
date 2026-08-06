@@ -4,8 +4,6 @@
  * missing from generated migrations.
  */
 
-export * from './enums'
-export * from './json'
 export * from './shared'
 
 /** Template — ordinary mutable rows (§4). */

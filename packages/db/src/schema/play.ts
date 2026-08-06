@@ -1,3 +1,5 @@
+import type { GameEventPayload } from '@kwiz/domain'
+import { ANSWER_VERDICTS, BUZZ_OUTCOMES } from '@kwiz/domain'
 import {
   index,
   integer,
@@ -8,8 +10,6 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { v7 as uuidv7 } from 'uuid'
 
-import type { GameEventPayload } from '../events/payload'
-import { ANSWER_VERDICTS, BUZZ_OUTCOMES } from './enums'
 import { game } from './game'
 import { gameQuestion, gameQuestionKeyword, gameQuestionOption } from './game-copy'
 

@@ -25,16 +25,11 @@ export {
   type KwizTx,
 } from './client'
 
-export {
-  GAME_EVENT_TYPES,
-  gameEventPayloadSchemas,
-  isGameEventType,
-  type GameEvent,
-  type GameEventPayload,
-  type GameEventType,
-} from './events/payload'
-
-export { EventPayloadError, parseGameEvent, parseStoredEvent } from './events/parse'
+/*
+ * The event catalogue and the content-config schemas live in `@kwiz/domain` — they are domain
+ * vocabulary that this package merely persists, and `packages/domain` may not import from here
+ * (CLAUDE.md §2.1, enforced by lint). Import them from `@kwiz/domain` directly.
+ */
 
 export { appendAndProject, latestSeq, readLog, type AppendResult } from './append'
 

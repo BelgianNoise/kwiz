@@ -1,8 +1,8 @@
+import { GAME_STATUSES, LOCALES } from '@kwiz/domain'
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { v7 as uuidv7 } from 'uuid'
 
-import { GAME_STATUSES, LOCALES } from './enums'
 import { quiz } from './template'
 
 /**

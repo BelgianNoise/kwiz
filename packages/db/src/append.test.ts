@@ -1,10 +1,9 @@
+import { EventPayloadError, type GameEvent } from '@kwiz/domain'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appendAndProject, readLog } from './append'
 import type { KwizDatabase } from './client'
-import { EventPayloadError } from './events/parse'
-import type { GameEvent } from './events/payload'
 import {
   game,
   gameAnswer,

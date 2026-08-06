@@ -612,6 +612,12 @@ The state machine that invariants 1–6 are written against. Owned by
                       └─────────┘
 ```
 
+> **`BUZZED` in the diagram is not a state.** The canonical type has six members —
+> `PENDING`, `OPEN`, `LOCKED`, `REVEALED`, `SCORED`, `SKIPPED` (protocol §5.5) — and the box
+> above is drawn only to show where adjudication happens. A buzzed question **stays `OPEN`**
+> throughout. Treating it as a state would make D35's deny → reopen loop a cycle in the state
+> machine, when what it actually is is repeated buzzes against one unchanged question.
+
 **Buzzer detail:** a buzz does not end the question — it pauses it for adjudication.
 The first buzz locks all buzzers; on a denial the buzzing team is locked out and the
 buzzers **reopen to the remaining teams**, looping until a team is credited or every
