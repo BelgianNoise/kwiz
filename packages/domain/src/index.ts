@@ -20,6 +20,10 @@ export * from './vocabulary'
 export * from './content-config'
 export * from './answers'
 export * from './question-state'
+export * from './state'
+export * from './reduce'
+export * from './derive'
+export * from './views'
 
 export {
   GAME_EVENT_TYPES,

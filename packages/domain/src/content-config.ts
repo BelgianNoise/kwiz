@@ -97,9 +97,9 @@ export function parseQuestionConfig(
   method: AnswerMethod,
   config: unknown,
 ): QuestionConfig {
-  return questionConfigSchemaByMethod[method].parse(config) as QuestionConfig
+  return questionConfigSchemaByMethod[method].parse(config)
 }
 
 export function parseRoundConfig(type: RoundType, config: unknown): RoundConfig {
-  return roundConfigSchemaByType[type].parse(config) as RoundConfig
+  return roundConfigSchemaByType[type].parse(config)
 }
