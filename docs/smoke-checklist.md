@@ -63,6 +63,18 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
       `better-sqlite3` prebuild is per-platform, so a Linux-only pass proves nothing about the
       laptop the quiz runs on.
 
+### After slice 2 — the domain rules
+
+- [ ] *(no UI — covered by the test suite, per build-order.)* The rows worth keeping as human
+      checks are the two the suite cannot judge:
+- [ ] `pnpm test` runs the sentinel leak test across **every** (audience × question state) pair,
+      and the count of pairs grew if you added a state or an audience.
+- [ ] `projection-parity.test.ts` still passes. It is the only thing comparing `@kwiz/db`'s
+      projection against `@kwiz/domain`'s reducer — two readings of one log — so if you change how
+      either grades an answer, that test is the one that notices.
+- [ ] A new secret added to any payload has a **sentinel** in `views.sentinel.test.ts`. Grep for
+      `ZZ_SECRET` — if your field is not represented, the table is silently incomplete.
+
 ### After slice 1 — schema & migrations
 
 - [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.

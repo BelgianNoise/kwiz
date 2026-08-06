@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { gameEventPayloadSchemas, isGameEventType, type GameEvent } from './payload'
 
 /**
@@ -10,11 +12,11 @@ export class EventPayloadError extends Error {
 }
 
 function describe(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'issues' in error) {
-    const { issues } = error as {
-      issues: { path: (string | number | symbol)[]; message: string }[]
-    }
-    return issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')
+  // `instanceof` rather than a shape assertion: zod owns this type, so let it prove it.
+  if (error instanceof z.ZodError) {
+    return error.issues
+      .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('; ')
   }
   return error instanceof Error ? error.message : String(error)
 }
@@ -33,6 +35,10 @@ export function parseGameEvent(type: string, payload: unknown): GameEvent {
     throw new EventPayloadError(`Invalid ${type} payload — ${describe(result.error)}`)
   }
 
+  // The map lookup loses the correlation between `type` and its variant: `result.data` is typed as
+  // the union of *all* payloads, so TypeScript cannot see this pair is one of its members. It is —
+  // `type` indexed the very schema that produced `data`.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return { type, payload: result.data } as GameEvent
 }
 

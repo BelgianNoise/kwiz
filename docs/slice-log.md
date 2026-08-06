@@ -12,6 +12,116 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 2 — `packages/domain`: the rules
+
+**Status:** complete · `pnpm check` green · 323 tests · lint silent · **the whole game is playable in tests, with
+no server and no UI**
+
+**Built:** `constants.ts`, `answers.ts` (D22), `question-state.ts` (PRD 1 §7.1), `state.ts`,
+`reduce.ts` over all 40 event types, `derive.ts` (everything deliberately not stored), `views.ts`
+(the three filters + `attention`), and the protocol §6.2 sentinel leak test.
+
+### The layering bug slice 1 left, fixed first
+
+`packages/domain` may not import `@kwiz/db` — oxlint enforces it — but the **event catalogue, the
+enum vocabulary and the content-config schemas were all in db**, and every domain function is
+defined over exactly those events. Keeping them there would have forced a duplicate union in
+domain, which is the drift the single-writer design exists to prevent. Moved to `@kwiz/domain`; db
+imports them and no longer re-exports them. All 97 db tests passed unaltered, so the move was
+behaviour-neutral.
+
+**`@kwiz/domain` now owns the vocabulary; `@kwiz/db` owns persistence.** Do not move it back.
+
+### The design that matters most
+
+**`reduce(content, events)`** — `content` is the game-copy subtree, which is *not* in the log and
+never could be: a question's prompt is not something that happened. Separating it is what keeps the
+reducer a pure function of two inputs. There is **no clock inside it**: every timestamp comes from
+the event that carried it, so a replay is byte-identical and every test is a literal array.
+
+**`derive.ts` holds what is not stored** (§1.1) — lockout set, timer pause, standings, Jeopardy turn
+order, every finale clock. If you find yourself adding a field to `GameState` for one of these,
+that is a second source of truth for the same fact.
+
+### Spec deviations
+
+- **PRD 1 §7.1 draws `BUZZED` as a state box.** The canonical type has six states and no such
+  member: a buzzed question stays `OPEN`. Noted inline, because modelling it as a state would turn
+  D35's deny → reopen loop into a cycle in the state machine rather than what it is — repeated
+  buzzes against one unchanged question.
+- **`FinaleTurnDetail` carried no keywords in my first pass**, which left the master with no way to
+  read the text they are supposed to mark. The sentinel test caught it. Added per protocol §5.5;
+  it is the one place keyword text is transmitted before marking.
+
+### A real bug found while closing the gaps
+
+**A skipped question was still being presented as an open one.** `QUESTION_SKIPPED` leaves
+`currentQuestionId` set — the master went around it — so the stage resolver kept yielding
+`QUESTION`, and since `SKIPPED` has no visible state of its own it rendered as **`OPEN`**: a dead
+question that looked like it was still taking answers, on both the projector and every phone.
+
+Fixed in `stageKind`, and it is now two tests: the stage falls back to the round intro, and the
+skipped prompt appears in neither audience's payload. I had flagged the `PENDING`/`SKIPPED` → `OPEN`
+fallback as "a smell" in the first pass; it was not a smell, it was a bug.
+
+### The drift slice 1 predicted, found and closed
+
+Slice 1 left auto-grading out of `applyProjection` because `normaliseAnswer` did not exist yet, and
+recorded it as "incomplete in one specific way, not wrong". Once slice 2 added the matcher, that note
+became a **live drift**: `packages/domain`'s reducer graded a `FREE_TEXT` match to `AUTO_CORRECT`
+with points, while `packages/db`'s projection still wrote `PENDING` with zero.
+
+The symptom would have been nasty and confusing rather than loud — **master control calling a team
+correct and scoring while the review grid still called the answer pending**, from the same log.
+
+`applyProjection` now calls `@kwiz/domain`'s `gradeFreeText` / `gradeMultipleChoice`, never a local
+copy, and `projection-parity.test.ts` runs one identical event list through **both** halves and
+compares verdicts, points and scores across seven scenarios — auto-correct, near-miss, master
+reversal, skip, adjustment and revocation, two teams graded differently, and a D47 proxy re-answer.
+
+**Verified the guard has teeth**: making the writer always return `PENDING` fails 5 of its 7 cases.
+
+Its fixture drives **everything** through the log — hence `seedGame(db, { withTeams: false })` plus
+`TEAM_ADDED` events. Seeding rows directly is fine elsewhere, but two halves comparing different
+histories would agree about nothing and pass.
+
+### Raised, not resolved
+
+- **`suggestedPicker` returns a suggestion; nothing appends `PICKER_ASSIGNED`.** That is an action's
+  job (slice 3). The log is supposed to answer "whose pick was it?" without re-deriving the rule, so
+  **the action must append it even when it merely confirms the suggestion.**
+
+Everything else raised in the first pass is now closed:
+
+- **Drafts** are a parameter of `toPlayerView` (`DraftLookup`, keyed by `gameQuestionId`) rather than
+  a note for slice 3 to remember. Domain stays pure — it receives a plain map — but D45 is now
+  impossible to forget, because a caller that ignores drafts is visibly ignoring an argument. A
+  submission supersedes a draft, since submission is final (D43).
+- **Lint is silent**, warnings included. The two casts that genuinely cannot be avoided —
+  `Object.keys` narrowing in `payload.ts`, and re-pairing a validated payload with its variant in
+  `parse.ts` — carry a one-line disable stating why. `describe()` now uses `instanceof z.ZodError`
+  rather than asserting a shape, and the tests assign from `JSON.parse` instead of asserting.
+- **The `no-misused-spread` suppression is gone.** `Array.from(w).length` iterates code points
+  exactly as `[...w].length` did, so the stored `wordLengths` are unchanged and conventions §8 was
+  updated to match. Code points are still not graphemes — an emoji counts as several — which remains
+  a documented limitation rather than a suppressed warning.
+
+### Next agent should know
+
+- **`toMainScreenView` / `toPlayerView` / `toMasterControlView` take `now`**, because a running timer
+  and a finale clock are functions of it. Pass the request instant; never read a clock inside domain.
+- **The sentinel test is the enforcement, and it has a complement.** It asserts each secret does
+  appear *once permitted* — without that, a filter returning nothing would satisfy the forbidden
+  table trivially. **Add a sentinel when you add a secret.**
+- **`toPlayerView` takes a `DraftLookup`.** Pass the team's drafts from `game_answer_draft` or two
+  devices on one team will not see each other typing (D45). Omitting it means *no drafts*, never
+  "do not share them" — there is a test asserting exactly that distinction.
+- **`visibleState`'s `PENDING`/`SKIPPED` fallback is unreachable by design.** `stageKind` only yields
+  `QUESTION` for the current question, which cannot be `PENDING`, and it now explicitly excludes
+  `SKIPPED`. If you make a non-current question renderable, revisit both — invariant 6 depends on it.
+- `FINALE_ENDED.ranking` is **stored as given**, while `finaleRanking(state)` derives the same thing.
+  The action should append what the deriver produced; they must not disagree.
+
 ## Slice 1 — `packages/db`: schema & migrations
 
 **Status:** complete · `pnpm check` green · 87 tests

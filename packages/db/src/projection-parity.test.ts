@@ -1,0 +1,271 @@
+import { reduce, type GameContent, type GameEvent, type LoggedEvent } from '@kwiz/domain'
+import { eq } from 'drizzle-orm'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { appendAndProject, readLog } from './append'
+import type { KwizDatabase } from './client'
+import { gameAcceptedAnswer, gameAnswer, gameTeam } from './schema'
+import { freshTestDatabase, seedGame, type SeededGame } from './test-support'
+
+/**
+ * **The two halves of I15 must agree.**
+ *
+ * `packages/db` writes the projection tables that the review screens and the validation queue read.
+ * `packages/domain` folds the same log into the `GameState` that every pushed view is built from.
+ * They are two readings of one log, and if they drift the symptom is ugly and confusing: master
+ * control calls a team correct and scoring while the review grid still calls the answer pending.
+ *
+ * CLAUDE.md §6 names this exactly — *"if it fails, a reducer and a writer have drifted"* — so this
+ * runs the identical event list through both and compares the answers side by side.
+ */
+
+let database: KwizDatabase
+let seed: SeededGame
+
+const ACCEPTED = 'paris'
+
+beforeEach(() => {
+  database = freshTestDatabase()
+  // `withTeams: false`, then `TEAM_ADDED` below — **everything** must come through the log, or the
+  // two halves are not reading the same history and comparing them proves nothing.
+  seed = seedGame(database, { points: 10, withTeams: false })
+
+  // seedGame leaves the question with no accepted answers, which would make every FREE_TEXT
+  // submission PENDING and hide the grading path entirely.
+  database.db
+    .insert(gameAcceptedAnswer)
+    .values({
+      gameId: seed.gameId,
+      gameQuestionId: seed.questionId,
+      position: 0,
+      text: ACCEPTED,
+    })
+    .run()
+
+  appendAndProject(database, seed.gameId, [
+    {
+      type: 'TEAM_ADDED',
+      payload: { teamId: seed.teamA, name: 'A', colour: '#EF4444', position: 0 },
+    },
+    {
+      type: 'TEAM_ADDED',
+      payload: { teamId: seed.teamB, name: 'B', colour: '#22D3EE', position: 1 },
+    },
+    { type: 'GAME_STARTED', payload: {} },
+    { type: 'QUESTION_OPENED', payload: { gameQuestionId: seed.questionId } },
+  ])
+})
+
+/** The same content the game-copy rows describe, as domain expects to receive it. */
+function contentFor(seeded: SeededGame): GameContent {
+  return {
+    gameId: seeded.gameId,
+    quizName: 'Test quiz',
+    code: 'TEST',
+    defaultPlayerLocale: 'en',
+    rounds: [
+      {
+        id: seeded.roundId,
+        position: 0,
+        type: 'QUESTION_SET',
+        title: 'Round 1',
+        defaultPoints: 10,
+        defaultTimerMs: null,
+        config: {},
+        categories: [],
+        questions: [
+          {
+            id: seeded.questionId,
+            roundId: seeded.roundId,
+            categoryId: null,
+            position: 0,
+            prompt: 'Capital of France?',
+            answerMethod: 'FREE_TEXT',
+            points: 10,
+            timerMs: null,
+            masterNotes: null,
+            config: {},
+            acceptedAnswers: [ACCEPTED],
+            options: [],
+            keywords: [],
+            media: [],
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/** What both halves must agree on, per team. */
+interface Row {
+  teamId: string
+  verdict: string
+  pointsAwarded: number
+  score: number
+}
+
+function fromDatabase(): Row[] {
+  const teams = database.db
+    .select()
+    .from(gameTeam)
+    .where(eq(gameTeam.gameId, seed.gameId))
+    .orderBy(gameTeam.position)
+    .all()
+
+  return teams.map((team) => {
+    const answer = database.db
+      .select()
+      .from(gameAnswer)
+      .where(eq(gameAnswer.teamId, team.id))
+      .get()
+    return {
+      teamId: team.id,
+      verdict: answer?.verdict ?? 'NONE',
+      pointsAwarded: answer?.pointsAwarded ?? 0,
+      score: team.score,
+    }
+  })
+}
+
+function fromDomain(): Row[] {
+  // Replayed from the very rows `appendAndProject` wrote, so the two halves see one identical log.
+  const log: LoggedEvent[] = readLog(database, seed.gameId).map((entry) => ({
+    seq: entry.seq,
+    event: entry.event,
+    createdAt: entry.createdAt.getTime(),
+  }))
+  const state = reduce(contentFor(seed), log)
+
+  return [...state.teams.values()]
+    .sort((a, b) => a.position - b.position)
+    .map((team) => {
+      const answer = state.questions.get(seed.questionId)?.answers.get(team.id)
+      return {
+        teamId: team.id,
+        verdict: answer?.verdict ?? 'NONE',
+        pointsAwarded: answer?.pointsAwarded ?? 0,
+        score: team.score,
+      }
+    })
+}
+
+const submit = (teamId: string, text: string): GameEvent => ({
+  type: 'ANSWER_SUBMITTED',
+  payload: {
+    gameQuestionId: seed.questionId,
+    teamId,
+    text,
+    fromDraft: false,
+    enteredByMaster: false,
+  },
+})
+
+describe('the writer and the reducer agree', () => {
+  it('on an auto-correct match', () => {
+    appendAndProject(database, seed.gameId, [submit(seed.teamA, '  PARIS ')])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    // …and both actually graded it, rather than agreeing on nothing.
+    expect(fromDatabase()[0]).toMatchObject({
+      verdict: 'AUTO_CORRECT',
+      pointsAwarded: 10,
+      score: 10,
+    })
+  })
+
+  /** D22: a near-miss must land on PENDING in *both* halves, never AUTO_WRONG. */
+  it('on a near-miss going to the master', () => {
+    appendAndProject(database, seed.gameId, [submit(seed.teamA, 'Pariss')])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    expect(fromDatabase()[0]).toMatchObject({
+      verdict: 'PENDING',
+      pointsAwarded: 0,
+      score: 0,
+    })
+  })
+
+  it('on a master validation reversing an auto-verdict', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'paris'),
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: seed.questionId, teamId: seed.teamA, accepted: false },
+      },
+    ])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    expect(fromDatabase()[0]).toMatchObject({ verdict: 'DENIED', score: 0 })
+  })
+
+  it('on a skip stripping points that were already awarded (I8)', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'paris'),
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: seed.questionId } },
+    ])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    // The verdict is kept for the record; only the points go.
+    expect(fromDatabase()[0]).toMatchObject({
+      verdict: 'AUTO_CORRECT',
+      pointsAwarded: 0,
+      score: 0,
+    })
+  })
+
+  it('on adjustments and their revocation (I9, D41)', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'paris'),
+      {
+        type: 'SCORE_ADJUSTED',
+        payload: {
+          adjustmentId: 'adj-1',
+          teamId: seed.teamA,
+          delta: -4,
+          announced: true,
+        },
+      },
+    ])
+    expect(fromDatabase()).toEqual(fromDomain())
+    expect(fromDatabase()[0]?.score).toBe(6)
+
+    appendAndProject(database, seed.gameId, [
+      { type: 'SCORE_ADJUSTMENT_REVOKED', payload: { adjustmentId: 'adj-1' } },
+    ])
+    expect(fromDatabase()).toEqual(fromDomain())
+    expect(fromDatabase()[0]?.score).toBe(10)
+  })
+
+  it('on two teams graded differently on the same question', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'PARIS'),
+      submit(seed.teamB, 'lyon'),
+    ])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    const rows = fromDatabase()
+    expect(rows.map((row) => row.verdict)).toEqual(['AUTO_CORRECT', 'PENDING'])
+  })
+
+  /** D47 — the one legitimate overwrite. Both halves must re-grade, not keep the old verdict. */
+  it('on the master re-answering for a team', () => {
+    appendAndProject(database, seed.gameId, [submit(seed.teamA, 'lyon')])
+    expect(fromDatabase()[0]?.verdict).toBe('PENDING')
+
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'ANSWER_SUBMITTED',
+        payload: {
+          gameQuestionId: seed.questionId,
+          teamId: seed.teamA,
+          text: 'paris',
+          fromDraft: false,
+          enteredByMaster: true,
+        },
+      },
+    ])
+
+    expect(fromDatabase()).toEqual(fromDomain())
+    expect(fromDatabase()[0]).toMatchObject({ verdict: 'AUTO_CORRECT', score: 10 })
+  })
+})

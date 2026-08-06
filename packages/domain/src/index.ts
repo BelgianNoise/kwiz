@@ -1,15 +1,37 @@
 /**
  * `@kwiz/domain` — the game rules as pure functions over an event list.
  *
- * This package has **no dependencies at all**, which is the point. It may not import a
- * database, a Next.js type, a `Request`, a socket or `process.env` (CLAUDE.md §2.1);
- * `.oxlintrc.json` fails the build on any of those rather than trusting convention.
+ * **This package imports no database, no Next.js type, no `Request`, no socket and no
+ * `process.env`** (CLAUDE.md §2.1). `.oxlintrc.json` fails the build on any of those rather than
+ * trusting convention. `zod` is present and permitted: it is a pure library, and the event
+ * catalogue's schemas are the boundary that guards the log.
  *
- * Purity is what makes D3's transport swap possible and what lets every test here be a
- * literal array with no mocks. If something needs a mock, it belongs in another package.
+ * Purity is what makes D3's transport swap possible and what lets every test here be a literal
+ * array with no mocks. If something needs a mock, it belongs in another package.
  *
- * The contents arrive in build-order slice 2 — deliberately empty until then, because a
- * placeholder written now is a decision made without having read the specs it implements
- * (agent-workflow §3.1).
+ * **The event catalogue and the content-config schemas live here, not in `@kwiz/db`.** They are
+ * domain vocabulary that the database merely persists, and `packages/domain` may not import from
+ * `@kwiz/db` — so keeping them there would have forced a duplicate union, which is exactly the
+ * drift the single-writer design exists to prevent.
  */
-export {}
+
+export * from './constants'
+export * from './vocabulary'
+export * from './content-config'
+export * from './answers'
+export * from './question-state'
+export * from './state'
+export * from './reduce'
+export * from './derive'
+export * from './views'
+
+export {
+  GAME_EVENT_TYPES,
+  gameEventPayloadSchemas,
+  isGameEventType,
+  type GameEvent,
+  type GameEventPayload,
+  type GameEventType,
+} from './events/payload'
+
+export { EventPayloadError, parseGameEvent, parseStoredEvent } from './events/parse'

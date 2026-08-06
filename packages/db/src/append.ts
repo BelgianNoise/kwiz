@@ -1,8 +1,7 @@
+import { parseGameEvent, parseStoredEvent, type GameEvent } from '@kwiz/domain'
 import { and, eq, max } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
-import { parseGameEvent, parseStoredEvent } from './events/parse'
-import type { GameEvent } from './events/payload'
 import { applyProjection } from './projections'
 import { gameEvent } from './schema'
 

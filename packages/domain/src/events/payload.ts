@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { TIE_PAYOUTS } from '../schema/enums'
+import { TIE_PAYOUTS } from '../vocabulary'
 
 /**
  * protocol §4 — every `game_event.type` and its payload schema.
@@ -206,6 +206,11 @@ export const gameEventPayloadSchemas = {
 
 export type GameEventType = keyof typeof gameEventPayloadSchemas
 
+/**
+ * `Object.keys` is typed `string[]`, so narrowing is unavoidable — the keys provably *are* the
+ * union, but TypeScript cannot see it. Asserted once, here, rather than at each use.
+ */
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 export const GAME_EVENT_TYPES = Object.keys(gameEventPayloadSchemas) as GameEventType[]
 
 /**

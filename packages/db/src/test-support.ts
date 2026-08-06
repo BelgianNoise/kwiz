@@ -46,7 +46,16 @@ const nextCode = (): string => `TEST${String(++codeCounter).padStart(2, '0')}`
 
 export function seedGame(
   database: KwizDatabase,
-  { points = 10 }: { points?: number } = {},
+  {
+    points = 10,
+    /**
+     * Set `false` to leave the teams out, so a test can create them through `TEAM_ADDED` instead.
+     * Seeding rows directly is fine for most tests, but any test comparing this projection against
+     * `@kwiz/domain`'s reducer must drive **everything** through the log, or the two halves are not
+     * reading the same history and the comparison is meaningless.
+     */
+    withTeams = true,
+  }: { points?: number; withTeams?: boolean } = {},
 ): SeededGame {
   const gameId = uuidv7()
   const roundId = uuidv7()
@@ -85,11 +94,13 @@ export function seedGame(
     })
     .run()
 
-  for (const [position, id] of [teamA, teamB].entries()) {
-    database.db
-      .insert(gameTeam)
-      .values({ id, gameId, position, name: `Team ${position + 1}`, colour: '#EF4444' })
-      .run()
+  if (withTeams) {
+    for (const [position, id] of [teamA, teamB].entries()) {
+      database.db
+        .insert(gameTeam)
+        .values({ id, gameId, position, name: `Team ${position + 1}`, colour: '#EF4444' })
+        .run()
+    }
   }
 
   return { gameId, roundId, questionId, teamA, teamB }
