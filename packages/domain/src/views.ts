@@ -656,6 +656,15 @@ function myAnswer(
   return null
 }
 
+/**
+ * What a `state` frame carries: exactly one of the three filtered views (protocol §5).
+ *
+ * Named as a union rather than left as `unknown` at the transport boundary so that a client — and a
+ * test — can narrow it by shape instead of asserting. The members are structurally distinct:
+ * `attention` marks master control, `team` marks a player, and neither appears on the main screen.
+ */
+export type AudienceView = MainScreenView | PlayerView | MasterControlView
+
 // ─── MASTER_CONTROL ───
 
 export interface ValidationItem {
