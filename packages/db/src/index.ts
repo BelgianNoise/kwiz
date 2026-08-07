@@ -37,6 +37,37 @@ export { applyProjection, recomputeScore } from './projections'
 
 export { loadGameContent } from './content'
 
+export { loadQuizTree } from './quiz-tree'
+
+export {
+  createCategory,
+  createQuestion,
+  createQuiz,
+  createRound,
+  deleteAttachment,
+  deleteCategory,
+  deleteQuestion,
+  deleteQuiz,
+  deleteRound,
+  duplicateQuiz,
+  listQuizzes,
+  moveQuestion,
+  moveRound,
+  renameCategory,
+  setAcceptedAnswers,
+  setAttachmentVisibility,
+  setKeywords,
+  setOptions,
+  setValueLadder,
+  updateQuestion,
+  updateQuiz,
+  updateRound,
+  type NewQuestionInput,
+  type OptionInput,
+  type QuestionPatch,
+  type QuizSummary,
+} from './authoring'
+
 export {
   findAttachmentFile,
   insertTemplateAttachment,
