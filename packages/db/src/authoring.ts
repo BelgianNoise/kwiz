@@ -6,6 +6,7 @@ import {
   type AnswerMethod,
   type QuestionConfig,
   type QuizContent,
+  roundConfigSchemaByType,
   type RoundConfig,
   type RoundType,
 } from '@kwiz/domain'
@@ -400,11 +401,26 @@ export function updateRound(
 ): ActionResult {
   return database.db.transaction((tx) => {
     const row = tx
-      .select({ quizId: round.quizId })
+      .select({ quizId: round.quizId, type: round.type })
       .from(round)
       .where(eq(round.id, roundId))
       .get()
     if (!row) return fail('VALIDATION_ERROR', `no round ${roundId}`)
+
+    /*
+     * I6 — `config` must validate against the schema for this round's `type`, and the pairing cannot
+     * be expressed in the column: the discriminator is a sibling column, so the boundary above can
+     * only check the shape is *one of* the three. This is the layer that knows which.
+     */
+    if (patch.config !== undefined) {
+      const parsed = roundConfigSchemaByType[row.type].safeParse(patch.config)
+      if (!parsed.success) {
+        return fail(
+          'VALIDATION_ERROR',
+          `that config is not valid for a ${row.type} round`,
+        )
+      }
+    }
 
     tx.update(round)
       .set({

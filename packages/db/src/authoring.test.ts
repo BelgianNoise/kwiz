@@ -243,8 +243,9 @@ describe('the Jeopardy board', () => {
     const roundId = addRound('JEOPARDY', 'Board')
     const category = unwrap(createCategory(database, roundId, 'Film')).categoryId
 
-    for (const _row of [0, 1, 2]) {
-      createQuestion(database, roundId, { categoryId: category, points: 100 })
+    // Three tiles down one column, all authored at the same value — which the ladder then governs.
+    for (const row of [0, 1, 2]) {
+      createQuestion(database, roundId, { categoryId: category, points: 100 + row })
     }
 
     setValueLadder(database, roundId, [200, 400, 600])

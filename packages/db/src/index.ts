@@ -88,9 +88,12 @@ export {
   findGame,
   findJoinableGameByCode,
   generateUnusedCode,
+  isStale,
+  listGames,
   touchDevice,
   JOINABLE_STATUSES,
   type GameRow,
+  type GameSummary,
 } from './games'
 
 export {

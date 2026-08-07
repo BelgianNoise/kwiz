@@ -1,8 +1,8 @@
 import { codeFromBytes, normaliseCode, type GameStatus } from '@kwiz/domain'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
-import { game, gameDevice } from './schema'
+import { game, gameDevice, gameTeam, quiz } from './schema'
 
 /**
  * Resolution: turning a code or a device token into a game, and minting a code that is free.
@@ -124,4 +124,60 @@ export function generateUnusedCode(
   // 32^6 codes against at most five live games (PRD 1 §2.1) — reaching here means the generator is
   // not random, which is worth failing loudly over rather than looping for ever.
   throw new Error(`could not find an unused game code in ${attempts} attempts`)
+}
+
+/**
+ * The dashboard's game list (PRD 2 §5).
+ *
+ * Carries `templateRevision` beside the game's own `quizRevision` so the **`⚠ template updated`**
+ * badge can exist: without it a master edits the template, wonders why the game still shows the
+ * typo, and never learns that a re-sync is a thing (data model §7.1).
+ */
+export interface GameSummary extends GameRow {
+  createdAt: Date
+  finishedAt: Date | null
+  teams: number
+  /** `null` once the template has been deleted — the game is self-contained and stays playable. */
+  templateRevision: number | null
+}
+
+export function listGames(database: KwizDatabase): GameSummary[] {
+  const { db } = database
+
+  const rows = db
+    .select({
+      id: game.id,
+      status: game.status,
+      code: game.code,
+      quizName: game.quizName,
+      sourceQuizId: game.sourceQuizId,
+      quizRevision: game.quizRevision,
+      createdAt: game.createdAt,
+      finishedAt: game.finishedAt,
+      templateRevision: quiz.revision,
+    })
+    .from(game)
+    .leftJoin(quiz, eq(quiz.id, game.sourceQuizId))
+    .orderBy(desc(game.createdAt))
+    .all()
+
+  const teamCounts = new Map(
+    db
+      .select({ gameId: gameTeam.gameId, count: sql<number>`count(*)` })
+      .from(gameTeam)
+      .groupBy(gameTeam.gameId)
+      .all()
+      .map((row) => [row.gameId, row.count]),
+  )
+
+  return rows.map((row) => ({ ...row, teams: teamCounts.get(row.id) ?? 0 }))
+}
+
+/** True when a `SETUP` game is behind its template and a re-sync would bring something new. */
+export function isStale(summary: GameSummary): boolean {
+  return (
+    summary.status === 'SETUP' &&
+    summary.templateRevision !== null &&
+    summary.templateRevision > summary.quizRevision
+  )
 }

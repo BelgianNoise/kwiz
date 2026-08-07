@@ -321,3 +321,43 @@ function streamOf(path: string, range?: ByteRange): ReadableStream<Uint8Array> {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return Readable.toWeb(node) as ReadableStream<Uint8Array>
 }
+
+/**
+ * Which of a quiz's attachments no longer have a usable file — pre-flight's one impure check
+ * (PRD 2 §10, data model §8).
+ *
+ * **Re-hashed, not just stat-ed.** A file that exists but no longer matches its checksum is the
+ * nastier failure: it plays, and it is the wrong thing. Re-hashing twelve pub-quiz files takes
+ * moments, which is the trade PRD 2 §10 makes explicitly — for a library of 2 GB videos it will not
+ * be, and that is worth revisiting with a progress state rather than pretending it is free.
+ */
+export async function findBrokenAttachments(
+  paths: DataPaths,
+  files: readonly { id: string; checksum: string; ext: string }[],
+): Promise<string[]> {
+  const broken: string[] = []
+
+  // One file at a time on purpose: hashing a quiz's media in parallel opens every handle at once
+  // and reads a whole media library into the page cache, on the laptop that is about to run a quiz.
+  // oxlint-disable no-await-in-loop
+  for (const file of files) {
+    const path = join(
+      /*turbopackIgnore: true*/ paths.attachments,
+      `${file.checksum}.${file.ext}`,
+    )
+    const info = await stat(/*turbopackIgnore: true*/ path).catch(() => undefined)
+    if (!info) {
+      broken.push(file.id)
+      continue
+    }
+
+    const hash = createHash('sha256')
+    // A `Hash` is a transform stream, so piping into it hashes without a read loop — and without
+    // asserting the chunk type, which is what a `for await` over a read stream would need.
+    await pipeline(createReadStream(path), hash)
+    if (hash.digest('hex') !== file.checksum) broken.push(file.id)
+  }
+
+  // oxlint-enable no-await-in-loop
+  return broken
+}
