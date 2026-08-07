@@ -21,9 +21,17 @@ export interface DataPaths {
   tmp: string
 }
 
-/** Pure given a cwd: resolves the configured directory and everything under it. */
+/**
+ * Pure given a cwd: resolves the configured directory and everything under it.
+ *
+ * `turbopackIgnore` because this path is dynamic **by design** — it is `KWIZ_DATA_DIR` (PRD 1 §6.8)
+ * — and without the opt-out Turbopack traces the entire project into the Next server output and
+ * warns about it on every build.
+ */
 export function dataPaths(dataDir: string): DataPaths {
-  const dir = isAbsolute(dataDir) ? dataDir : resolve(process.cwd(), dataDir)
+  const dir = isAbsolute(dataDir)
+    ? dataDir
+    : resolve(/*turbopackIgnore: true*/ process.cwd(), dataDir)
   return {
     dir,
     dbFile: join(dir, 'kwiz.db'),

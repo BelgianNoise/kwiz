@@ -257,7 +257,29 @@ export function applyProjection(
 
     // ─── buzzer ───
 
-    case 'BUZZ_RECEIVED':
+    case 'BUZZ_RECEIVED': {
+      /*
+       * **`AWAITING` unless one is already being adjudicated** — I10 allows only one `AWAITING` per
+       * question, and a buzz arriving during adjudication is recorded as `NOT_FIRST` (protocol
+       * §4.4).
+       *
+       * Derived here rather than taken from the payload, because `@kwiz/domain`'s reducer derives
+       * exactly the same thing the same way. An earlier version of this wrote `AWAITING`
+       * unconditionally and left the distinction to "the action", which no payload field could
+       * carry — so the two halves disagreed about who was first the moment two teams buzzed
+       * together.
+       */
+      const adjudicating = tx
+        .select({ id: gameBuzz.id })
+        .from(gameBuzz)
+        .where(
+          and(
+            eq(gameBuzz.gameQuestionId, event.payload.gameQuestionId),
+            eq(gameBuzz.outcome, 'AWAITING'),
+          ),
+        )
+        .get()
+
       tx.insert(gameBuzz)
         .values({
           id: event.payload.buzzId,
@@ -266,19 +288,47 @@ export function applyProjection(
           teamId: event.payload.teamId,
           receivedAt: new Date(event.payload.receivedAt),
           offsetMs: event.payload.offsetMs,
-          // Whether this is AWAITING or NOT_FIRST is decided by the action, which knows
-          // whether a buzz window is open. I10 allows only one AWAITING per question.
-          outcome: 'AWAITING',
+          outcome: adjudicating ? 'NOT_FIRST' : 'AWAITING',
         })
         .run()
       return
+    }
 
-    case 'BUZZ_ADJUDICATED':
+    case 'BUZZ_ADJUDICATED': {
+      const buzz = tx
+        .select({
+          teamId: gameBuzz.teamId,
+          gameQuestionId: gameBuzz.gameQuestionId,
+        })
+        .from(gameBuzz)
+        .where(eq(gameBuzz.id, event.payload.buzzId))
+        .get()
+
       tx.update(gameBuzz)
         .set({ outcome: event.payload.accepted ? 'ACCEPTED' : 'DENIED' })
         .where(eq(gameBuzz.id, event.payload.buzzId))
         .run()
+      if (!buzz) return
+
+      /*
+       * **The adjudication is also the scoring** for a buzzer question and every Jeopardy tile
+       * (PRD 1 §8.4, D34, D35): the master accepts or denies what was said out loud, and there is
+       * no `ANSWER_SUBMITTED` to validate because nothing was typed. `@kwiz/domain`'s reducer
+       * credits the team on this event, so this half must too — `projection-parity.test.ts` is
+       * what proves they agree.
+       */
+      upsertOutcome(
+        tx,
+        gameId,
+        buzz.gameQuestionId,
+        buzz.teamId,
+        event.payload.accepted ? questionPoints(tx, buzz.gameQuestionId) : 0,
+        at,
+        event.payload.accepted ? 'ACCEPTED' : 'DENIED',
+      )
+      recomputeScore(tx, gameId, buzz.teamId)
       return
+    }
 
     // ─── finale keywords ───
 
@@ -463,6 +513,7 @@ function upsertOutcome(
   teamId: string,
   pointsAwarded: number,
   at: Date,
+  verdict: AnswerVerdict = 'ACCEPTED',
 ): void {
   tx.insert(gameAnswer)
     .values({
@@ -470,13 +521,13 @@ function upsertOutcome(
       gameQuestionId,
       teamId,
       isDraft: false,
-      verdict: 'ACCEPTED',
+      verdict,
       pointsAwarded,
       validatedAt: at,
     })
     .onConflictDoUpdate({
       target: [gameAnswer.gameId, gameAnswer.gameQuestionId, gameAnswer.teamId],
-      set: { verdict: 'ACCEPTED', pointsAwarded, validatedAt: at, isDraft: false },
+      set: { verdict, pointsAwarded, validatedAt: at, isDraft: false },
     })
     .run()
 }

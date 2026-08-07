@@ -401,6 +401,13 @@ Full contract in the [protocol spec](../spec/protocol.md).
 Created on first boot. On first visit, if no quiz exists, the admin dashboard shows
 an empty state rather than an error.
 
+**`./data/` means the repo root, and that takes one line of configuration to be true.**
+`KWIZ_DATA_DIR` defaults to `./data`, resolved against the process working directory — and both
+`pnpm dev` and `pnpm start` run Next from `apps/web`, which would put a master's only database at
+`apps/web/data`. `apps/web/.env.development` and `.env.production` set `KWIZ_DATA_DIR=../../data`
+so the documented layout holds. A real environment variable still wins, which is how a deployment
+moves the directory somewhere else.
+
 ### 6.7 Migrations (D14)
 
 Migrations are Drizzle Kit-generated plain SQL files, committed to the repo and

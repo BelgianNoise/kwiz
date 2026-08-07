@@ -1,10 +1,16 @@
 import { reduce, type GameContent, type GameEvent, type LoggedEvent } from '@kwiz/domain'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appendAndProject, readLog } from './append'
 import type { KwizDatabase } from './client'
-import { gameAcceptedAnswer, gameAnswer, gameTeam } from './schema'
+import {
+  gameAcceptedAnswer,
+  gameAnswer,
+  gameBuzz,
+  gameQuestion,
+  gameTeam,
+} from './schema'
 import { freshTestDatabase, seedGame, type SeededGame } from './test-support'
 
 /**
@@ -23,6 +29,8 @@ let database: KwizDatabase
 let seed: SeededGame
 
 const ACCEPTED = 'paris'
+/** A second question, because a buzzer question is scored by a path a `FREE_TEXT` one never takes. */
+const BUZZ_Q = 'q-buzzer'
 
 beforeEach(() => {
   database = freshTestDatabase()
@@ -39,6 +47,20 @@ beforeEach(() => {
       gameQuestionId: seed.questionId,
       position: 0,
       text: ACCEPTED,
+    })
+    .run()
+
+  database.db
+    .insert(gameQuestion)
+    .values({
+      id: BUZZ_Q,
+      gameId: seed.gameId,
+      gameRoundId: seed.roundId,
+      position: 1,
+      prompt: 'Name that tune',
+      answerMethod: 'BUZZER',
+      points: 20,
+      config: {},
     })
     .run()
 
@@ -90,6 +112,22 @@ function contentFor(seeded: SeededGame): GameContent {
             keywords: [],
             media: [],
           },
+          {
+            id: BUZZ_Q,
+            roundId: seeded.roundId,
+            categoryId: null,
+            position: 1,
+            prompt: 'Name that tune',
+            answerMethod: 'BUZZER',
+            points: 20,
+            timerMs: null,
+            masterNotes: null,
+            config: {},
+            acceptedAnswers: [],
+            options: [],
+            keywords: [],
+            media: [],
+          },
         ],
       },
     ],
@@ -104,7 +142,7 @@ interface Row {
   score: number
 }
 
-function fromDatabase(): Row[] {
+function fromDatabase(questionId = seed.questionId): Row[] {
   const teams = database.db
     .select()
     .from(gameTeam)
@@ -116,7 +154,9 @@ function fromDatabase(): Row[] {
     const answer = database.db
       .select()
       .from(gameAnswer)
-      .where(eq(gameAnswer.teamId, team.id))
+      .where(
+        and(eq(gameAnswer.teamId, team.id), eq(gameAnswer.gameQuestionId, questionId)),
+      )
       .get()
     return {
       teamId: team.id,
@@ -127,7 +167,7 @@ function fromDatabase(): Row[] {
   })
 }
 
-function fromDomain(): Row[] {
+function fromDomain(questionId = seed.questionId): Row[] {
   // Replayed from the very rows `appendAndProject` wrote, so the two halves see one identical log.
   const log: LoggedEvent[] = readLog(database, seed.gameId).map((entry) => ({
     seq: entry.seq,
@@ -139,7 +179,7 @@ function fromDomain(): Row[] {
   return [...state.teams.values()]
     .sort((a, b) => a.position - b.position)
     .map((team) => {
-      const answer = state.questions.get(seed.questionId)?.answers.get(team.id)
+      const answer = state.questions.get(questionId)?.answers.get(team.id)
       return {
         teamId: team.id,
         verdict: answer?.verdict ?? 'NONE',
@@ -245,6 +285,97 @@ describe('the writer and the reducer agree', () => {
     expect(fromDatabase()).toEqual(fromDomain())
     const rows = fromDatabase()
     expect(rows.map((row) => row.verdict)).toEqual(['AUTO_CORRECT', 'PENDING'])
+  })
+
+  /**
+   * The buzzer path, which is scored by nothing a `FREE_TEXT` question ever touches: PRD 1 §8.4 and
+   * D35 credit the accepted team, and there is no `ANSWER_SUBMITTED` to validate because nothing was
+   * typed. Both halves have to do it on `BUZZ_ADJUDICATED` or a whole answer method scores zero.
+   */
+  it('on an accepted buzz crediting the team, and a denied one crediting nobody', () => {
+    appendAndProject(database, seed.gameId, [
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ_Q } },
+      {
+        type: 'BUZZ_RECEIVED',
+        payload: {
+          buzzId: 'bz-1',
+          gameQuestionId: BUZZ_Q,
+          teamId: seed.teamA,
+          receivedAt: 1_000,
+          offsetMs: 900,
+        },
+      },
+      { type: 'BUZZ_ADJUDICATED', payload: { buzzId: 'bz-1', accepted: false } },
+      {
+        type: 'BUZZ_RECEIVED',
+        payload: {
+          buzzId: 'bz-2',
+          gameQuestionId: BUZZ_Q,
+          teamId: seed.teamB,
+          receivedAt: 2_000,
+          offsetMs: 1_900,
+        },
+      },
+      { type: 'BUZZ_ADJUDICATED', payload: { buzzId: 'bz-2', accepted: true } },
+    ])
+
+    expect(fromDatabase(BUZZ_Q)).toEqual(fromDomain(BUZZ_Q))
+    expect(fromDatabase(BUZZ_Q)).toEqual([
+      { teamId: seed.teamA, verdict: 'DENIED', pointsAwarded: 0, score: 0 },
+      { teamId: seed.teamB, verdict: 'ACCEPTED', pointsAwarded: 20, score: 20 },
+    ])
+  })
+
+  /**
+   * I10 allows one `AWAITING` buzz per question, and a buzz arriving during adjudication is
+   * `NOT_FIRST`. No payload field carries that, so both halves have to derive it the same way — the
+   * projection wrote `AWAITING` unconditionally until this test existed.
+   */
+  it('on which of two simultaneous buzzes was first', () => {
+    appendAndProject(database, seed.gameId, [
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ_Q } },
+      {
+        type: 'BUZZ_RECEIVED',
+        payload: {
+          buzzId: 'bz-1',
+          gameQuestionId: BUZZ_Q,
+          teamId: seed.teamA,
+          receivedAt: 4_210,
+          offsetMs: 4_210,
+        },
+      },
+      {
+        type: 'BUZZ_RECEIVED',
+        payload: {
+          buzzId: 'bz-2',
+          gameQuestionId: BUZZ_Q,
+          teamId: seed.teamB,
+          receivedAt: 4_280,
+          offsetMs: 4_280,
+        },
+      },
+    ])
+
+    const rows = database.db
+      .select({ id: gameBuzz.id, outcome: gameBuzz.outcome })
+      .from(gameBuzz)
+      .where(eq(gameBuzz.gameQuestionId, BUZZ_Q))
+      .orderBy(gameBuzz.receivedAt)
+      .all()
+    expect(rows).toEqual([
+      { id: 'bz-1', outcome: 'AWAITING' },
+      { id: 'bz-2', outcome: 'NOT_FIRST' },
+    ])
+
+    const log: LoggedEvent[] = readLog(database, seed.gameId).map((entry) => ({
+      seq: entry.seq,
+      event: entry.event,
+      createdAt: entry.createdAt.getTime(),
+    }))
+    const state = reduce(contentFor(seed), log)
+    expect(state.questions.get(BUZZ_Q)?.buzzes.map((buzz) => buzz.outcome)).toEqual(
+      rows.map((row) => row.outcome),
+    )
   })
 
   /** D47 — the one legitimate overwrite. Both halves must re-grade, not keep the old verdict. */

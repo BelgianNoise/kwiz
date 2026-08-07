@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 
@@ -18,24 +18,69 @@ import {
  * this module is only the plumbing, which is why it is thin.
  */
 
-/** Resolved from this file, so it survives being called from the app rather than the package. */
-export const MIGRATIONS_FOLDER = join(import.meta.dirname, '..', 'migrations')
+/**
+ * Where the committed migrations live — **searched, not assumed, and never at module load.**
+ *
+ * `import.meta.dirname` is the obvious answer and it is only *sometimes* right: under vitest and
+ * plain Node this file knows where it is, but Next bundles `@kwiz/db` into the server (it is a
+ * `transpilePackages` entry, since the workspace ships TypeScript source), and in that bundle
+ * `import.meta.dirname` is **`undefined`**. As a module-level `const` that threw
+ * `ERR_INVALID_ARG_TYPE` while Next was collecting page data — a build failure whose message named
+ * `join`, not the reason.
+ *
+ * So: a lazy function over candidates, each verified by the presence of drizzle-kit's journal. The
+ * cwd-relative ones cover the bundled server, which runs from `apps/web` (`pnpm start`) or the
+ * repo root.
+ */
+export function migrationsFolder(): string {
+  const candidates = [
+    // Undefined inside the Next bundle; correct everywhere else.
+    import.meta.dirname === undefined
+      ? undefined
+      : join(import.meta.dirname, '..', 'migrations'),
+    join(process.cwd(), '..', '..', 'packages', 'db', 'migrations'),
+    join(process.cwd(), 'packages', 'db', 'migrations'),
+  ].filter((candidate) => candidate !== undefined)
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'meta', '_journal.json'))) return candidate
+  }
+
+  throw new Error(
+    `could not find the migrations folder; looked in ${candidates.join(', ')}`,
+  )
+}
 
 /**
- * PRD 1 §6.7's prompt. Lists what will run and where the backup went, then asks — defaulting to
- * yes on a bare Enter, since the master has already been shown the escape route.
+ * The terminal the prompt talks to. Defaulted to the process's own, and injectable **so the prompt
+ * itself can be tested** — the rest of D14 is covered by `migrate.ts`'s seams, but for a long time
+ * this function was the one part of PRD 1 §6.7 that nothing exercised: six lines of plumbing that
+ * only ran in front of a master, on the one occasion where being wrong costs them their history.
  */
-async function askTerminal(
+export interface PromptIo {
+  input: NodeJS.ReadableStream
+  output: NodeJS.WritableStream
+}
+
+/**
+ * PRD 1 §6.7's prompt. Lists what will run and where the backup went, then asks — **defaulting to
+ * yes on a bare Enter**, since the master has already been shown the escape route.
+ *
+ * Anything starting with `n` is a no; everything else, including an empty line, is a yes. Erring
+ * toward applying is safe here precisely because the backup has already been written.
+ */
+export async function askTerminal(
   pending: PendingMigration[],
   backupPath: string,
+  io: PromptIo = { input: process.stdin, output: process.stdout },
 ): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const rl = createInterface({ input: io.input, output: io.output })
   try {
-    process.stdout.write(`\n${pending.length} pending migration(s):\n`)
+    io.output.write(`\n${pending.length} pending migration(s):\n`)
     for (const m of pending) {
-      process.stdout.write(`  ${m.tag}  (${m.statements} statement(s))\n`)
+      io.output.write(`  ${m.tag}  (${m.statements} statement(s))\n`)
     }
-    process.stdout.write(`\nA backup has been written to ${backupPath}\n`)
+    io.output.write(`\nA backup has been written to ${backupPath}\n`)
 
     const answer = await rl.question('Apply now? [Y/n] ')
     return !/^n/i.test(answer.trim())
@@ -71,7 +116,7 @@ export async function bootDatabase(): Promise<BootResult> {
 
   const outcome = await migrateAtBoot({
     database,
-    migrationsFolder: MIGRATIONS_FOLDER,
+    migrationsFolder: migrationsFolder(),
     autoMigrate: config.KWIZ_AUTO_MIGRATE,
     interactive: process.stdin.isTTY ?? false,
     backup: async () => {

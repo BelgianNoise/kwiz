@@ -75,6 +75,41 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
 - [ ] A new secret added to any payload has a **sentinel** in `views.sentinel.test.ts`. Grep for
       `ZZ_SECRET` — if your field is not represented, the table is silently incomplete.
 
+### After slice 3 — transport
+
+Needs a game in the database. Slice 3 has no authoring UI, so seed one through the real code:
+a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./data`, run with
+`npx vitest run --project db <name>`, then **delete the file**. It prints the `gameId` and code.
+
+- [ ] `curl -N http://localhost:3000/api/live/<gameId>/screen` returns `200` with
+      `content-type: text/event-stream` and **`x-accel-buffering: no`** — without that header a
+      proxy buffers the stream and the room sees the game in bursts.
+- [ ] The first two frames are `retry: 3000` and one `state`, and the `state` carries
+      **`id: <gameId>:<seq>`** — qualified by game, or protocol §3.2's cross-game rule cannot hold.
+- [ ] A `: ping` arrives every **15 s**. Leave the stream open for 40 s and count two.
+- [ ] **No polling** (D2): the network panel shows one long-lived request per surface, not a
+      repeating one.
+- [ ] The **main-screen and player payloads contain no `masterNotes`** while a question is open,
+      and the control payload does. Seed the question with a distinctive string and grep the raw
+      SSE text for it — this is the network-level version of the sentinel test, and the unit test
+      cannot prove the filter is the thing being used.
+- [ ] `POST /api/games/join` returns a `deviceToken`; the same token on
+      `/api/live/<gameId>/play` resolves to that team, and on **another game's** stream returns
+      `401 UNKNOWN_DEVICE`.
+- [ ] Submit twice with the same text → both `{ ok: true }`. Submit different text → `409`
+      `ALREADY_SUBMITTED` **carrying the canonical answer** (D43).
+- [ ] **Kill the server mid-question and restart it.** Every stream comes back with the same
+      question, the same submitted answer and the same `attention` — from the log alone (D4).
+- [ ] `POST /api/attachments` with an image returns a checksum; uploading the identical file again
+      returns `stored: false` and leaves **one** file in `data/attachments/`.
+- [ ] `GET /api/attachment/<id>` answers `200` with `accept-ranges: bytes`, a `Range: bytes=4-8`
+      request answers `206` with `content-range`, and a range past the end answers `416` (D5).
+- [ ] `data/` is at the **repo root**, not `apps/web/data` — the `.env.development` anchor is
+      working (PRD 1 §6.6).
+- [ ] `actions.test.ts` still lists every path in protocol §7.1–§7.2. It transcribes the spec
+      independently of the route table, so an endpoint dropped or renamed fails there rather than
+      being discovered by a surface that cannot call it.
+
 ### After slice 1 — schema & migrations
 
 - [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.
@@ -84,9 +119,10 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
       the data intact, `KWIZ_AUTO_MIGRATE` skips the question but still backs up, no-TTY refuses
       — are covered by `boot.test.ts` against a **real directory and a real backup file**, so
       `pnpm test` is this row. Break one on purpose once if you want to trust it.
-- [ ] **The one part no test drives:** at slice 3, boot `pnpm start` against a database with a
-      pending migration and confirm the `readline` prompt actually renders and honours `n`. That
-      is six lines of plumbing over logic already tested, but nobody has seen it run.
+- [ ] The prompt itself is covered by `boot.test.ts` from slice 3 — a real `readline` over injected
+      streams, asserting it lists each migration by name, names the backup, honours `n` and treats a
+      bare Enter as yes. **What is left for a human is only whether it *looks* right:** boot
+      `pnpm start` against a database with a pending migration once, in a real terminal.
 - [ ] The column-parity guard fails if you delete a column from one side of a shared factory —
       worth breaking on purpose once, since it is the only thing standing between a routine
       schema change and silent data loss in games.

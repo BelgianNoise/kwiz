@@ -258,13 +258,36 @@ export function applyEvent(
     }
 
     case 'BUZZ_ADJUDICATED': {
-      for (const play of state.questions.values()) {
+      for (const [questionId, play] of state.questions) {
         const buzz = play.buzzes.find((b) => b.buzzId === event.payload.buzzId)
         if (!buzz) continue
         buzz.outcome = event.payload.accepted ? 'ACCEPTED' : 'DENIED'
         buzz.adjudicatedAt = createdAt
-        // A denial locks the team out and reopens the buzzers to everyone else — both derived,
-        // so there is nothing further to record here.
+
+        /*
+         * **The adjudication is also the scoring.** PRD 1 §8.4: for a buzzer question the master
+         * "accepts or denies the spoken answer", and D35 says an accepted team is *credited* — so
+         * a buzzer question and every Jeopardy tile (D34) is scored by this event and no other.
+         * There is no `ANSWER_SUBMITTED` to validate: nothing was typed.
+         *
+         * The denied team gets a `DENIED` outcome rather than no row, because they did answer and
+         * the review grid should say so.
+         */
+        const question = findQuestion(state.content, questionId)
+        const points =
+          event.payload.accepted && question && play.state !== 'SKIPPED'
+            ? question.points
+            : 0
+        setOutcome(
+          play,
+          buzz.teamId,
+          event.payload.accepted ? 'ACCEPTED' : 'DENIED',
+          points,
+          createdAt,
+        )
+        // A denial also locks the team out and reopens the buzzers to everyone else — both derived,
+        // so there is nothing further to record for that half of it.
+        recomputeScores(state)
         return
       }
       return

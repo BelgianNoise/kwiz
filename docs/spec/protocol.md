@@ -89,7 +89,7 @@ X-Accel-Buffering: no        ← required; nginx and friends buffer SSE without 
 Two event names, and only two:
 
 ```
-id: 42
+id: 01920e7c-…-9f31:42
 event: state
 data: {"stage":{"kind":"QUESTION",...},"teams":[...]}
 
@@ -99,9 +99,15 @@ data: {"kind":"SCORE_ADJUSTED","teamId":"...","delta":5,"reason":"best heckle"}
 : ping
 ```
 
+**The `id` is `<gameId>:<seq>`, not a bare number.** §3.2 requires a `Last-Event-ID` from another
+game to be *treated as unknown, never compared numerically* — and with `id: 42` that rule cannot be
+implemented, because nothing in the value says which game produced it and both games' `seq` sit in
+the same range. Qualifying it makes the guarantee structural instead of aspirational, and costs
+nothing: `EventSource` echoes the id back without any client parsing it.
+
 | Frame | Meaning |
 | --- | --- |
-| `state` | The complete audience-filtered view. Idempotent. Carries `id: <seq>`. |
+| `state` | The complete audience-filtered view. Idempotent. Carries `id: <gameId>:<seq>`. |
 | `notice` | A transient one-shot moment: a banner, a sound cue, a celebratory flash. **Never replayed** (§3.2). Carries no `id`. |
 | `: ping` | Comment-only keepalive every **15 s**. Keeps intermediaries from timing out an idle stream, and lets the server notice dead sockets. |
 
@@ -141,15 +147,22 @@ The browser reconnects automatically and sends `Last-Event-ID`. Because views ar
 whole and idempotent (§1), the handling is trivial:
 
 ```
-if (lastEventId === currentSeq) → send nothing; the client is already current
-else                            → send the current `state` frame
+parse `<gameId>:<seq>`; a different gameId, or anything unparseable, is unknown
+if (seq === currentSeq) → send nothing; the client is already current
+else                    → send the current `state` frame
 ```
 
 **No event replay.** Missed `notice` frames are not resent — by design (§2.3).
 
 Per PRD 1 §6.5, `seq` is **per-game**. A `Last-Event-ID` belonging to a different game
 must be treated as unknown, never compared numerically against this game's `seq` — the
-numbers are in the same range and would silently match.
+numbers are in the same range and would silently match. The qualified `id` (§2.2) is what
+makes that check possible rather than a rule to remember.
+
+**`Last-Event-ID` is consulted once, at connect, and never again.** A later push whose `seq` is
+unchanged is still a real change: a shared draft (D45, §4.8) moves text between a team's phones
+without appending anything to the log. Treating the stored id as "this client is current" would
+lose exactly that.
 
 ### 3.3 Disconnect
 
@@ -250,7 +263,7 @@ to `PENDING` and clear `validatedAt` — because the answer genuinely changed.
 | Type | Payload | Notes |
 | --- | --- | --- |
 | `BUZZ_RECEIVED` | `{ buzzId, gameQuestionId, teamId, receivedAt, offsetMs }` | Recorded even when it arrives after the lock (`outcome = NOT_FIRST`) |
-| `BUZZ_ADJUDICATED` | `{ buzzId, accepted }` | Deny ⇒ lockout + automatic reopen, both derived |
+| `BUZZ_ADJUDICATED` | `{ buzzId, accepted }` | **This is also the scoring.** Deny ⇒ lockout + automatic reopen, both derived — and the team gets a `DENIED` outcome with no points. Accept ⇒ the team is *credited* the question's points (PRD 1 §8.4, D35). Nothing was typed, so there is no `ANSWER_SUBMITTED` to validate: for a buzzer question and every Jeopardy tile (D34), this event is the only thing that can award anything. Both halves of the projection must do it, or a whole answer method scores zero |
 | `BUZZERS_FORCE_REOPENED` | `{ gameQuestionId }` | Master clears **all** lockouts because they misheard (D35 rule 5) |
 
 Not events, because they are derived:
@@ -861,8 +874,17 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/finale/eliminate` | `{ teamId }` — server recomputes the instant |
 | `POST /api/games/:gameId/adjust-score` | `{ teamId, delta, reason?, announced }` |
 | `POST /api/games/:gameId/adjustments/:id/revoke` | `{}` — idempotent |
-| `POST /api/games/:gameId/regenerate-code` | `{}` — `SETUP` only |
+| `POST /api/games/:gameId/regenerate-code` | `{}` — `SETUP` only. The server mints the code (conventions §2); a client-supplied one would let two games collide |
 | `POST /api/games/:gameId/resync` | `{}` — `SETUP` only (data model §7.1) |
+
+**That is 38 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+actions (D50) arrived after that number was written. Counted here because "every action is
+zod-validated" is only checkable against a correct total.
+
+`resync` is the one action with **no domain command**: both halves of it are outside
+`packages/domain`. The precondition that matters is whether `game_answer` or `game_buzz` rows exist
+and whether `sourceQuizId` still points anywhere, and the operation replaces the game-copy subtree —
+so `@kwiz/db` owns it end to end, in one transaction with its `GAME_RESYNCED` event.
 
 ### 7.3 `submit` — finality, idempotency and the multi-device case
 
@@ -914,7 +936,31 @@ Per §1.1, anything O(questions × teams) is fetched, never pushed. All of these
 | `GET /api/games` | Game list for the dashboard — includes `quizRevision` vs template `revision` so the staleness indicator works (data model §7.1) |
 | `GET /api/games/:id/review` | Full played game: every question, every team's answer, every verdict |
 | `GET /api/games/:id/validation-queue` | The full pending list, paginated |
-| `GET /api/attachment/:gameAttachmentId` | The file, with **HTTP range support** (D5) so audio and video can seek |
+| `GET /api/attachment/:gameAttachmentId` | The file, with **HTTP range support** (D5) so audio and video can seek. The id is the *row's*, template or game copy — the same file on disk backs both (data model §8) |
+
+### 7.5 Attachment upload
+
+`POST /api/attachments`, `multipart/form-data` with a `file` part and a `questionId` field. Added
+here because §7 listed the reads and the play-half actions but no upload route, while PRD 2 §7.1
+describes the UI that needs one.
+
+```
+1. stream to ${KWIZ_DATA_DIR}/tmp/<random>, hashing on the way past
+2. sniff the type from the leading bytes; reject anything outside conventions §7's allowlist
+3. rename atomically to attachments/<sha256>.<ext>, or discard if that file already exists
+4. insert the `attachment` row, and return { id, kind, mimeType, sizeBytes, checksum, stored, url }
+```
+
+- **The type comes from the bytes, never from the filename or the declared `Content-Type`** (data
+  model §4.7). Both of those are the client's word for it; magic bytes are not. What sniffing
+  cannot see is a **codec**, which is why upload-time playability verification still exists.
+- `stored: false` means the checksum was already on disk — the same song in three quizzes is one
+  file.
+- **The row is written after the file.** Content addressing makes that ordering safe: a file with no
+  row is an orphan the reconciliation pass sweeps, while a row with no file is a question that
+  cannot be played (data model §8).
+- Rejections are `ATTACHMENT_REJECTED` and carry the accepted MIME list, because PRD 2 §7.1 requires
+  the message to name what does work.
 
 ---
 

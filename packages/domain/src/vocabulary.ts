@@ -28,6 +28,16 @@ export type GameStatus = (typeof GAME_STATUSES)[number]
 export const LOCALES = ['en', 'nl'] as const
 export type Locale = (typeof LOCALES)[number]
 
+/**
+ * The three SSE audiences (protocol §2.1). One filter per audience, selected by the **route** —
+ * never by a query parameter — so the wrong filter cannot be reached by editing a URL.
+ *
+ * **`CONFIG` is deliberately not here.** The configuration pages are request/response and have no
+ * live requirement; giving them a stream would mean a fourth filter to keep correct for no benefit.
+ */
+export const AUDIENCES = ['MAIN_SCREEN', 'MASTER_CONTROL', 'PLAYER'] as const
+export type Audience = (typeof AUDIENCES)[number]
+
 /** data model §6.5. A `FREE_TEXT` answer never auto-resolves to `AUTO_WRONG` (D22). */
 export const ANSWER_VERDICTS = [
   'PENDING',

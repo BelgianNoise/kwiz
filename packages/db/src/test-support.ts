@@ -1,8 +1,7 @@
-import { join } from 'node:path'
-
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { v7 as uuidv7 } from 'uuid'
 
+import { migrationsFolder } from './boot'
 import { openDatabase, type KwizDatabase } from './client'
 import { game, gameQuestion, gameRound, gameTeam } from './schema'
 
@@ -14,10 +13,10 @@ import { game, gameQuestion, gameRound, gameTeam } from './schema'
  * one (CLAUDE.md §6). Every FK and constraint under test is the one that ships.
  */
 /**
- * Absolute, derived from this file's location. A relative path resolves against the *process*
- * cwd — the workspace root when vitest runs from there — not the package.
+ * Absolute, and **searched rather than assumed** — see `migrationsFolder()`. A relative path would
+ * resolve against the *process* cwd, which is the workspace root when vitest runs from there.
  */
-export const MIGRATIONS_FOLDER = join(import.meta.dirname, '..', 'migrations')
+export const MIGRATIONS_FOLDER = migrationsFolder()
 
 export function freshTestDatabase(): KwizDatabase {
   const database = openDatabase(':memory:')

@@ -319,13 +319,20 @@ type ErrorCode =
   // ─── resolution ───
   | 'GAME_NOT_FOUND'          // unknown gameId or code
   | 'GAME_NOT_JOINABLE'       // FINISHED or ABANDONED (PRD 5 §14 O3)
+  | 'GAME_NOT_LIVE'           // a play action against a game that is not LIVE.
+                              //   Joining has its own code above; the other 33 master
+                              //   actions had no status guard until slice 3 added this
   | 'TEAM_NOT_FOUND'
   | 'UNKNOWN_DEVICE'          // deviceToken not recognised → clear storage, rejoin
   // ─── joining ───
   | 'TEAM_FULL'               // KWIZ_MAX_DEVICES_PER_TEAM reached (D20).
                               //   payload carries the other teams
   // ─── answering ───
-  | 'QUESTION_NOT_OPEN'       // not the current question, or PENDING/SKIPPED
+  | 'QUESTION_NOT_OPEN'       // not the current question, or in a state this action is
+                              //   illegal from — reveal before lock, skip after reveal.
+                              //   Repeating an action that already happened is NOT this:
+                              //   a lifecycle transition into the state a question is
+                              //   already in is an idempotent { ok: true } with no event
   | 'QUESTION_LOCKED'         // master locked it → stop retrying (D8)
   | 'ALREADY_SUBMITTED'       // different value after submission (D43).
                               //   payload carries the canonical answer
@@ -343,7 +350,12 @@ type ErrorCode =
   | 'FINALISTS_ALREADY_SET'   // selection is fixed once the round opens
   | 'TEAM_NOT_A_FINALIST'
   | 'TEAM_ELIMINATED'         // no turn, no marks, no further penalty (I22)
-  | 'NOT_TEAMS_TURN'          // marking against a team that isn't on turn
+  | 'NOT_TEAMS_TURN'          // marking against a team that isn't on turn.
+                              //   **Unreachable as built, deliberately:** the mark endpoint takes
+                              //   no teamId and credits whoever is on turn, so there is no request
+                              //   that can name the wrong team. Kept because PRD 3 §10.2's desk
+                              //   could grow a "credit another team" affordance, and the code
+                              //   should exist before the path does rather than after
   | 'NO_TURN_ACTIVE'          // pass/mark between turns
   | 'KEYWORD_ALREADY_MARKED'  // idempotent for the same team; error for a different one
   // ─── import ───
@@ -351,9 +363,17 @@ type ErrorCode =
   | 'CHECKSUM_MISMATCH'       // payload lists the failing files
   | 'IMPORT_COLLISION'        // needs a Replace / Copy choice (D9)
   | 'MANIFEST_INVALID'
+  // ─── attachments ───
+  | 'ATTACHMENT_REJECTED'     // outside §7's allowlist, or over KWIZ_MAX_UPLOAD_MB.
+                              //   payload lists the accepted MIME types
+  | 'ATTACHMENT_NOT_FOUND'    // the row exists and the file does not (data model §8)
   // ─── boundary ───
   | 'VALIDATION_ERROR'        // zod rejected the request shape.
                               //   Distinct from every domain error above
+  | 'DATABASE_MIGRATION_REQUIRED'
+                              // the master declined the pending migrations (D14).
+                              //   Every action refuses until they are applied; the server
+                              //   is running, so this is temporary rather than fatal
 ```
 
 **Response shape**, uniformly:
@@ -603,7 +623,7 @@ type says one thing, the runtime enforces another, and the compiler is satisfied
 
 | Place | Why |
 | --- | --- |
-| **POST bodies** — all 25 actions | Untrusted input. Rejects as `VALIDATION_ERROR` (§4) |
+| **POST bodies** — all 38 actions (protocol §7.1–§7.2) | Untrusted input. Rejects as `VALIDATION_ERROR` (§4) |
 | **JSON columns** — `question.config`, `round.config`, `game_event.payload` | A JSON column without a validator is a bug (data model §2) |
 | **`game_event.payload` on append** | Per-type schemas in a discriminated union on `type`. Catches a malformed event *before* it becomes permanent in an append-only table |
 | **`game_event.payload` on replay** | Read back from disk as `unknown`. Validating on replay catches corruption and, more usefully, a log written by an older build |

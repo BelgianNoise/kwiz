@@ -12,6 +12,164 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 3 — Transport: SSE, actions, attachments
+
+**Status:** complete · `pnpm check` green · **440 tests** · lint silent · `pnpm build` clean, no
+warnings · the three streams, all 38 actions and the attachment path driven by hand against a real
+game
+
+**Built:** `decide()` and the command catalogue in `@kwiz/domain`; the typed error catalogue and
+`errors.<CODE>` copy in EN and NL; `loadGameContent`, the drafts repository, device/code resolution
+and `createGameFromQuiz` / `resyncGame` in `@kwiz/db`; and in `apps/web/lib/server` the
+`RealtimeTransport`, the `Map<gameId, GameState>` registry, the command service, the action
+dispatch table and the content-addressed attachment store. Six routes: three SSE, one join, one
+catch-all for the other 37 actions, and attachment upload + range serving.
+
+### The shape, and why it is this shape
+
+PRD 1 §6.4 names the flow — *"the domain layer decides: reject, or produce one or more events"* — so
+that is literally the code:
+
+```
+route → zod → decide(state, command, now) → appendAndProject → registry.catchUp → transport.broadcast
+```
+
+**`decide` is pure and lives in `packages/domain`.** Every guard in protocol §7 — submission
+finality, the buzz window, the open-question guard on a break, every finale refusal — is a function
+of `(GameState, Command, now)`, which is CLAUDE.md §3.2's test answered with a yes. `decide.test.ts`
+drives it through a six-line "server" (decide → append → fold) with no mocks, and that is where the
+interesting cases live rather than behind HTTP.
+
+Everything a decision cannot invent is passed **in**: ids, device tokens, the device cap, and the
+drafts to commit at lock. A decision that minted its own uuid could not be compared against an
+expected event list.
+
+**One dispatch module, not 38 route files.** PRD 1 §6.9 constraint 2 names *the action-dispatch
+module* as one of three files a transport swap would touch, which only holds if there is one — and
+it keeps the catalogue greppable. The SSE routes are deliberately the opposite: one file per
+audience, because §2.1 requires the payload filter to be chosen by the route and never by a URL
+segment.
+
+### Two real bugs found, both invisible until now
+
+- **An accepted buzz credited nobody.** PRD 1 §8.4 and D35 say the master accepts or denies the
+  spoken answer and the team is *credited* — but nothing did it. There is no `ANSWER_SUBMITTED` for
+  a buzzer question (nothing was typed), so `BUZZ_ADJUDICATED` is the only event that can award
+  anything, and neither half of the projection was doing so. **Every buzzer question and every
+  Jeopardy tile scored zero.** Fixed in the reducer and in `applyProjection`, added to protocol §4.4,
+  and now covered by a `projection-parity` case.
+- **The two halves disagreed about who buzzed first.** `applyProjection` wrote `AWAITING`
+  unconditionally with a comment saying the action would decide — but no payload field could carry
+  it, so a second buzz during adjudication was `NOT_FIRST` in the reducer and `AWAITING` in the
+  table. Both now derive it the same way. Verified with teeth: forcing the old behaviour fails the
+  new parity case.
+
+### Spec deviations — all four docs updated in this change
+
+- **The SSE `id` is now `<gameId>:<seq>`, not a bare `seq`.** protocol §3.2 requires a
+  `Last-Event-ID` from another game to be treated as unknown *and never compared numerically* — and
+  with `id: 42` that is unimplementable, because nothing in the value says which game produced it
+  and both games' sequences sit in the same range. Qualifying it costs nothing: `EventSource` echoes
+  the id without a client ever reading it.
+- **`Last-Event-ID` is consulted once, at connect.** Keeping it on the subscriber and skipping
+  "already current" pushes would lose every shared draft (D45), which changes a view without
+  changing `seq`. Written into §3.2.
+- **conventions §4 was missing four codes**: `GAME_NOT_LIVE` (33 master actions had no status
+  guard — only joining did), `DATABASE_MIGRATION_REQUIRED` (D14's declined state is specified but
+  had no code), and the two attachment codes. `QUESTION_NOT_OPEN`'s note was widened to cover an
+  illegal transition, with idempotent repeats explicitly *not* being an error.
+- **"all 25 actions" is 38.** The `DSMTW_FINALE` endpoints arrived after that number was written.
+  Corrected in conventions §10.1, and the real list is protocol §7.1–§7.2.
+- **Attachment upload had no endpoint anywhere.** PRD 2 §7.1 describes the UI; §7 listed only reads.
+  Added as protocol §7.5, including that the type is sniffed from the bytes — a declared
+  `Content-Type` is no better than a filename, and data model §4.7 requires the *detected* type.
+
+### Two things that only fail in a build
+
+Both were invisible to `pnpm check` and cost the slice its first green build:
+
+- **`MIGRATIONS_FOLDER` was a module-level `const` using `import.meta.dirname`.** Next bundles
+  `@kwiz/db` (it is a `transpilePackages` entry), and in that bundle `import.meta.dirname` is
+  **`undefined`** — so the const threw `ERR_INVALID_ARG_TYPE` while Next collected page data, with a
+  message naming `join` rather than the reason. Now `migrationsFolder()`: lazy, and it *searches*
+  candidates for drizzle-kit's journal instead of assuming one.
+- **`./data` meant `apps/web/data`.** Both `pnpm dev` and `pnpm start` run Next with the cwd at
+  `apps/web`, so a master's only database landed somewhere neither the docs nor CLAUDE.md §3
+  mention. Anchored with `apps/web/.env.development` / `.env.production` — `.env` itself is
+  gitignored, which is why it is those two files — and a real environment variable still wins.
+
+Also five Turbopack "dynamic filesystem access" warnings, from paths that are dynamic **by design**
+(`KWIZ_DATA_DIR`, and a filename that is a content hash). Opted out with `turbopackIgnore`, because
+the alternative is tracing the whole project into the server output and a build that is never clean.
+
+### Raised, not resolved
+
+- **`createGameFromQuiz` is slice 4's, and slice 3 needed it.** `/resync` cannot exist without the
+  copy function, and nothing else could create a game to smoke-test against. Written in `@kwiz/db`
+  per data model §7 rather than reached for from the app, spreading `SHARED_COLUMN_GROUPS` so the
+  §7.2 parity guard passes by construction. Slice 4 inherits it and should add teams and the
+  palette on top rather than rewriting it. **This is a build-order gap, not a spec bug.**
+- **No REST reads yet** (protocol §7.4). `GET /api/games`, `/review`, `/validation-queue` and the
+  quiz tree belong with the surfaces that read them (slices 4 and 8). One consequence lands on
+  slice 7: a phone can join a code but there is no endpoint that lists a game's teams, so the team
+  picker needs one — probably `GET /api/games/by-code/:code`.
+- **No typed client module.** PRD 1 §6.9 constraint 3 wants components to call one, never `fetch`.
+  Writing it now would be an untested stub for surfaces that do not exist; it belongs with slice 4's
+  first form.
+- **The team palette (conventions §3) is still absent.** Slice 0 assigned it to slice 2, slice 2 did
+  not add it, and slice 3 does not need it — no action creates a team. Slice 4 must add it to
+  `@kwiz/domain` before game setup.
+
+### Three loose ends closed before handing over
+
+- **The D14 prompt is now tested** — slice 1's oldest open row. `askTerminal` takes its streams as a
+  parameter, so a test runs the real `readline` over a pipe: it asserts the listing names every
+  migration, that the backup path is shown, that `n` refuses and that a bare Enter is a yes.
+  Verified with teeth by making it always return `true`. What is left for a human is only whether it
+  *looks* right in a terminal, which is now the whole of that checklist row.
+- **The SSE route itself is tested** (`sse.test.ts`), not just the modules under it: headers,
+  `retry` + first view, the `Last-Event-ID` skip, an id from another game being ignored, subscribe
+  and unsubscribe, and all three refusals — 404, 401 and the D14 503.
+- **A locked question's drafts are deleted.** They were left behind, and for a team whose draft was
+  empty — never committed, because an empty draft is not an answer — the draft would have gone on
+  showing as that team's in-progress text on a closed question.
+
+Plus `actions.test.ts`, which transcribes protocol §7.1–§7.2's paths **independently of the route
+table** and compares the two. With no client yet, a dropped endpoint would otherwise be invisible.
+
+### Not verifiable here
+
+- **Nobody has watched the migration prompt render in a real terminal.** Its logic is covered; its
+  appearance is not, and cannot be from here.
+- Everything else in this slice was driven by hand against a running server: the three streams,
+  ping cadence, the qualified id, join, submission finality, a **server restart mid-question**, and
+  the attachment upload/range/dedup path.
+
+### Next agent should know
+
+- **`runCommand` in `lib/server/service.ts` is the one way to change a game.** It decides, appends,
+  folds and pushes, in that order. The append is the commit point (PRD 1 §6.4): nothing is broadcast
+  that is not already durable.
+- **`FINALE_ENDED` has no endpoint and no client decides it.** The service settles it after every
+  command, deriving the ranking with `finaleRanking` — the same function the views use, so the event
+  and the deriver cannot disagree.
+- **A draft push is a state frame with an unchanged `seq`**, sent only to that team's devices
+  (`publishToTeam`). If you find yourself suppressing pushes by comparing `seq`, that is the case
+  you will break.
+- **`decide` returning `{ ok: true, events: [] }` is a real answer**, not a failure: an idempotent
+  retry, a second click, or a stale observation the server declines to act on (a finale elimination
+  for a team still above zero is the clearest one). Collapsing it into an error makes every D8 retry
+  look broken.
+- **`@kwiz/db/test-support` is now an exported subpath**, so `apps/web` tests get a real migrated
+  in-memory database. `createTestRuntime()` in `lib/server/test-runtime.ts` assembles a whole server
+  minus HTTP — use it rather than mocking anything.
+- **Seeding for a manual smoke:** a throwaway `*.test.ts` under `packages/db/src` that calls
+  `createGameFromQuiz` against `./data`, run with vitest and then deleted. Slice 1's finding still
+  holds — you cannot run package source with plain `node`.
+- **`PICKER_ASSIGNED` is appended even when it only confirms the rule** (slice 2's open item, now
+  closed): the `picker` action always appends, so the log answers "whose pick was it?" without
+  re-deriving D30.
+
 ## Slice 2 — `packages/domain`: the rules
 
 **Status:** complete · `pnpm check` green · 323 tests · lint silent · **the whole game is playable in tests, with
