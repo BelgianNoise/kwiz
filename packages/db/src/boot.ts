@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 
@@ -18,8 +18,38 @@ import {
  * this module is only the plumbing, which is why it is thin.
  */
 
-/** Resolved from this file, so it survives being called from the app rather than the package. */
-export const MIGRATIONS_FOLDER = join(import.meta.dirname, '..', 'migrations')
+/**
+ * Where the committed migrations live — **searched, not assumed, and never at module load.**
+ *
+ * `import.meta.dirname` is the obvious answer and it is only *sometimes* right: under vitest and
+ * plain Node this file knows where it is, but Next bundles `@kwiz/db` into the server (it is a
+ * `transpilePackages` entry, since the workspace ships TypeScript source), and in that bundle
+ * `import.meta.dirname` is **`undefined`**. As a module-level `const` that threw
+ * `ERR_INVALID_ARG_TYPE` while Next was collecting page data — a build failure whose message named
+ * `join`, not the reason.
+ *
+ * So: a lazy function over candidates, each verified by the presence of drizzle-kit's journal. The
+ * cwd-relative ones cover the bundled server, which runs from `apps/web` (`pnpm start`) or the
+ * repo root.
+ */
+export function migrationsFolder(): string {
+  const candidates = [
+    // Undefined inside the Next bundle; correct everywhere else.
+    import.meta.dirname === undefined
+      ? undefined
+      : join(import.meta.dirname, '..', 'migrations'),
+    join(process.cwd(), '..', '..', 'packages', 'db', 'migrations'),
+    join(process.cwd(), 'packages', 'db', 'migrations'),
+  ].filter((candidate) => candidate !== undefined)
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'meta', '_journal.json'))) return candidate
+  }
+
+  throw new Error(
+    `could not find the migrations folder; looked in ${candidates.join(', ')}`,
+  )
+}
 
 /**
  * PRD 1 §6.7's prompt. Lists what will run and where the backup went, then asks — defaulting to
@@ -71,7 +101,7 @@ export async function bootDatabase(): Promise<BootResult> {
 
   const outcome = await migrateAtBoot({
     database,
-    migrationsFolder: MIGRATIONS_FOLDER,
+    migrationsFolder: migrationsFolder(),
     autoMigrate: config.KWIZ_AUTO_MIGRATE,
     interactive: process.stdin.isTTY ?? false,
     backup: async () => {

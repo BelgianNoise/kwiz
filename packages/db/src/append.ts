@@ -1,7 +1,7 @@
 import { parseGameEvent, parseStoredEvent, type GameEvent } from '@kwiz/domain'
 import { and, eq, max } from 'drizzle-orm'
 
-import type { KwizDatabase } from './client'
+import type { KwizDatabase, KwizTx } from './client'
 import { applyProjection } from './projections'
 import { gameEvent } from './schema'
 
@@ -38,12 +38,25 @@ export function appendAndProject(
   gameId: string,
   events: GameEvent[],
   now: () => Date = () => new Date(),
+  /**
+   * Work that must commit **with** these events, run before the first one is appended.
+   *
+   * Exactly two callers need it, and both are structural rather than convenient: creating a game
+   * writes the `game` row and its copy subtree before `GAME_CREATED` (which references the row via
+   * `game_event.gameId`), and a re-sync replaces the copy subtree with `GAME_RESYNCED` (data model
+   * §7.1's "ONE transaction"). Anything that is *only* a projection belongs in `applyProjection`,
+   * not here — this hook writes the two table groups the log does not own.
+   */
+  withinTx?: (tx: KwizTx) => void,
 ): AppendResult {
   if (events.length === 0) {
+    if (withinTx) database.db.transaction((tx) => withinTx(tx))
     return { seqs: [], seq: latestSeq(database, gameId) }
   }
 
   return database.db.transaction((tx) => {
+    withinTx?.(tx)
+
     const last =
       tx
         .select({ seq: max(gameEvent.seq) })

@@ -35,6 +35,37 @@ export { appendAndProject, latestSeq, readLog, type AppendResult } from './appen
 
 export { applyProjection, recomputeScore } from './projections'
 
+export { loadGameContent } from './content'
+
+export {
+  findAttachmentFile,
+  insertTemplateAttachment,
+  type AttachmentFile,
+  type NewAttachment,
+} from './attachments'
+
+export { deleteDraft, questionDrafts, saveDraft, teamDrafts } from './drafts'
+
+export {
+  findDeviceByToken,
+  findGame,
+  findJoinableGameByCode,
+  generateUnusedCode,
+  touchDevice,
+  JOINABLE_STATUSES,
+  type GameRow,
+} from './games'
+
+export {
+  createGameFromQuiz,
+  resyncGame,
+  type CreatedGame,
+  type CreateGameOptions,
+  type NewTeam,
+} from './instantiate'
+
+export { bootDatabase, describeOutcome, migrationsFolder, type BootResult } from './boot'
+
 export {
   backupDatabase,
   isFreshDatabase,
