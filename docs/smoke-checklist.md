@@ -106,6 +106,9 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       request answers `206` with `content-range`, and a range past the end answers `416` (D5).
 - [ ] `data/` is at the **repo root**, not `apps/web/data` — the `.env.development` anchor is
       working (PRD 1 §6.6).
+- [ ] `actions.test.ts` still lists every path in protocol §7.1–§7.2. It transcribes the spec
+      independently of the route table, so an endpoint dropped or renamed fails there rather than
+      being discovered by a surface that cannot call it.
 
 ### After slice 1 — schema & migrations
 
@@ -116,9 +119,10 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       the data intact, `KWIZ_AUTO_MIGRATE` skips the question but still backs up, no-TTY refuses
       — are covered by `boot.test.ts` against a **real directory and a real backup file**, so
       `pnpm test` is this row. Break one on purpose once if you want to trust it.
-- [ ] **The one part no test drives:** at slice 3, boot `pnpm start` against a database with a
-      pending migration and confirm the `readline` prompt actually renders and honours `n`. That
-      is six lines of plumbing over logic already tested, but nobody has seen it run.
+- [ ] The prompt itself is covered by `boot.test.ts` from slice 3 — a real `readline` over injected
+      streams, asserting it lists each migration by name, names the backup, honours `n` and treats a
+      bare Enter as yes. **What is left for a human is only whether it *looks* right:** boot
+      `pnpm start` against a database with a pending migration once, in a real terminal.
 - [ ] The column-parity guard fails if you delete a column from one side of a shared factory —
       worth breaking on purpose once, since it is the only thing standing between a routine
       schema change and silent data loss in games.

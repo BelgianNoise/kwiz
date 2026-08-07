@@ -44,7 +44,13 @@ export {
   type NewAttachment,
 } from './attachments'
 
-export { deleteDraft, questionDrafts, saveDraft, teamDrafts } from './drafts'
+export {
+  deleteDraft,
+  deleteQuestionDrafts,
+  questionDrafts,
+  saveDraft,
+  teamDrafts,
+} from './drafts'
 
 export {
   findDeviceByToken,

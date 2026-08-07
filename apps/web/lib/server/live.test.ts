@@ -355,6 +355,11 @@ describe('submit', () => {
     expect(answers?.get(one.teamA)?.isDraft).toBe(false)
     expect(answers?.get(one.teamB)?.isDraft).toBe(true)
     expect(answers?.get(one.teamB)?.text).toBe('lyon')
+
+    // Spent, so they go. A draft outliving its lock would keep appearing as a team's in-progress
+    // text on a closed question — including an empty one, which is never committed because an
+    // empty draft is not an answer.
+    expect(questionDrafts(runtime.database, one.questionId)).toEqual([])
   })
 })
 

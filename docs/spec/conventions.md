@@ -350,7 +350,12 @@ type ErrorCode =
   | 'FINALISTS_ALREADY_SET'   // selection is fixed once the round opens
   | 'TEAM_NOT_A_FINALIST'
   | 'TEAM_ELIMINATED'         // no turn, no marks, no further penalty (I22)
-  | 'NOT_TEAMS_TURN'          // marking against a team that isn't on turn
+  | 'NOT_TEAMS_TURN'          // marking against a team that isn't on turn.
+                              //   **Unreachable as built, deliberately:** the mark endpoint takes
+                              //   no teamId and credits whoever is on turn, so there is no request
+                              //   that can name the wrong team. Kept because PRD 3 §10.2's desk
+                              //   could grow a "credit another team" affordance, and the code
+                              //   should exist before the path does rather than after
   | 'NO_TURN_ACTIVE'          // pass/mark between turns
   | 'KEYWORD_ALREADY_MARKED'  // idempotent for the same team; error for a different one
   // ─── import ───

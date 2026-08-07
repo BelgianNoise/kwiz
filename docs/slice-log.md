@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 3 — Transport: SSE, actions, attachments
 
-**Status:** complete · `pnpm check` green · **425 tests** · lint silent · `pnpm build` clean, no
+**Status:** complete · `pnpm check` green · **440 tests** · lint silent · `pnpm build` clean, no
 warnings · the three streams, all 38 actions and the attachment path driven by hand against a real
 game
 
@@ -120,11 +120,27 @@ the alternative is tracing the whole project into the server output and a build 
   not add it, and slice 3 does not need it — no action creates a team. Slice 4 must add it to
   `@kwiz/domain` before game setup.
 
+### Three loose ends closed before handing over
+
+- **The D14 prompt is now tested** — slice 1's oldest open row. `askTerminal` takes its streams as a
+  parameter, so a test runs the real `readline` over a pipe: it asserts the listing names every
+  migration, that the backup path is shown, that `n` refuses and that a bare Enter is a yes.
+  Verified with teeth by making it always return `true`. What is left for a human is only whether it
+  *looks* right in a terminal, which is now the whole of that checklist row.
+- **The SSE route itself is tested** (`sse.test.ts`), not just the modules under it: headers,
+  `retry` + first view, the `Last-Event-ID` skip, an id from another game being ignored, subscribe
+  and unsubscribe, and all three refusals — 404, 401 and the D14 503.
+- **A locked question's drafts are deleted.** They were left behind, and for a team whose draft was
+  empty — never committed, because an empty draft is not an answer — the draft would have gone on
+  showing as that team's in-progress text on a closed question.
+
+Plus `actions.test.ts`, which transcribes protocol §7.1–§7.2's paths **independently of the route
+table** and compares the two. With no client yet, a dropped endpoint would otherwise be invisible.
+
 ### Not verifiable here
 
-- **The D14 migration prompt still has not been seen by anyone.** It was slice 1's last open row and
-  it stays open: it needs a real TTY, and every path around it (`n`, `KWIZ_AUTO_MIGRATE`, no-TTY
-  refusal) is covered by `boot.test.ts` against a real directory. Two minutes at a terminal closes it.
+- **Nobody has watched the migration prompt render in a real terminal.** Its logic is covered; its
+  appearance is not, and cannot be from here.
 - Everything else in this slice was driven by hand against a running server: the three streams,
   ping cadence, the qualified id, join, submission finality, a **server restart mid-question**, and
   the attachment upload/range/dedup path.

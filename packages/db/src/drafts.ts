@@ -85,6 +85,23 @@ export function questionDrafts(
 }
 
 /**
+ * Every draft for one question, dropped once `QUESTION_LOCKED` has committed them.
+ *
+ * Not merely tidiness: a team whose draft was empty gets no `ANSWER_SUBMITTED` (an empty draft is
+ * not an answer), so without this its draft would outlive the lock and keep appearing as the team's
+ * in-progress text on a question that is closed.
+ */
+export function deleteQuestionDrafts(
+  database: KwizDatabase,
+  gameQuestionId: string,
+): void {
+  database.db
+    .delete(gameAnswerDraft)
+    .where(eq(gameAnswerDraft.gameQuestionId, gameQuestionId))
+    .run()
+}
+
+/**
  * **Submitting deletes the team's draft** (protocol §4.3), so a stale draft can never resurface at
  * lock. Draft commitment therefore only ever applies to teams that never submitted at all.
  */

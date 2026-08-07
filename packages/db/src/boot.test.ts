@@ -1,9 +1,11 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable, Writable } from 'node:stream'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { askTerminal } from './boot'
 import { dataPaths, openDatabase, type KwizDatabase } from './client'
 import { backupDatabase, migrateAtBoot, pendingMigrations } from './migrate'
 import { MIGRATIONS_FOLDER } from './test-support'
@@ -17,8 +19,7 @@ import { MIGRATIONS_FOLDER } from './test-support'
  *
  * `bootDatabase()` itself is not called here: it reads `KWIZ_DATA_DIR` via `@kwiz/config`, and
  * `process.env` is confined to that package (conventions §1.4) — a test setting it would be the
- * one violation the guard exists to catch. Its terminal prompt is six lines of `readline`
- * plumbing over exactly what is exercised below, and gets used for real at slice 3's boot.
+ * one violation the guard exists to catch. Its prompt *is* covered, at the bottom of this file.
  */
 
 let dir: string
@@ -166,5 +167,60 @@ describe('boot against a real data directory', () => {
 
     expect((await boot({ confirm: () => Promise.resolve(true) })).kind).toBe('APPLIED')
     expect(pendingMigrations(database, MIGRATIONS_FOLDER)).toEqual([])
+  })
+})
+
+/**
+ * **The prompt itself** (PRD 1 §6.7) — the last part of D14 that nothing exercised.
+ *
+ * A real `readline` over injected streams rather than the process's own: `createInterface` does not
+ * care whether its input is a TTY, so the question, the listing and the answer parsing are all
+ * genuinely run here. What remains for a human is only whether it *looks* right in a terminal.
+ */
+describe('the migration prompt', () => {
+  const pending = [
+    { tag: '0001_initial', statements: 42, folderMillis: 1 },
+    { tag: '0002_add_master_notes', statements: 3, folderMillis: 2 },
+  ]
+
+  /** Feeds one line of input and collects everything written. */
+  async function ask(answer: string): Promise<{ applied: boolean; shown: string }> {
+    let shown = ''
+    const output = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        shown += chunk.toString()
+        done()
+      },
+    })
+
+    const applied = await askTerminal(pending, '/data/backups/kwiz-2026.db', {
+      input: Readable.from([`${answer}\n`]),
+      output,
+    })
+    return { applied, shown }
+  }
+
+  it('lists every pending migration by name, and says where the backup went', async () => {
+    const { shown } = await ask('y')
+
+    expect(shown).toContain('2 pending migration(s)')
+    // By name, because "3 migrations will run" tells a master nothing about what they are agreeing
+    // to — and this is the one prompt in the product with irreversible consequences.
+    expect(shown).toContain('0001_initial')
+    expect(shown).toContain('0002_add_master_notes')
+    expect(shown).toContain('/data/backups/kwiz-2026.db')
+    expect(shown).toContain('Apply now? [Y/n]')
+  })
+
+  it('honours n, and treats a bare Enter as yes', async () => {
+    expect((await ask('n')).applied).toBe(false)
+    expect((await ask('N')).applied).toBe(false)
+    expect((await ask('no')).applied).toBe(false)
+
+    // Defaulting to yes is safe **because the backup already exists** — the master has been shown
+    // the escape route before being asked.
+    expect((await ask('')).applied).toBe(true)
+    expect((await ask('y')).applied).toBe(true)
+    expect((await ask('  ')).applied).toBe(true)
   })
 })

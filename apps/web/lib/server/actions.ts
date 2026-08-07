@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 
 import {
   deleteDraft,
+  deleteQuestionDrafts,
   findDeviceByToken,
   generateUnusedCode,
   questionDrafts,
@@ -327,15 +328,19 @@ function execute(
       )
 
     case 'question-lock':
-      return withNoBody(body, () =>
-        run({
+      return withNoBody(body, () => {
+        const result = run({
           type: 'LOCK_QUESTION',
           gameQuestionId: questionId,
-          // Read here rather than in `decide`, which cannot reach a database. Committing them is what
-          // surfaces D26's "not confirmed by team" marker.
+          // Read here rather than in `decide`, which cannot reach a database. Committing them is
+          // what surfaces D26's "not confirmed by team" marker.
           drafts: questionDrafts(runtime.database, questionId),
-        }),
-      )
+        })
+        // Committed or empty, they are spent either way — and an uncommitted empty draft would
+        // otherwise keep showing as a team's in-progress text on a closed question.
+        if (result.ok) deleteQuestionDrafts(runtime.database, questionId)
+        return result
+      })
 
     case 'question-reveal':
       return withNoBody(body, () =>
