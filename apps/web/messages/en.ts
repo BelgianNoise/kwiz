@@ -63,6 +63,20 @@ const en = {
 
   common: {
     appName: 'Kwiz',
+    cancel: 'Cancel',
+    save: 'Save',
+    delete: 'Delete',
+    create: 'Create',
+    add: 'Add',
+    rename: 'Rename',
+    close: 'Close',
+    back: 'Back',
+    saved: 'Saved',
+    saving: 'Saving…',
+    saveFailed: 'Not saved — check your connection.',
+    teams: 'Teams',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
 
     /**
      * Language names are **never translated** and are identical in every catalogue
@@ -76,11 +90,100 @@ const en = {
     },
   },
 
+  /** PRD 2 §3 — the only page a guest and a master both see. */
   landing: {
-    scaffold: {
+    playing: {
+      title: "I'm playing",
+      detail: 'Scan the QR code on screen, or enter the code.',
+      codeLabel: 'Game code',
+      join: 'Join',
+      invalid: "That code doesn't look right.",
+    },
+    hosting: {
+      title: "I'm hosting",
+      detail: 'Manage my quizzes and run a game.',
+      open: 'Open',
+    },
+  },
+
+  admin: {
+    /** PRD 2 §5 — quizzes above games, and finished games out of the way. */
+    dashboard: {
       title: 'Kwiz',
-      subtitle: 'The scaffold is running.',
-      detail: 'Surfaces are built in build-order slices 4 to 7.',
+      quizzes: 'Quizzes',
+      newQuiz: 'New quiz',
+      import: 'Import…',
+      games: 'Games',
+      showFinished: 'Show finished',
+      hideFinished: 'Hide finished',
+      play: 'Play',
+      open: 'Open',
+      rounds: '{count, plural, one {# round} other {# rounds}}',
+      questions: '{count, plural, one {# question} other {# questions}}',
+      teamCount: '{count, plural, one {# team} other {# teams}}',
+      edited: 'edited {date}',
+      code: 'code {code}',
+      templateUpdated: 'Template updated',
+      resync: 'Re-sync',
+      duplicate: 'Duplicate',
+      export: 'Export',
+      /** §5 — a real screen, and the moment the database is created (PRD 1 §6.6). */
+      emptyQuizzes: 'No quizzes yet.',
+      emptyQuizzesDetail: 'Create one, or import a .zip you exported elsewhere.',
+      emptyGames: 'No games yet. Press Play on a quiz to set one up.',
+      newQuizTitle: 'New quiz',
+      newQuizLabel: 'Name',
+      newQuizPlaceholder: 'Pub Quiz #4',
+      deleteQuizTitle: 'Delete “{name}”?',
+      /**
+       * §5 names what survives, because masters assume deleting a quiz takes their history with
+       * it and therefore never clean up. Games keep their own copies (data model §10).
+       */
+      deleteQuizKeepsGames:
+        '{count, plural, =0 {This quiz has no played games.} one {# played game will be kept and stays reviewable.} other {# played games will be kept and stay reviewable.}}',
+      status: {
+        SETUP: 'Setup',
+        LIVE: 'Live',
+        FINISHED: 'Finished',
+        ABANDONED: 'Abandoned',
+      },
+    },
+
+    /** PRD 2 §6 — the round list, and the finale's one legal position. */
+    quiz: {
+      backToDashboard: 'Dashboard',
+      name: 'Name',
+      description: 'Description',
+      rounds: 'Rounds',
+      addRound: 'Add round',
+      openRound: 'Open',
+      /** §6 — balance between rounds is the thing a master worries about while authoring. */
+      totals: '{questions} questions · {points} points · est. {minutes} min',
+      roundSummary: '{questions} questions · {points} pts',
+      /** A finale scores seconds, not points (D51), so `0 pts` would read as a mistake. */
+      roundSummaryFinale: '{questions} questions',
+      empty: 'No rounds yet. Add one to start writing questions.',
+      addRoundTitle: 'Add a round',
+      roundTypeLabel: 'Type',
+      roundTitleLabel: 'Title',
+      roundTitlePlaceholder: 'Music',
+      type: {
+        QUESTION_SET: 'Questions',
+        JEOPARDY: 'Jeopardy board',
+        DSMTW_FINALE: 'Finale',
+      },
+      typeHint: {
+        QUESTION_SET: 'A list of questions, any answer method.',
+        JEOPARDY: 'A board of categories and values. Every tile is a buzzer question.',
+        DSMTW_FINALE: 'The timed keyword round. Always last, and only one per quiz.',
+      },
+      /** §6.1 — a one-line reason, rather than a silently missing option. */
+      finaleExists: 'This quiz already ends with a finale.',
+      finalePinned: 'Pinned as the last round',
+      deleteRoundTitle: 'Delete “{title}”?',
+      deleteRoundBody:
+        '{count, plural, =0 {This round has no questions.} one {Its # question is deleted too.} other {Its # questions are deleted too.}}',
+      preflight: 'Check',
     },
   },
 }

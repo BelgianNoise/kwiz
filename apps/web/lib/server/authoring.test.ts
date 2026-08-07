@@ -18,12 +18,23 @@ let runtime: TestRuntime
 const run = (path: string, body: unknown = {}) =>
   runAuthoring({ runtime, segments: path.split('/'), body, now: new Date() })
 
-/** Narrows to the payload, so a test reads `.quizId` without three lines of ceremony. */
-function data<T>(result: ReturnType<typeof run>): T {
+/**
+ * Narrows to the payload, so a test reads `.quizId` without three lines of ceremony.
+ *
+ * The ids come back as `unknown` because `runAuthoring` is deliberately untyped per action — the
+ * dispatch table returns whatever its repository returns. Reading the one field each test needs off
+ * a record is honest about that, and fails loudly if the shape is not what the test assumed.
+ */
+function idFrom(result: ReturnType<typeof run>, key: string): string {
   if (!result.ok || result.data === undefined) {
     throw new Error(`expected data, got ${JSON.stringify(result)}`)
   }
-  return result.data as T
+  const record: Record<string, unknown> = { ...result.data }
+  const value = record[key]
+  if (typeof value !== 'string') {
+    throw new Error(`expected ${key} on ${JSON.stringify(result.data)}`)
+  }
+  return value
 }
 
 beforeEach(() => {
@@ -58,14 +69,12 @@ describe('the authoring catalogue', () => {
 
 describe('running an action', () => {
   it('creates a quiz, a round and a question, and reads them back as a tree', () => {
-    const { quizId } = data<{ quizId: string }>(run('quizzes', { name: 'Pub Quiz #4' }))
-    const { roundId } = data<{ roundId: string }>(
+    const quizId = idFrom(run('quizzes', { name: 'Pub Quiz #4' }), 'quizId')
+    const roundId = idFrom(
       run(`quizzes/${quizId}/rounds`, { type: 'QUESTION_SET', title: 'Warm-up' }),
+      'roundId',
     )
-    const { questionId } = data<{ questionId: string }>(
-      run(`rounds/${roundId}/questions`),
-    )
-
+    const questionId = idFrom(run(`rounds/${roundId}/questions`), 'questionId')
     run(`questions/${questionId}`, { prompt: 'Capital of France?', points: 20 })
     run(`questions/${questionId}/accepted-answers`, { answers: ['Paris'] })
 
@@ -88,11 +97,11 @@ describe('running an action', () => {
   })
 
   it('checks a round config against that round’s own type (I6)', () => {
-    const { quizId } = data<{ quizId: string }>(run('quizzes', { name: 'Q' }))
-    const { roundId } = data<{ roundId: string }>(
+    const quizId = idFrom(run('quizzes', { name: 'Q' }), 'quizId')
+    const roundId = idFrom(
       run(`quizzes/${quizId}/rounds`, { type: 'JEOPARDY', title: 'Board' }),
+      'roundId',
     )
-
     // A finale's config on a Jeopardy round: the shape is one of the three, so the boundary lets it
     // through — and the repository, which knows the round's type, does not.
     expect(
@@ -107,7 +116,7 @@ describe('running an action', () => {
   })
 
   it('sends the finale rules through, rather than restating them here', () => {
-    const { quizId } = data<{ quizId: string }>(run('quizzes', { name: 'Q' }))
+    const quizId = idFrom(run('quizzes', { name: 'Q' }), 'quizId')
     run(`quizzes/${quizId}/rounds`, { type: 'DSMTW_FINALE', title: 'Finale' })
 
     // The repository owns §6.1; this only checks the refusal reaches the caller intact.
@@ -117,14 +126,12 @@ describe('running an action', () => {
   })
 
   it('insists on exactly five keywords at the boundary (I17)', () => {
-    const { quizId } = data<{ quizId: string }>(run('quizzes', { name: 'Q' }))
-    const { roundId } = data<{ roundId: string }>(
+    const quizId = idFrom(run('quizzes', { name: 'Q' }), 'quizId')
+    const roundId = idFrom(
       run(`quizzes/${quizId}/rounds`, { type: 'DSMTW_FINALE', title: 'Finale' }),
+      'roundId',
     )
-    const { questionId } = data<{ questionId: string }>(
-      run(`rounds/${roundId}/questions`),
-    )
-
+    const questionId = idFrom(run(`rounds/${roundId}/questions`), 'questionId')
     expect(
       run(`questions/${questionId}/keywords`, { keywords: ['a', 'b'] }),
     ).toMatchObject({

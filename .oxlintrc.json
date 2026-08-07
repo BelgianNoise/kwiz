@@ -66,6 +66,15 @@
     {
       "files": ["scripts/**"],
       "rules": { "no-console": "off" }
+    },
+    {
+      // shadcn/ui primitives are **generated** by `shadcn add` and not hand-maintained
+      // (conventions §1, PRD 2 §15.2). They ship a few assertions against Radix's types that
+      // we would have to re-fix after every regeneration, so the rule is off *here only* —
+      // our own components in `components/admin/**` are still held to it. This is not one of
+      // §1.4's architectural rules, which must never be weakened.
+      "files": ["apps/web/components/ui/**"],
+      "rules": { "typescript/no-unsafe-type-assertion": "off" }
     }
   ]
 }

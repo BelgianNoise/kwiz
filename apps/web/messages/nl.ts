@@ -55,6 +55,20 @@ const nl: Messages = {
 
   common: {
     appName: 'Kwiz',
+    cancel: 'Annuleren',
+    save: 'Opslaan',
+    delete: 'Verwijderen',
+    create: 'Aanmaken',
+    add: 'Toevoegen',
+    rename: 'Hernoemen',
+    close: 'Sluiten',
+    back: 'Terug',
+    saved: 'Opgeslagen',
+    saving: 'Opslaan…',
+    saveFailed: 'Niet opgeslagen — controleer je verbinding.',
+    teams: 'Teams',
+    moveUp: 'Omhoog',
+    moveDown: 'Omlaag',
 
     // Identical to the English catalogue on purpose — see the note there.
     language: {
@@ -65,10 +79,88 @@ const nl: Messages = {
   },
 
   landing: {
-    scaffold: {
+    playing: {
+      title: 'Ik speel mee',
+      detail: 'Scan de QR-code op het scherm, of vul de code in.',
+      codeLabel: 'Spelcode',
+      join: 'Meedoen',
+      invalid: 'Die code klopt niet.',
+    },
+    hosting: {
+      title: 'Ik presenteer',
+      detail: 'Mijn quizzen beheren en een spel starten.',
+      open: 'Openen',
+    },
+  },
+
+  admin: {
+    dashboard: {
       title: 'Kwiz',
-      subtitle: 'De basisopzet werkt.',
-      detail: 'De schermen worden gebouwd in build-order slices 4 tot 7.',
+      quizzes: 'Quizzen',
+      newQuiz: 'Nieuwe quiz',
+      import: 'Importeren…',
+      games: 'Spellen',
+      showFinished: 'Toon afgelopen',
+      hideFinished: 'Verberg afgelopen',
+      play: 'Spelen',
+      open: 'Openen',
+      rounds: '{count, plural, one {# ronde} other {# rondes}}',
+      questions: '{count, plural, one {# vraag} other {# vragen}}',
+      teamCount: '{count, plural, one {# team} other {# teams}}',
+      edited: 'bewerkt {date}',
+      code: 'code {code}',
+      templateUpdated: 'Quiz is bijgewerkt',
+      resync: 'Vernieuwen',
+      duplicate: 'Dupliceren',
+      export: 'Exporteren',
+      emptyQuizzes: 'Nog geen quizzen.',
+      emptyQuizzesDetail: 'Maak er een, of importeer een .zip die je elders exporteerde.',
+      emptyGames: 'Nog geen spellen. Druk op Spelen bij een quiz om er een op te zetten.',
+      newQuizTitle: 'Nieuwe quiz',
+      newQuizLabel: 'Naam',
+      newQuizPlaceholder: 'Pubquiz #4',
+      deleteQuizTitle: '“{name}” verwijderen?',
+      deleteQuizKeepsGames:
+        '{count, plural, =0 {Deze quiz heeft geen gespeelde spellen.} one {# gespeeld spel blijft bewaard en blijft terug te lezen.} other {# gespeelde spellen blijven bewaard en blijven terug te lezen.}}',
+      status: {
+        SETUP: 'Opzet',
+        LIVE: 'Live',
+        FINISHED: 'Afgelopen',
+        ABANDONED: 'Afgebroken',
+      },
+    },
+
+    quiz: {
+      backToDashboard: 'Overzicht',
+      name: 'Naam',
+      description: 'Omschrijving',
+      rounds: 'Rondes',
+      addRound: 'Ronde toevoegen',
+      openRound: 'Openen',
+      totals: '{questions} vragen · {points} punten · ± {minutes} min',
+      roundSummary: '{questions} vragen · {points} ptn',
+      roundSummaryFinale: '{questions} vragen',
+      empty: 'Nog geen rondes. Voeg er een toe om vragen te schrijven.',
+      addRoundTitle: 'Ronde toevoegen',
+      roundTypeLabel: 'Type',
+      roundTitleLabel: 'Titel',
+      roundTitlePlaceholder: 'Muziek',
+      type: {
+        QUESTION_SET: 'Vragen',
+        JEOPARDY: 'Jeopardy-bord',
+        DSMTW_FINALE: 'Finale',
+      },
+      typeHint: {
+        QUESTION_SET: 'Een lijst vragen, elke antwoordvorm.',
+        JEOPARDY: 'Een bord met categorieën en waardes. Elke tegel is een buzzervraag.',
+        DSMTW_FINALE: 'De finale op tijd. Altijd als laatste, en één per quiz.',
+      },
+      finaleExists: 'Deze quiz eindigt al met een finale.',
+      finalePinned: 'Staat vast als laatste ronde',
+      deleteRoundTitle: '“{title}” verwijderen?',
+      deleteRoundBody:
+        '{count, plural, =0 {Deze ronde heeft geen vragen.} one {De # vraag wordt ook verwijderd.} other {De # vragen worden ook verwijderd.}}',
+      preflight: 'Controleren',
     },
   },
 }
