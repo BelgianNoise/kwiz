@@ -143,6 +143,15 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       refuse with a specific message, and **nothing is written** — the quiz list is unchanged.
 - [ ] Switch the admin locale to Dutch and walk one screen of each kind. A missing key is a build
       error, so what this catches is layout: Dutch runs 20–30% longer.
+- [ ] **Drag a round, and try to drag one past the finale.** The handle is real, not decoration —
+      it did nothing for most of slice 4 and nothing failed. Then do the same with `↑`/`↓`: both
+      routes must refuse identically (§15.2), or the keyboard is a way around §6.1.
+- [ ] `[+ Add team]` on a **live** game: the dialog must state what they missed, what their ceiling
+      now is versus everyone else's, and suggest half the missed points. Add with the starting
+      score, then confirm it appears as an ordinary revocable adjustment rather than a magic
+      opening balance.
+- [ ] Upload an image and a sound file to a question, and try a text file renamed `.png`. The last
+      one is refused by its **bytes**, not its extension, and names the formats that work.
 
 ### After slice 1 — schema & migrations
 

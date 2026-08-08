@@ -58,8 +58,30 @@ gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one 
 
 - **Post-game review and correction (PRD 2 §13)** — build-order defers it to slice 8, where the
   event log it reads and rewrites actually has content.
+- **§7.1's `[Preview on main screen ↗]` (O4)** — it opens *the real PRD 4 renderer* in a mock `OPEN`
+  state, and that renderer does not exist until slice 6. Adding a button now would mean either a
+  second throwaway renderer or a link to nothing, and the whole value of O4 is that it shows the
+  actual projected output at true type scale. **Slice 6 should add it**, not reinvent it.
 - **`[Copy from last game]` copies names and colours only.** Nothing else on a team survives, and
   nothing else should.
+
+### Found late, while auditing this slice against build-order
+
+Three things were built but not *finished*, and none of them would have failed a test:
+
+- **The `⠿` drag handles did nothing.** Rounds and questions reordered by `↑`/`↓` buttons only,
+  while the list showed a grab handle — §15.2 asks for both routes and §6.1 for the drop to be
+  refused past the pinned finale. Now one hook, sharing the buttons' own predicate so the two
+  cannot drift.
+- **§11.2 was missing entirely**, and with it two protocol actions: `TEAM_ADDED` and `TEAM_UPDATED`
+  existed as events with nothing that could cause them.
+- **`verifyPlayable` could hang forever.** A malformed container that fires neither `loadedmetadata`
+  nor `error` left the promise unsettled and the upload button permanently disabled with no
+  explanation. Bounded at ten seconds, which is far beyond parsing metadata off a local disk.
+
+The lesson worth carrying: `pnpm check` was green through all three. **Re-read your slice's
+build-order bullets one at a time against the running app before declaring it done** — an
+affordance that renders is not an affordance that works.
 
 ### What the next agent would otherwise rediscover
 

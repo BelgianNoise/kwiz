@@ -225,6 +225,7 @@ const nl: Messages = {
       attachments: 'Bijlagen',
       addAttachment: 'Bestand toevoegen',
       checking: 'Controleren...',
+      emptyAttachments: 'Nog geen media bij deze vraag.',
       playable: 'Speelbaar',
       showOnPlayers: 'Op telefoons tonen',
       showOnPlayersHint:

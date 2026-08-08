@@ -255,6 +255,7 @@ const en = {
       addAttachment: 'Add file',
       /** O6 — verified in the browser before it is uploaded at all. */
       checking: 'Checking...',
+      emptyAttachments: 'No media on this question yet.',
       playable: 'Playable',
       showOnPlayers: 'Show on player devices',
       showOnPlayersHint: 'Images only. Audio and video play on the main screen.',

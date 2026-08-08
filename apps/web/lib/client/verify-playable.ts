@@ -52,6 +52,16 @@ function decodesAsImage(url: string): Promise<boolean> {
 }
 
 /**
+ * A file that answers neither way inside this is treated as not playable.
+ *
+ * Browsers do not promise to fire `error` for every malformed file — a truncated container can leave
+ * a media element sitting there indefinitely. Without a bound the promise never settles, and what a
+ * master sees is an upload button that stays disabled and never explains itself. Ten seconds is far
+ * beyond how long parsing metadata off a local disk takes, so reaching it means something is wrong.
+ */
+const METADATA_TIMEOUT_MS = 10_000
+
+/**
  * `loadedmetadata` is the right signal rather than `canplay`: it fires once the browser has parsed
  * enough to know the format and the duration, which is exactly the question being asked, and it does
  * not wait for buffering.
@@ -61,11 +71,21 @@ function loadsAsMedia(url: string, kind: 'audio' | 'video'): Promise<Playability
     const element = document.createElement(kind)
     element.preload = 'metadata'
 
+    let settled = false
     const done = (result: PlayabilityResult): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      // Releases the decoder; without it a rejected 40 MB video stays attached to a detached element.
       element.removeAttribute('src')
       element.load()
       resolve(result)
     }
+
+    const timer = setTimeout(
+      () => done({ playable: false, durationMs: null }),
+      METADATA_TIMEOUT_MS,
+    )
 
     element.addEventListener('loadedmetadata', () => {
       done({

@@ -80,7 +80,10 @@ export function AttachmentList({
         </p>
       ) : null}
 
-      {question.media.length > 0 ? (
+      {/* §15.2 — the fifth designed empty state. The button above is the action; this says why. */}
+      {question.media.length === 0 ? (
+        <p className="text-muted-foreground text-sm">{t('emptyAttachments')}</p>
+      ) : (
         <ul className="divide-border border-border divide-y rounded-lg border">
           {question.media.map((media) => (
             <li key={media.id} className="flex items-center gap-3 p-3">
@@ -140,7 +143,7 @@ export function AttachmentList({
             </li>
           ))}
         </ul>
-      ) : null}
+      )}
 
       {question.media.some((media) => media.kind === 'IMAGE') ? (
         <p className="text-muted-foreground text-sm">{t('showOnPlayersHint')}</p>
