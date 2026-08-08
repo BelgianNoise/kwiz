@@ -152,6 +152,11 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       opening balance.
 - [ ] Upload an image and a sound file to a question, and try a text file renamed `.png`. The last
       one is refused by its **bytes**, not its extension, and names the formats that work.
+- [ ] **The game overflow menu has all three items** — export this game, abandon, delete — and the
+      delete confirmation names the real team and answer counts. Delete one and confirm the **quiz
+      survives**; that fear is why masters never tidy up.
+- [ ] Reorder a Jeopardy column left and right. Column order is what the room reads.
+- [ ] Pick a custom team colour of dark navy: it is **accepted, with a warning**, not refused.
 - [ ] **`[Preview on main screen]` on three questions**: one short and text-only, one with an image,
       one with a deliberately enormous prompt. The first fills the stage, the second becomes the
       `HERO` layout, and the third shrinks — but **never below 4% of the frame height**, because

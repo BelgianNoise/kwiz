@@ -62,9 +62,31 @@ gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one 
 - **`[Copy from last game]` copies names and colours only.** Nothing else on a team survives, and
   nothing else should.
 
-### Found late, while auditing this slice against build-order
+### Found late, by auditing PRD 2 section by section
 
-Three things were built but not *finished*, and none of them would have failed a test:
+Two passes found ten things. The first, against build-order's bullets, found three; the second,
+against the PRD's own sections one at a time, found seven more — including a menu two-thirds empty
+and a delete path that did not exist. **None of them would have failed a test**, and `pnpm check`
+was green throughout both.
+
+From the second pass:
+
+- **`Delete game` existed only as message strings.** No repository function, no action, no route.
+  Data model §10 describes the cascade and PRD 2 §12.1 offers the menu item; nothing joined them.
+- **`Export this game` exported all of them.** §14.1 means quiz + *that* game.
+- **Jeopardy columns could not be reordered** — no `moveCategory` anywhere, though §8 lists it.
+- The dashboard showed neither `round N of M` nor the winner (§5), the quiz editor had no `[Export]`
+  or `[⋯]` (§6), there was no custom colour (§11), the assumed team count was not remembered (§9),
+  attachment rows showed no filename or size (§7.1), and deleting an option was not confirmed
+  (§15.2 lists option beside round, category and question).
+
+**The lesson is about how to audit, not about these ten.** Reading the build-order bullet — "the
+Jeopardy board builder" — and looking at a board builder that exists tells you nothing. Reading
+§8's sentence *"[edit ▾] on a category header: rename, reorder, delete"* and then looking for
+`moveCategory` finds the gap in seconds. Go clause by clause through the PRD, not feature by
+feature.
+
+From the first pass:
 
 - **O4's preview was skipped on a bad reading of its dependency.** "It needs PRD 4's renderer" was
   true and led to the wrong conclusion: the renderer is what the preview *is*.
@@ -78,9 +100,8 @@ Three things were built but not *finished*, and none of them would have failed a
   nor `error` left the promise unsettled and the upload button permanently disabled with no
   explanation. Bounded at ten seconds, which is far beyond parsing metadata off a local disk.
 
-The lesson worth carrying: `pnpm check` was green through all three. **Re-read your slice's
-build-order bullets one at a time against the running app before declaring it done** — an
-affordance that renders is not an affordance that works.
+An affordance that renders is not an affordance that works, and a section that exists is not a
+section that is finished.
 
 ### Slice 6 inherits three real components, not stubs
 
