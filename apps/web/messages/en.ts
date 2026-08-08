@@ -436,6 +436,48 @@ const en = {
         DECLINED: 'Migrations pending - the server is running read-only',
       },
     },
+
+    /** PRD 2 §14.1 — sizes are computed, not estimated. */
+    export: {
+      title: 'Export "{name}"',
+      body: 'Everything needed to run this quiz on another machine.',
+      quizOnly: 'Quiz only',
+      quizOnlyHint: 'For taking to another machine.',
+      withGames: 'Quiz + {count, plural, one {# played game} other {# played games}}',
+      withGamesHint: 'For archiving a night, with every answer and score.',
+      includeAttachments:
+        'Include attachments ({count, plural, one {# file} other {# files}}, {size})',
+      includeAttachmentsPlain: 'Include attachments',
+      cancel: 'Cancel',
+      export: 'Export',
+    },
+
+    /** §14.2 — the dialog that stands between a master and deleting their own work. */
+    import: {
+      importButton: 'Import…',
+      title: 'Import "{name}"',
+      summary:
+        '{rounds, plural, one {# round} other {# rounds}}, {questions, plural, one {# question} other {# questions}}.',
+      missingMedia:
+        '{count, plural, one {# file is} other {# files are}} missing or damaged. Everything else imports; you can re-upload the media afterwards.',
+      collision: 'You already have a quiz with this identity.',
+      field: 'Property',
+      onThisMachine: 'On this machine',
+      inThisFile: 'In this file',
+      edited: 'Edited',
+      rounds: 'Rounds',
+      roundsValue: '{rounds} · {questions} questions',
+      games: 'Games',
+      gamesValue: '{count, plural, one {# played} other {# played}}',
+      fileIsOlder: 'The file is older than your local copy.',
+      fileIsNewer: 'The file is newer than your local copy.',
+      asCopy: 'Import as a separate copy',
+      replace: 'Replace my local copy',
+      replaceCost:
+        'Deletes it and {games, plural, =0 {no games} one {its # game} other {its # games}}.',
+      cancel: 'Cancel',
+      import: 'Import',
+    },
   },
 
   /** PRD 2 §4 / D10 — the screen that stops a dead QR code from being the first thing a room sees. */

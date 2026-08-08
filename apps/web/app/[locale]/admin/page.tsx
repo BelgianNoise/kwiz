@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 
 import { GameList } from '@/components/admin/game-list'
+import { ImportZone } from '@/components/admin/import-zone'
 import { NetworkBanner } from '@/components/admin/network-banner'
 import { QuizList } from '@/components/admin/quiz-list'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -74,7 +75,10 @@ export default async function DashboardPage({
         <NetworkBanner address={settings.networkAddress} />
       ) : null}
 
-      <QuizList quizzes={quizzes} />
+      {/* §14.2 — the drop target is the dashboard itself, so the zone wraps rather than sits beside. */}
+      <ImportZone>
+        <QuizList quizzes={quizzes} />
+      </ImportZone>
 
       <GameList
         games={games.map((game) => ({

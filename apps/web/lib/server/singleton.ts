@@ -14,16 +14,15 @@
  * Keyed by an explicit string rather than by module identity, because module identity is the thing
  * that is unreliable. Keys are namespaced so a second app in the same process cannot collide.
  */
-const REGISTRY = Symbol.for('kwiz.singletons')
-
-interface Store {
-  [REGISTRY]?: Map<string, unknown>
+declare global {
+  /* eslint-disable-next-line no-var */
+  // oxlint-disable-next-line no-var
+  var kwizSingletons: Map<string, unknown> | undefined
 }
 
 function store(): Map<string, unknown> {
-  const host = globalThis as Store
-  host[REGISTRY] ??= new Map<string, unknown>()
-  return host[REGISTRY]
+  globalThis.kwizSingletons ??= new Map<string, unknown>()
+  return globalThis.kwizSingletons
 }
 
 /**

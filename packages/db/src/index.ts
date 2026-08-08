@@ -40,6 +40,24 @@ export { loadGameContent } from './content'
 export { loadQuizTree } from './quiz-tree'
 
 export {
+  gameExportSchema,
+  gamesFileSchema,
+  quizFileSchema,
+  type GameExport,
+  type GamesFile,
+  type QuizFile,
+} from './export-schema'
+
+export { collectQuizExport, type QuizExport } from './export-read'
+
+export {
+  importQuiz,
+  type ImportInput,
+  type ImportMode,
+  type ImportResult,
+} from './export-write'
+
+export {
   createCategory,
   createQuestion,
   createQuiz,

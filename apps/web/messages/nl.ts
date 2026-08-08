@@ -400,6 +400,47 @@ const nl: Messages = {
         DECLINED: 'Migraties in behandeling - de server draait alleen-lezen',
       },
     },
+
+    export: {
+      title: '"{name}" exporteren',
+      body: 'Alles wat nodig is om deze quiz op een andere machine te draaien.',
+      quizOnly: 'Alleen de quiz',
+      quizOnlyHint: 'Om mee te nemen naar een andere machine.',
+      withGames:
+        'Quiz + {count, plural, one {# gespeelde game} other {# gespeelde games}}',
+      withGamesHint: 'Om een avond te archiveren, met elk antwoord en elke score.',
+      includeAttachments:
+        'Bijlagen meenemen ({count, plural, one {# bestand} other {# bestanden}}, {size})',
+      includeAttachmentsPlain: 'Bijlagen meenemen',
+      cancel: 'Annuleren',
+      export: 'Exporteren',
+    },
+
+    import: {
+      importButton: 'Importeren…',
+      title: '"{name}" importeren',
+      summary:
+        '{rounds, plural, one {# ronde} other {# rondes}}, {questions, plural, one {# vraag} other {# vragen}}.',
+      missingMedia:
+        '{count, plural, one {# bestand ontbreekt} other {# bestanden ontbreken}} of is beschadigd. De rest wordt geïmporteerd; je kunt de media daarna opnieuw uploaden.',
+      collision: 'Je hebt al een quiz met deze identiteit.',
+      field: 'Eigenschap',
+      onThisMachine: 'Op deze machine',
+      inThisFile: 'In dit bestand',
+      edited: 'Bewerkt',
+      rounds: 'Rondes',
+      roundsValue: '{rounds} · {questions} vragen',
+      games: 'Games',
+      gamesValue: '{count, plural, one {# gespeeld} other {# gespeeld}}',
+      fileIsOlder: 'Het bestand is ouder dan je lokale kopie.',
+      fileIsNewer: 'Het bestand is nieuwer dan je lokale kopie.',
+      asCopy: 'Als aparte kopie importeren',
+      replace: 'Mijn lokale kopie vervangen',
+      replaceCost:
+        'Verwijdert die en {games, plural, =0 {geen games} one {# game} other {# games}}.',
+      cancel: 'Annuleren',
+      import: 'Importeren',
+    },
   },
 
   setup: {

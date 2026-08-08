@@ -7,6 +7,8 @@ import type {
   RoundType,
 } from '@kwiz/domain'
 
+import type { ImportPreview } from '@/lib/server/transfer'
+
 /**
  * PRD 1 §6.9 constraint 3 — **the one module that talks to the server.** Components never call
  * `fetch` themselves.
@@ -223,4 +225,89 @@ export const api = {
     send<{ reached: boolean; userAgent: string | null }>(
       `/api/probe?address=${encodeURIComponent(address)}`,
     ),
+
+  // ─── export and import (PRD 2 §14) ───
+
+  /** §14.1 — real numbers before the master commits to a copy onto a slow USB stick. */
+  exportSize: (
+    quizId: string,
+    options: { includeGames: boolean; includeAttachments: boolean },
+  ) =>
+    send<{ bytes: number; attachments: number; games: number }>('/api/transfer', {
+      quizId,
+      ...options,
+      intent: 'size',
+    }),
+
+  /**
+   * The one call that does not go through `send`: the response is a zip, not an `ActionResult`.
+   *
+   * The download is triggered from an object URL rather than by navigating, so a failure surfaces
+   * here as a typed refusal instead of replacing the page the master is working on with an error.
+   */
+  downloadExport: async (
+    quizId: string,
+    options: { includeGames: boolean; includeAttachments: boolean },
+  ): Promise<ActionResult> => {
+    try {
+      const response = await fetch('/api/transfer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ quizId, ...options, intent: 'download' }),
+      })
+
+      if (!response.ok || !response.headers.get('content-type')?.includes('zip')) {
+        const parsed: unknown = await response.json().catch(() => undefined)
+        if (isActionResult<void>(parsed)) return parsed
+        return { ok: false, error: 'VALIDATION_ERROR', message: 'the export failed' }
+      }
+
+      const disposition = response.headers.get('content-disposition') ?? ''
+      const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'kwiz-export.zip'
+      const url = URL.createObjectURL(await response.blob())
+
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      link.click()
+      URL.revokeObjectURL(url)
+
+      return { ok: true }
+    } catch (cause) {
+      return {
+        ok: false,
+        error: 'VALIDATION_ERROR',
+        message: cause instanceof Error ? cause.message : 'the export failed',
+      }
+    }
+  },
+
+  /** §14.2 — validates and previews. Writes nothing, which is what makes the dialog trustworthy. */
+  inspectImport: (file: File) => transfer<{ preview: ImportPreview }>(file, 'inspect'),
+  performImport: (file: File, mode: 'COPY' | 'REPLACE') =>
+    transfer<{ quizId: string; missing: number }>(file, 'import', mode),
+}
+
+async function transfer<T>(
+  file: File,
+  intent: 'inspect' | 'import',
+  mode?: 'COPY' | 'REPLACE',
+): Promise<ActionResult<T>> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('intent', intent)
+  if (mode) form.append('mode', mode)
+
+  try {
+    const response = await fetch('/api/transfer', { method: 'POST', body: form })
+    const parsed: unknown = await response.json()
+    if (isActionResult<T>(parsed)) return parsed
+    return { ok: false, error: 'MANIFEST_INVALID', message: 'unexpected response' }
+  } catch (cause) {
+    return {
+      ok: false,
+      error: 'MANIFEST_INVALID',
+      message: cause instanceof Error ? cause.message : 'the import failed',
+    }
+  }
 }

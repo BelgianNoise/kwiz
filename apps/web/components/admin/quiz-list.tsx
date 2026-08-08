@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
+import { ExportDialog } from '@/components/admin/export-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -51,6 +52,7 @@ export function QuizList({ quizzes }: { quizzes: QuizRow[] }) {
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [deleting, setDeleting] = useState<QuizRow | undefined>()
+  const [exporting, setExporting] = useState<QuizRow | undefined>()
   const [busy, setBusy] = useState(false)
 
   const create = async (): Promise<void> => {
@@ -123,6 +125,9 @@ export function QuizList({ quizzes }: { quizzes: QuizRow[] }) {
                   >
                     {t('duplicate')}
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setExporting(quiz)}>
+                    {t('export')}
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => setDeleting(quiz)}
                     variant="destructive"
@@ -135,6 +140,16 @@ export function QuizList({ quizzes }: { quizzes: QuizRow[] }) {
           ))}
         </ul>
       )}
+
+      {exporting ? (
+        <ExportDialog
+          open
+          quizId={exporting.id}
+          quizName={exporting.name}
+          games={exporting.games}
+          onClose={() => setExporting(undefined)}
+        />
+      ) : null}
 
       <Dialog open={creating} onOpenChange={setCreating}>
         {/* Focus the one field, without the `autoFocus` attribute jsx-a11y bans. */}
