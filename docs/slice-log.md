@@ -12,6 +12,151 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
+
+**Status:** complete · `pnpm check` green · **512 tests** · lint silent · every screen driven by
+hand against a real quiz, a real LAN address and a real zip
+
+### What was built
+
+PRD 2, end to end: the landing page and dashboard, the quiz editor, the three round editors
+(question set, Jeopardy board, DSMTW finale) with the question sheet, pre-flight, game setup, the
+game hub, the first-run network picker, settings, and export/import.
+
+Underneath: `packages/domain` gained the team palette and the pure `preflight()` rules;
+`packages/db` gained every template writer plus the export/import repositories; `packages/export`
+gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one for this machine
+(`/api/settings/*`), and `/api/transfer` for the two calls that are not JSON.
+
+### Deviations from the specs — all four recorded in the specs themselves
+
+1. **`game_team` and `game_device` are projections here** (protocol §8.2). They are written by
+   `applyProjection` from `TEAM_ADDED` and `DEVICE_JOINED`, so the spec's list of four
+   replay-owned tables is incomplete. The export carries them; the import ignores them and lets
+   replay rebuild them, or every row inserts twice.
+2. **The join code lives in event payloads**, so importing a joinable game rewrites it there rather
+   than patching the row afterwards — a projection may only be written by its event.
+3. **`drizzle-zod` date handling** (conventions §10.3): revive the ISO strings before validating.
+   Per-column refinements built at runtime defeat its typing and TypeScript gives up.
+4. **An accepted buzz credits the team** — found in slice 3, but PRD 1 §8.4 and protocol §4.4 were
+   only reconciled then; see that entry.
+
+### Raised and not resolved
+
+- **`localGames` in the import collision dialog counts games whose `sourceQuizId` matches.** For an
+  imported-as-copy quiz that is right. For a quiz whose games were themselves imported under a
+  different id it is right too. It has not been exercised against a *replaced* quiz whose games
+  predate the identity, because nothing yet creates that state.
+- **The export is built in memory** (`zipSync`). Correct at PRD 1 §2.1's scale and stated in the
+  code; a library of gigabyte videos needs a streaming writer. That is a revisit trigger, not a bug.
+- **`Reclaim space` reads the referenced set outside a transaction.** Safe in the direction that
+  matters — a row inserted mid-sweep points at a file that was already referenced — and the reverse
+  race just leaves a file for the next pass. Worth a second look if reconciliation ever runs
+  automatically rather than on a button.
+
+### Deliberately left out
+
+- **Post-game review and correction (PRD 2 §13)** — build-order defers it to slice 8, where the
+  event log it reads and rewrites actually has content.
+- Nothing from §7.1 or §11.2. **O4's preview is built** — see below.
+- **`[Copy from last game]` copies names and colours only.** Nothing else on a team survives, and
+  nothing else should.
+
+### Found late, by auditing PRD 2 section by section
+
+Two passes found ten things. The first, against build-order's bullets, found three; the second,
+against the PRD's own sections one at a time, found seven more — including a menu two-thirds empty
+and a delete path that did not exist. **None of them would have failed a test**, and `pnpm check`
+was green throughout both.
+
+From the second pass:
+
+- **`Delete game` existed only as message strings.** No repository function, no action, no route.
+  Data model §10 describes the cascade and PRD 2 §12.1 offers the menu item; nothing joined them.
+- **`Export this game` exported all of them.** §14.1 means quiz + *that* game.
+- **Jeopardy columns could not be reordered** — no `moveCategory` anywhere, though §8 lists it.
+- The dashboard showed neither `round N of M` nor the winner (§5), the quiz editor had no `[Export]`
+  or `[⋯]` (§6), there was no custom colour (§11), the assumed team count was not remembered (§9),
+  attachment rows showed no filename or size (§7.1), and deleting an option was not confirmed
+  (§15.2 lists option beside round, category and question).
+
+**The lesson is about how to audit, not about these ten.** Reading the build-order bullet — "the
+Jeopardy board builder" — and looking at a board builder that exists tells you nothing. Reading
+§8's sentence *"[edit ▾] on a category header: rename, reorder, delete"* and then looking for
+`moveCategory` finds the gap in seconds. Go clause by clause through the PRD, not feature by
+feature.
+
+From the first pass:
+
+- **O4's preview was skipped on a bad reading of its dependency.** "It needs PRD 4's renderer" was
+  true and led to the wrong conclusion: the renderer is what the preview *is*.
+- **The `⠿` drag handles did nothing.** Rounds and questions reordered by `↑`/`↓` buttons only,
+  while the list showed a grab handle — §15.2 asks for both routes and §6.1 for the drop to be
+  refused past the pinned finale. Now one hook, sharing the buttons' own predicate so the two
+  cannot drift.
+- **§11.2 was missing entirely**, and with it two protocol actions: `TEAM_ADDED` and `TEAM_UPDATED`
+  existed as events with nothing that could cause them.
+- **`verifyPlayable` could hang forever.** A malformed container that fires neither `loadedmetadata`
+  nor `error` left the promise unsettled and the upload button permanently disabled with no
+  explanation. Bounded at ten seconds, which is far beyond parsing metadata off a local disk.
+
+An affordance that renders is not an affordance that works, and a section that exists is not a
+section that is finished.
+
+### Slice 6 inherits three real components, not stubs
+
+O4's `[Preview on main screen]` was first deferred here on the grounds that it needs PRD 4's
+renderer. That was the wrong call: the preview *is* a scaled-down projector, so building it means
+building the stage — and building the stage twice is exactly what O4 exists to prevent. So
+`components/screen/` now holds the beginning of PRD 4, used by PRD 2:
+
+- **`StageFrame`** — a fixed 1920×1080 box, CSS-scaled to fit. This is §2.2's letterbox rule made
+  mechanical, and it is what makes the preview honest: overflow is a question about *proportions*,
+  and a stage re-laid-out into a small box answers a different question.
+- **`FittedText`** — §2.4's fitting, binary-searched in `useLayoutEffect` so no unfitted frame is
+  ever painted, clamped at §2.1's 4vh floor.
+- **`QuestionStage` + `resolveLayout`** — §6's five named layouts. The resolver is a separate plain
+  module and is tested; the renderer is not, per D18.
+
+**Sizes inside the frame are `cqh`, never `vh`.** A `transform: scale()` does not change what `vh`
+means — it stays relative to the viewport — so `5vh` would be one size in the preview and another on
+the projector, which is the single discrepancy this component cannot have. `container-type: size`
+makes `1cqh` exactly 1% of the frame, so every number in PRD 4 §2.1 transcribes directly.
+
+Slice 6 should **import these and add the remaining stages**, and wire the timer's countdown from
+`deadlineAt` (D52) — `Timer` already takes the value as a prop for that reason.
+
+### What the next agent would otherwise rediscover
+
+**Next evaluates `lib/server/*` twice** — once in the server-component layer, once in the
+route-handler layer. Module-level state is therefore **not** shared between a page and an API
+route. This had been quietly opening two SQLite connections, two projection registries and two
+transports since slice 3; `[kwiz] database up to date` printed twice at boot and nobody looked. It
+first *broke* something here: PRD 2 §4's probe is written by a page and read by a route, so the
+phone reached the machine and the setup screen never noticed. Everything process-wide now goes
+through `lib/server/singleton.ts`, which also survives HMR. **Put any new server-side singleton
+through it.**
+
+- **The dev server's HMR websocket does not reach the in-app browser pane.** Hot updates never
+  arrive, so a message-file edit appears to have done nothing. Restart the dev server rather than
+  debugging the code. Several apparent bugs this slice were a stale bundle.
+- **Radix opens menus on pointerdown**, so a programmatic `.click()` on a `DropdownMenuTrigger`
+  does nothing. Drive it with a real click. Likewise the confirm dialogs are `role="alertdialog"`,
+  not `role="dialog"` — a probe for the latter finds nothing and looks like a broken dialog.
+- **Popover and dialog content is portalled outside `<main>`**, so `get_page_text` (which reads
+  `main`) misses it entirely. Query the DOM instead.
+- **The team palette is a hue wheel, not the array order.** `assignedColour(n)` walks
+  `PALETTE_BY_ASSIGNMENT` (Red, Cyan, Amber, Violet, …) so the first four teams are maximally
+  distinct; `TEAM_PALETTE` is the display order in the picker. They are different sequences on
+  purpose.
+- **Crockford Base32 keeps `1` and `8`** and excludes `I`, `L`, `O`, `U`. A join code containing
+  `1` is not a bug — that check has been made twice now.
+- **`settings.json` lives in the data dir, not the database.** The chosen network address is true
+  of one machine on one wifi and must not travel with a copied `kwiz.db`. It is also why
+  `chooseAddress` validates against the live interface list rather than a format check.
+- **A quiz named like a path is sanitised into the export filename**, and the `content-disposition`
+  header is built from the sanitised value. Do not reintroduce the raw name there.
+
 ## Slice 3 — Transport: SSE, actions, attachments
 
 **Status:** complete · `pnpm check` green · **440 tests** · lint silent · `pnpm build` clean, no

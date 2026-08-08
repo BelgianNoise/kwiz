@@ -963,3 +963,116 @@ describe('finale', () => {
     expect(accepted(game.act({ type: 'END_FINALE' })).events).toEqual([])
   })
 })
+
+/**
+ * PRD 2 §11.2 — a table arriving mid-game. Legal at **every** status, which is the whole point:
+ * PRD 1 does not block late joins, so the gate is a dialog that shows what they missed, not a
+ * refusal here.
+ */
+describe('adding a team', () => {
+  it('appends at the end and writes no adjustment when no opening score is given', () => {
+    const game = driver(LIVE)
+    const decision = accepted(
+      game.act({
+        type: 'ADD_TEAM',
+        teamId: 'team-d',
+        name: 'Late Arrivals',
+        colour: '#A78BFA',
+      }),
+    )
+
+    expect(decision.events).toEqual([
+      {
+        type: 'TEAM_ADDED',
+        // Position is explicit and appended — never insertion order (CLAUDE.md §2.7).
+        payload: {
+          teamId: 'team-d',
+          name: 'Late Arrivals',
+          colour: '#A78BFA',
+          position: 3,
+        },
+      },
+    ])
+    expect(game.state.teams.get('team-d')?.score).toBe(0)
+  })
+
+  /**
+   * §11.2's inline generosity is an **ordinary** adjustment (D15), not a magic opening balance — so
+   * it appears in the audit trail and can be revoked (D41) like anything else.
+   */
+  it('writes the opening score as a normal, silent, revocable adjustment', () => {
+    const game = driver(LIVE)
+    const decision = accepted(
+      game.act({
+        type: 'ADD_TEAM',
+        teamId: 'team-d',
+        name: 'Late Arrivals',
+        colour: '#A78BFA',
+        startingScore: {
+          adjustmentId: 'adj-1',
+          delta: 70,
+          reason: 'joined during round 2',
+        },
+      }),
+    )
+
+    expect(decision.events[1]).toEqual({
+      type: 'SCORE_ADJUSTED',
+      payload: {
+        adjustmentId: 'adj-1',
+        teamId: 'team-d',
+        delta: 70,
+        reason: 'joined during round 2',
+        // The room does not need a banner about bookkeeping for a team that just walked in.
+        announced: false,
+      },
+    })
+    expect(game.state.teams.get('team-d')?.score).toBe(70)
+
+    accepted(game.act({ type: 'REVOKE_ADJUSTMENT', adjustmentId: 'adj-1' }))
+    expect(game.state.teams.get('team-d')?.score).toBe(0)
+  })
+
+  it('writes no adjustment for a zero opening score', () => {
+    const game = driver(LIVE)
+    const decision = accepted(
+      game.act({
+        type: 'ADD_TEAM',
+        teamId: 'team-d',
+        name: 'Late Arrivals',
+        colour: '#A78BFA',
+        startingScore: { adjustmentId: 'adj-1', delta: 0, reason: 'joined late' },
+      }),
+    )
+    expect(decision.events).toHaveLength(1)
+  })
+
+  /** The same retry rule submission has (D8): a doubted network must not produce a second table. */
+  it('is idempotent on the same team id', () => {
+    const game = driver(LIVE)
+    game.act({ type: 'ADD_TEAM', teamId: 'team-d', name: 'Late', colour: '#A78BFA' })
+    expect(
+      accepted(
+        game.act({ type: 'ADD_TEAM', teamId: 'team-d', name: 'Late', colour: '#A78BFA' }),
+      ).events,
+    ).toEqual([])
+  })
+})
+
+describe('renaming a team', () => {
+  /** §13.4 — a misspelled name is worth fixing after the night is over, so there is no status gate. */
+  it('is allowed once the game has finished', () => {
+    const game = driver([...LIVE, { type: 'GAME_FINISHED', payload: {} }])
+    accepted(game.act({ type: 'UPDATE_TEAM', teamId: A, name: 'The Correct Name' }))
+    expect(game.state.teams.get(A)?.name).toBe('The Correct Name')
+  })
+
+  it('does nothing when neither field is given, and refuses an unknown team', () => {
+    const game = driver(LIVE)
+    expect(accepted(game.act({ type: 'UPDATE_TEAM', teamId: A })).events).toEqual([])
+    expect(game.act({ type: 'UPDATE_TEAM', teamId: 'nope', name: 'x' })).toMatchObject({
+      ok: false,
+      error: 'TEAM_NOT_FOUND',
+    })
+  })
+})

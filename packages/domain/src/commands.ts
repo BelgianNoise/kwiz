@@ -122,6 +122,20 @@ export type Command =
     }
   | { type: 'REVOKE_ADJUSTMENT'; adjustmentId: string }
   | { type: 'REGENERATE_CODE'; code: string }
+  /**
+   * PRD 2 §11.2 — a table arriving mid-game is normal, so this is legal at **every** status. The
+   * arithmetic that makes it a decision rather than a surprise lives in `missedSoFar`, and the
+   * optional opening score rides along as an ordinary adjustment so it stays revocable (D41).
+   */
+  | {
+      type: 'ADD_TEAM'
+      teamId: string
+      name: string
+      colour: string
+      startingScore?: { adjustmentId: string; delta: number; reason: string }
+    }
+  /** Renaming works at any time, including after the game finishes (PRD 2 §13.4). */
+  | { type: 'UPDATE_TEAM'; teamId: string; name?: string; colour?: string }
 
 /*
  * **`resync` is deliberately not a command** (protocol §7.2, data model §7.1). Both halves of it are

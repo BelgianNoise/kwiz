@@ -8,7 +8,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   attachmentResponse,
   parseRange,
+  reclaimSpace,
   sniffMimeType,
+  storageStats,
   storeAttachment,
 } from './attachments'
 
@@ -192,6 +194,63 @@ describe('range requests (D5)', () => {
     // Recoverable, and what PRD 2's pre-flight is for — content addressing makes this the failure
     // direction that happens, rather than a file with no row.
     expect(await response.json()).toMatchObject({ error: 'ATTACHMENT_NOT_FOUND' })
+  })
+})
+
+/**
+ * data model §8's reconciliation, surfaced as PRD 2 §16's `Reclaim space`.
+ *
+ * This is the one function in the app that deletes a master's files, so the case that matters is not
+ * "does it free space" but **"does it ever free the wrong thing"**. The referenced set it is given is
+ * the union of both attachment tables precisely so a template row deleted while a game still plays
+ * its file cannot strand that game — and the assertion below is that rule, stated as a test.
+ */
+describe('reclaiming space', () => {
+  const upload = (bytes: Uint8Array) =>
+    storeAttachment(paths, bytes, { originalName: 'x.png', maxBytes: 1024 })
+
+  it('deletes only files no row references, and reports what it freed', async () => {
+    const kept = await upload(PNG)
+    const orphan = await upload(
+      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9]),
+    )
+    if (!kept.ok || !orphan.ok || !kept.data || !orphan.data)
+      throw new Error('upload failed')
+
+    const result = await reclaimSpace(paths, new Set([kept.data.checksum]))
+
+    expect(result.removed).toBe(1)
+    expect(result.bytes).toBeGreaterThan(0)
+    expect(await readdir(paths.attachments)).toEqual([`${kept.data.checksum}.png`])
+  })
+
+  it('is a no-op when every file is referenced', async () => {
+    const stored = await upload(PNG)
+    if (!stored.ok || !stored.data) throw new Error('upload failed')
+
+    expect(await reclaimSpace(paths, new Set([stored.data.checksum]))).toEqual({
+      removed: 0,
+      bytes: 0,
+    })
+    expect(await readdir(paths.attachments)).toHaveLength(1)
+  })
+
+  /**
+   * §16 shows the reclaimable total *before* offering the button, so the two must agree: a master told
+   * "2 unused files" and then given "removed 5" has been lied to about their own disk.
+   */
+  it('agrees with what storageStats offered to reclaim', async () => {
+    const kept = await upload(PNG)
+    await upload(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]))
+    if (!kept.ok || !kept.data) throw new Error('upload failed')
+
+    const referenced = new Set([kept.data.checksum])
+    const before = await storageStats(paths, referenced)
+    const result = await reclaimSpace(paths, referenced)
+
+    expect(before.attachmentCount).toBe(2)
+    expect(result.removed).toBe(before.orphanCount)
+    expect(result.bytes).toBe(before.orphanBytes)
   })
 })
 

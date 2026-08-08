@@ -55,6 +55,29 @@ export function findAttachmentFile(
   )
 }
 
+/**
+ * Every checksum still referenced by a row — the query half of data model §8's reconciliation.
+ *
+ * **The union of both tables is the point.** Deleting a template attachment is safe precisely because
+ * a game copy keeps the checksum referenced, so sweeping on the template table alone would delete the
+ * file out from under a game that is about to play it.
+ *
+ * Returned as a `Set` because the caller's loop is one `has()` per file on disk; the whole set is a
+ * few thousand 64-character strings at the scale in PRD 1 §2.1.
+ */
+export function referencedChecksums(database: KwizDatabase): Set<string> {
+  const template = database.db
+    .select({ checksum: attachment.checksum })
+    .from(attachment)
+    .all()
+  const copies = database.db
+    .select({ checksum: gameAttachment.checksum })
+    .from(gameAttachment)
+    .all()
+
+  return new Set([...template, ...copies].map((row) => row.checksum))
+}
+
 export interface NewAttachment {
   questionId: string
   kind: AttachmentKind

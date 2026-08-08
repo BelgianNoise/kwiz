@@ -63,6 +63,9 @@ async function firstFrames(response: Response, chunks = 2): Promise<string> {
 
   const decoder = new TextDecoder()
   let text = ''
+  // Sequential by nature: frames arrive in order, and reading them in parallel would be reading a
+  // stream out from under itself.
+  // oxlint-disable no-await-in-loop
   for (let read = 0; read < chunks; read += 1) {
     // The stream stays open by design, so a read that would block ends the loop instead.
     const next = await Promise.race([
@@ -72,6 +75,7 @@ async function firstFrames(response: Response, chunks = 2): Promise<string> {
     if (!next || next.done) break
     text += decoder.decode(next.value)
   }
+  // oxlint-enable no-await-in-loop
   await reader.cancel()
   return text
 }
@@ -166,10 +170,14 @@ describe('refusing a stream', () => {
     if (!joined.ok || !joined.data) throw new Error('expected a join')
 
     const noToken: Record<string, string> = {}
+    // Both refusals, checked the same way. Sequential because each opens a stream.
+    // oxlint-disable-next-line no-await-in-loop
     for (const headers of [noToken, { 'x-kwiz-device': 'invented' }]) {
+      // oxlint-disable no-await-in-loop
       const refused = await openStream(request(headers), seed.gameId, 'PLAYER')
       expect(refused.status).toBe(401)
       expect(await refused.json()).toMatchObject({ error: 'UNKNOWN_DEVICE' })
+      // oxlint-enable no-await-in-loop
     }
 
     // The token is real, but it belongs to the other game (D21).

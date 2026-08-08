@@ -37,9 +37,60 @@ export { applyProjection, recomputeScore } from './projections'
 
 export { loadGameContent } from './content'
 
+export { loadQuizTree } from './quiz-tree'
+
+export {
+  gameExportSchema,
+  gamesFileSchema,
+  quizFileSchema,
+  type GameExport,
+  type GamesFile,
+  type QuizFile,
+} from './export-schema'
+
+export { collectQuizExport, type QuizExport } from './export-read'
+
+export {
+  importQuiz,
+  type ImportInput,
+  type ImportMode,
+  type ImportResult,
+} from './export-write'
+
+export {
+  createCategory,
+  createQuestion,
+  createQuiz,
+  createRound,
+  deleteAttachment,
+  deleteCategory,
+  deleteQuestion,
+  deleteQuiz,
+  deleteRound,
+  duplicateQuiz,
+  listQuizzes,
+  moveCategory,
+  moveQuestion,
+  moveRound,
+  renameCategory,
+  setAcceptedAnswers,
+  setAttachmentVisibility,
+  setKeywords,
+  setOptions,
+  setValueLadder,
+  updateQuestion,
+  updateQuiz,
+  updateRound,
+  type NewQuestionInput,
+  type OptionInput,
+  type QuestionPatch,
+  type QuizSummary,
+} from './authoring'
+
 export {
   findAttachmentFile,
   insertTemplateAttachment,
+  referencedChecksums,
   type AttachmentFile,
   type NewAttachment,
 } from './attachments'
@@ -53,13 +104,20 @@ export {
 } from './drafts'
 
 export {
+  deleteGame,
   findDeviceByToken,
   findGame,
+  gameLoss,
+  gameWinners,
   findJoinableGameByCode,
   generateUnusedCode,
+  isStale,
+  listGames,
   touchDevice,
   JOINABLE_STATUSES,
+  type GameLoss,
   type GameRow,
+  type GameSummary,
 } from './games'
 
 export {

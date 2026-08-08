@@ -63,6 +63,21 @@ const en = {
 
   common: {
     appName: 'Kwiz',
+    cancel: 'Cancel',
+    save: 'Save',
+    delete: 'Delete',
+    create: 'Create',
+    add: 'Add',
+    rename: 'Rename',
+    close: 'Close',
+    back: 'Back',
+    saved: 'Saved',
+    saving: 'Saving…',
+    saveFailed: 'Not saved — check your connection.',
+    teams: 'Teams',
+    dragToReorder: 'Drag to reorder',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
 
     /**
      * Language names are **never translated** and are identical in every catalogue
@@ -76,11 +91,450 @@ const en = {
     },
   },
 
+  /** PRD 2 §3 — the only page a guest and a master both see. */
   landing: {
-    scaffold: {
+    playing: {
+      title: "I'm playing",
+      detail: 'Scan the QR code on screen, or enter the code.',
+      codeLabel: 'Game code',
+      join: 'Join',
+      invalid: "That code doesn't look right.",
+    },
+    hosting: {
+      title: "I'm hosting",
+      detail: 'Manage my quizzes and run a game.',
+      open: 'Open',
+    },
+  },
+
+  admin: {
+    /** PRD 2 §5 — quizzes above games, and finished games out of the way. */
+    dashboard: {
       title: 'Kwiz',
-      subtitle: 'The scaffold is running.',
-      detail: 'Surfaces are built in build-order slices 4 to 7.',
+      settings: 'Settings',
+      quizzes: 'Quizzes',
+      newQuiz: 'New quiz',
+      import: 'Import…',
+      games: 'Games',
+      showFinished: 'Show finished',
+      hideFinished: 'Hide finished',
+      play: 'Play',
+      open: 'Open',
+      rounds: '{count, plural, one {# round} other {# rounds}}',
+      questions: '{count, plural, one {# question} other {# questions}}',
+      teamCount: '{count, plural, one {# team} other {# teams}}',
+      edited: 'edited {date}',
+      code: 'code {code}',
+      roundOf: 'round {number} of {total}',
+      winner: 'winner: {name}',
+      drawBetween: 'a {count}-way draw',
+      templateUpdated: 'Template updated',
+      resync: 'Re-sync',
+      duplicate: 'Duplicate',
+      export: 'Export',
+      /** §5 — a real screen, and the moment the database is created (PRD 1 §6.6). */
+      emptyQuizzes: 'No quizzes yet.',
+      emptyQuizzesDetail: 'Create one, or import a .zip you exported elsewhere.',
+      emptyGames: 'No games yet. Press Play on a quiz to set one up.',
+      newQuizTitle: 'New quiz',
+      newQuizLabel: 'Name',
+      newQuizPlaceholder: 'Pub Quiz #4',
+      deleteQuizTitle: 'Delete “{name}”?',
+      /**
+       * §5 names what survives, because masters assume deleting a quiz takes their history with
+       * it and therefore never clean up. Games keep their own copies (data model §10).
+       */
+      deleteQuizKeepsGames:
+        '{count, plural, =0 {This quiz has no played games.} one {# played game will be kept and stays reviewable.} other {# played games will be kept and stay reviewable.}}',
+      status: {
+        SETUP: 'Setup',
+        LIVE: 'Live',
+        FINISHED: 'Finished',
+        ABANDONED: 'Abandoned',
+      },
+    },
+
+    /** PRD 2 §6 — the round list, and the finale's one legal position. */
+    quiz: {
+      backToDashboard: 'Dashboard',
+      name: 'Name',
+      description: 'Description',
+      rounds: 'Rounds',
+      addRound: 'Add round',
+      openRound: 'Open',
+      /** §6 — balance between rounds is the thing a master worries about while authoring. */
+      totals: '{questions} questions · {points} points · est. {minutes} min',
+      roundSummary: '{questions} questions · {points} pts',
+      /** A finale scores seconds, not points (D51), so `0 pts` would read as a mistake. */
+      roundSummaryFinale: '{questions} questions',
+      empty: 'No rounds yet. Add one to start writing questions.',
+      addRoundTitle: 'Add a round',
+      roundTypeLabel: 'Type',
+      roundTitleLabel: 'Title',
+      roundTitlePlaceholder: 'Music',
+      type: {
+        QUESTION_SET: 'Questions',
+        JEOPARDY: 'Jeopardy board',
+        DSMTW_FINALE: 'Finale',
+      },
+      typeHint: {
+        QUESTION_SET: 'A list of questions, any answer method.',
+        JEOPARDY: 'A board of categories and values. Every tile is a buzzer question.',
+        DSMTW_FINALE: 'The timed keyword round. Always last, and only one per quiz.',
+      },
+      /** §6.1 — a one-line reason, rather than a silently missing option. */
+      finaleExists: 'This quiz already ends with a finale.',
+      finalePinned: 'Pinned as the last round',
+      deleteRoundTitle: 'Delete “{title}”?',
+      deleteRoundBody:
+        '{count, plural, =0 {This round has no questions.} one {Its # question is deleted too.} other {Its # questions are deleted too.}}',
+      preflight: 'Check',
+    },
+
+    /** PRD 2 §7 — the QUESTION_SET round editor and its side sheet. */
+    round: {
+      backToQuiz: 'Quiz',
+      title: 'Title',
+      defaultPoints: 'Default points',
+      defaultTimer: 'Default timer',
+      seconds: 's',
+      noTimer: 'No timer',
+      questions: 'Questions',
+      addQuestion: 'Add question',
+      empty: 'No questions yet.',
+      untitled: 'Untitled question',
+      /** §7 — a round default silently rewriting a round's scoring is a nasty surprise. */
+      cascadeTitle: 'Change the default for this round?',
+      cascadeBody:
+        '{count, plural, =0 {No questions inherit this default.} one {# question will change from {from} to {to}.} other {# questions will change from {from} to {to}.}}',
+      deleteQuestionTitle: 'Delete this question?',
+      ready: 'Ready',
+      incomplete: 'Incomplete',
+    },
+
+    /** PRD 2 §7.1 — the question sheet, over the list rather than on its own page. */
+    question: {
+      heading: 'Question {index} of {total}',
+      previous: 'Previous question',
+      next: 'Next question',
+      prompt: 'Prompt',
+      promptPlaceholder: 'Who released "Kid A" in 2000?',
+      answerMethod: 'Answer method',
+      method: {
+        FREE_TEXT: 'Free text',
+        MULTIPLE_CHOICE: 'Multiple choice',
+        BUZZER: 'Buzzer',
+        DO: 'Do / challenge',
+        KEYWORDS: 'Keywords',
+      },
+      points: 'Points',
+      timer: 'Timer',
+      noTimer: 'No timer',
+      /** §8 and §9.1 — stated as a fact, not shown as a disabled control (D34, I18). */
+      lockedBuzzer: 'Jeopardy tiles are always buzzer questions.',
+      lockedKeywords: 'A finale question is always a keyword question.',
+      deleteOptionTitle: 'Delete this option?',
+      correctAnswer: 'Correct answer',
+      alsoAccept: 'Also accept',
+      addAlternative: 'Add alternative',
+      /** §7.2 — telling the master here turns a live-game problem into an authoring one (D22). */
+      matchingNote:
+        'Matching is exact after lowercasing and trimming. Anything else comes to you to accept or deny during the game.',
+      buzzerNote:
+        'You will judge spoken answers yourself. This is shown on your control screen and revealed to the room afterwards.',
+      options: 'Options',
+      optionsHint: 'Two to four, and pick the correct one.',
+      addOption: 'Add option',
+      scoring: 'Scoring',
+      scoringMode: {
+        WINNER_TAKES_ALL: 'Winner takes all',
+        PER_TEAM_SCORE: 'Score each team',
+      },
+      tiePayout: 'If several teams tie',
+      payout: { FULL: 'Each gets full points', SPLIT: 'Split the points' },
+      /** §7.2 — `points` doubling as the per-team maximum is genuinely non-obvious (D24). */
+      perTeamNote:
+        'Each team gets 0-{points} points. Change "Points" above to change the maximum.',
+      attachments: 'Attachments',
+      addAttachment: 'Add file',
+      /** O6 — verified in the browser before it is uploaded at all. */
+      checking: 'Checking...',
+      emptyAttachments: 'No media on this question yet.',
+      playable: 'Playable',
+      showOnPlayers: 'Show on player devices',
+      showOnPlayersHint: 'Images only. Audio and video play on the main screen.',
+      deleteAttachment: 'Remove file',
+      previewOnScreen: 'Preview on main screen',
+      masterNotes: 'Master notes',
+      /** §7.1 — labelled with its guarantee, which is why a master will trust it (invariant 7). */
+      masterNotesHint: 'Never shown to anyone else.',
+      keywords: 'Keywords',
+      keywordsHint: 'Exactly five.',
+      keywordRequired: 'Required',
+      wordShape: '{count, plural, one {# word} other {# words}}',
+      /** §9.1 — the shape is what the room sees, and it changes authoring decisions (D53). */
+      keywordShapeNote:
+        'The room sees blurred word shapes until you mark each one. "wrought iron" shows as two blurred words of 7 and 4 letters.',
+    },
+
+    /** PRD 2 §8 — the board is authored as a board, because that is what the room will see. */
+    board: {
+      valueLadder: 'Value ladder',
+      addRow: 'Add row',
+      addCategory: 'Add category',
+      categoryName: 'Category name',
+      moveCategoryLeft: 'Move left',
+      moveCategoryRight: 'Move right',
+      renameCategory: 'Rename category',
+      deleteCategoryTitle: 'Delete "{name}"?',
+      deleteCategoryBody:
+        '{count, plural, =0 {It has no tiles.} one {Its # tile is deleted too.} other {Its # tiles are deleted too.}}',
+      everyTileBuzzer: 'Every tile is a buzzer question - any team can buzz in.',
+      addTile: 'Add a tile',
+      emptyBoard: 'No categories yet. Add one to start building the board.',
+      emptyTiles: '{count, plural, one {# empty tile} other {# empty tiles}}',
+      incompleteTiles:
+        '{count, plural, one {# incomplete question} other {# incomplete questions}}',
+    },
+
+    /** PRD 2 §9 — the finale editor: a list of keyword questions plus the two numbers. */
+    finale: {
+      pinnedNote: 'Pinned as the last round. A quiz can have at most one finale.',
+      rate: 'Points to seconds',
+      rateSuffix: 'points = 1 second',
+      /** §9 — the conversion shown *working*, not just entered. */
+      rateWorked: 'A team on {score} pts starts with {seconds}s.',
+      rateQuizTotal:
+        'Your quiz is worth {points} pts - a strong team is about {seconds}s.',
+      penalty: 'Penalty per keyword',
+      penaltySuffix: 's off every other team',
+      penaltyNote: 'Set at game setup too, once you know how many teams play.',
+      suggested: '{have} of ~{suggested} suggested',
+      assumeTeams: 'Assume {count} teams',
+      /** §9 — a shortfall is a warning, never a block: over-supplying costs nothing (D58). */
+      shortfall:
+        'For {teams} teams at {penalty}s, about {suggested} questions are usually needed to get down to one survivor. You have {have}.',
+      keywordCount: '{count, plural, one {# keyword} other {# keywords}}',
+    },
+
+    /** PRD 2 §10 — run when [Play] is pressed. §1.1 is why it exists. */
+    preflight: {
+      heading: '{name} - ready to play?',
+      problems:
+        '{count, plural, one {# problem must be fixed} other {# problems must be fixed}}',
+      warnings:
+        '{count, plural, one {# thing worth a look} other {# things worth a look}}',
+      healthy:
+        '{questions} questions, {attachments} attachments verified, {rounds} rounds',
+      fix: 'Fix',
+      view: 'View',
+      /** §10 — deliberately available even with errors: blocking protects data at the event's cost. */
+      playAnyway: 'Play anyway',
+      fixProblems: 'Fix problems',
+      setUpGame: 'Set up the game',
+      round: 'Round {number}',
+      code: {
+        EMPTY_PROMPT: 'no question text',
+        NO_ACCEPTED_ANSWER: 'no correct answer',
+        MC_NEEDS_ONE_CORRECT: 'needs two to four options with exactly one correct',
+        DO_NO_SCORING_MODE: 'no scoring mode chosen',
+        ATTACHMENT_MISSING: 'a file is missing from disk or has changed',
+        FINALE_KEYWORD_COUNT: 'needs exactly five keywords, has {count}',
+        MULTIPLE_FINALES: 'a quiz can only have one finale',
+        FINALE_NOT_LAST: 'the finale has to be the last round',
+        FINALE_RATE_MISSING: 'no points-to-seconds rate set',
+        KEYWORDS_OUTSIDE_FINALE: 'keyword questions only belong in a finale',
+        FINALE_QUESTION_NOT_KEYWORDS: 'a finale question has to be a keyword question',
+        ROUND_EMPTY: 'no questions in this round',
+        SINGLE_ACCEPTED_ANSWER: 'only one accepted answer, so near-misses come to you',
+        SHORT_TIMER: 'only {seconds}s to answer',
+        JEOPARDY_UNEVEN_COLUMNS: 'columns are uneven - the tallest has {tallest}',
+        JEOPARDY_EMPTY_TILES: '{empty} empty tiles',
+        FINALE_RATE_SUSPICIOUS:
+          'the top team would start with only {seconds}s - the rate may be inverted',
+        FINALE_TOO_FEW_QUESTIONS:
+          '{teams} teams usually need about {suggested} questions; you have {have}',
+      },
+    },
+
+    /** PRD 2 §11 — game setup, against the clock in a noisy room (§1.1). */
+    setup: {
+      heading: 'New game from "{name}"',
+      teams: 'Teams',
+      addTeam: 'Add team',
+      /** §11 — the same pub tends to have the same teams, and re-typing eight names costs time. */
+      copyFromLast: 'Copy from last game',
+      teamName: 'Team name',
+      defaultTeamName: 'Team {number}',
+      colour: 'Colour',
+      customColour: 'Custom',
+      colourTooDark: 'Too dark to read on the projected screen.',
+      colourTaken: 'already used',
+      removeTeam: 'Remove team',
+      playerLanguage: 'Player language',
+      playerLanguageHint: 'Players can change this on their own phone.',
+      createGame: 'Create game',
+      /** §11.1 — shown only when the quiz ends in a finale, because the penalty depends on this. */
+      finaleHeading: 'This quiz ends with a finale.',
+      teamsPlaying: '{count, plural, one {# team playing} other {# teams playing}}',
+      penaltyReach: 'With {teams} teams, 5 keywords can remove up to {seconds}s.',
+      penaltyWarning: 'At this penalty a single question can end the round.',
+      rateFromQuiz: '{rate} points = 1 second (from the quiz)',
+      questionsOk: 'About {suggested} are usually needed for these {teams} teams.',
+      questionsShort:
+        'The finale has {have, plural, one {# question} other {# questions}}. About {suggested} are usually needed for these {teams} teams.',
+      lowerPenalty: 'Lower the penalty',
+    },
+
+    /** PRD 2 §12 — the hub for one game, before, during and after. */
+    game: {
+      join: 'Join',
+      code: 'Code',
+      regenerate: 'New code',
+      /** §12 — the obvious fear is that a new code kicks everyone out. It does not. */
+      regenerateTitle: 'Generate a new code?',
+      regenerateBody: 'Devices that have already joined keep working.',
+      openMainScreen: 'Open main screen',
+      openControl: 'Open control screen',
+      teams: 'Teams',
+      devices: '{count, plural, =0 {no devices} one {# device} other {# devices}}',
+      devicesJoined: '{count} of {total} devices joined',
+      rounds: '{rounds} rounds, {questions} questions',
+      notStarted: 'not started',
+      noAddress: 'Choose a network address to show a QR code players can scan.',
+      staleTitle: 'Template updated since this game was created',
+      staleBody:
+        'Teams, devices and the join code are kept. Questions are refreshed from the quiz.',
+      resync: 'Re-sync',
+      addTeam: 'Add team',
+      abandon: 'Abandon game',
+      abandonTitle: 'Abandon this game?',
+      abandonBody: 'It ends without being marked finished. The room is mid-quiz.',
+      deleteGame: 'Delete game',
+      deleteTitle: 'Delete this game?',
+      deleteBody:
+        'This game, its {teams} teams and all its answers go. The quiz itself is kept.',
+      exportGame: 'Export this game',
+    },
+
+    /** PRD 2 §16 — "small and boring on purpose". */
+    settings: {
+      title: 'Settings',
+      network: 'Network',
+      noAddress: 'No address chosen yet, so join links stay relative to this browser.',
+      addressStale:
+        'This address is no longer on any adapter. Pick it again before the room arrives.',
+      changeAddress: 'Change address',
+      language: 'Language',
+      languageHint: 'This device only. It does not change what players see.',
+      sound: 'Sound',
+      muteAll: 'Mute all quiz sounds',
+      storage: 'Storage',
+      dataDir: 'Data directory',
+      databaseSize: 'Database',
+      attachments: 'Attachments',
+      attachmentSummary: '{count, plural, one {# file} other {# files}}, {size}',
+      reclaim: 'Reclaim space',
+      reclaimable: '{count, plural, one {# unused file} other {# unused files}}, {size}',
+      nothingToReclaim: 'Nothing to reclaim.',
+      reclaimed: 'Removed {count, plural, one {# file} other {# files}}, freeing {size}.',
+      about: 'About',
+      schemaVersion: 'Export format',
+      migrationStatus: 'Database',
+      migration: {
+        UP_TO_DATE: 'Up to date',
+        CREATED: 'Created and migrated',
+        APPLIED: 'Migrations applied',
+        DECLINED: 'Migrations pending - the server is running read-only',
+      },
+    },
+
+    /** PRD 2 §7.1 / O4 — the real PRD 4 renderer, scaled, in a mock OPEN state. */
+    preview: {
+      title: 'On the main screen',
+      body: 'The projected screen at its real proportions. Check the prompt fits and the image survives a projector.',
+    },
+    /** PRD 2 §11.2 / O5 — a table arriving mid-game, and the arithmetic that makes it a decision. */
+    addTeam: {
+      title: 'Add a team',
+      titleMidGame: 'Add a team mid-game?',
+      inProgress: 'Round {round} of {total} is in progress.',
+      missed:
+        'This team has missed {questions, plural, one {# question} other {# questions}} worth {points} points.',
+      ceiling: 'Their maximum possible score is now {theirs} (others: {others}).',
+      startingScore: 'Starting score',
+      startOnZero: 'Start on 0',
+      givePoints: 'Give them',
+      halfOfMissed: 'points - half of what they missed is {suggested}',
+      adjustmentReason: 'joined during round {round}',
+      recordedAs: 'Recorded as a score adjustment with the reason "{reason}".',
+      cancel: 'Cancel',
+      addTeam: 'Add team',
+    },
+    /** PRD 2 §14.1 — sizes are computed, not estimated. */
+    export: {
+      title: 'Export "{name}"',
+      body: 'Everything needed to run this quiz on another machine.',
+      quizOnly: 'Quiz only',
+      quizOnlyHint: 'For taking to another machine.',
+      withGames: 'Quiz + {count, plural, one {# played game} other {# played games}}',
+      withGamesHint: 'For archiving a night, with every answer and score.',
+      includeAttachments:
+        'Include attachments ({count, plural, one {# file} other {# files}}, {size})',
+      includeAttachmentsPlain: 'Include attachments',
+      cancel: 'Cancel',
+      export: 'Export',
+    },
+
+    /** §14.2 — the dialog that stands between a master and deleting their own work. */
+    import: {
+      importButton: 'Import…',
+      title: 'Import "{name}"',
+      summary:
+        '{rounds, plural, one {# round} other {# rounds}}, {questions, plural, one {# question} other {# questions}}.',
+      missingMedia:
+        '{count, plural, one {# file is} other {# files are}} missing or damaged. Everything else imports; you can re-upload the media afterwards.',
+      collision: 'You already have a quiz with this identity.',
+      field: 'Property',
+      onThisMachine: 'On this machine',
+      inThisFile: 'In this file',
+      edited: 'Edited',
+      rounds: 'Rounds',
+      roundsValue: '{rounds} · {questions} questions',
+      games: 'Games',
+      gamesValue: '{count, plural, one {# played} other {# played}}',
+      fileIsOlder: 'The file is older than your local copy.',
+      fileIsNewer: 'The file is newer than your local copy.',
+      asCopy: 'Import as a separate copy',
+      replace: 'Replace my local copy',
+      replaceCost:
+        'Deletes it and {games, plural, =0 {no games} one {its # game} other {its # games}}.',
+      cancel: 'Cancel',
+      import: 'Import',
+    },
+  },
+
+  /** PRD 2 §4 / D10 — the screen that stops a dead QR code from being the first thing a room sees. */
+  setup: {
+    heading: 'Which address should players use?',
+    body: 'This laptop has several. Players need the one on the same network as their phones.',
+    noAddresses: 'No network addresses found. Is this machine connected to a network?',
+    continue: 'Continue',
+    reason: {
+      PRIVATE: 'reachable',
+      PUBLIC: 'public address',
+      VIRTUAL: 'no route from other devices',
+      LOOPBACK: 'this machine only',
+      LINK_LOCAL: 'no network assigned',
+    },
+    probe: {
+      start: 'Test with my phone',
+      waiting: 'Scan this with a phone on the venue wifi.',
+      confirmed: 'Your phone reached this machine.',
+      cancel: 'Cancel',
+      /** Rendered on the phone, so it is player copy: short, and it answers "did it work?". */
+      reached: 'You reached the quiz laptop.',
+      reachedBody: 'This network works. Hand the phone back to the quiz master.',
     },
   },
 }

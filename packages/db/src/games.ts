@@ -1,8 +1,8 @@
 import { codeFromBytes, normaliseCode, type GameStatus } from '@kwiz/domain'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
-import { game, gameDevice } from './schema'
+import { game, gameAnswer, gameDevice, gameTeam, quiz } from './schema'
 
 /**
  * Resolution: turning a code or a device token into a game, and minting a code that is free.
@@ -124,4 +124,142 @@ export function generateUnusedCode(
   // 32^6 codes against at most five live games (PRD 1 §2.1) — reaching here means the generator is
   // not random, which is worth failing loudly over rather than looping for ever.
   throw new Error(`could not find an unused game code in ${attempts} attempts`)
+}
+
+/**
+ * The dashboard's game list (PRD 2 §5).
+ *
+ * Carries `templateRevision` beside the game's own `quizRevision` so the **`⚠ template updated`**
+ * badge can exist: without it a master edits the template, wonders why the game still shows the
+ * typo, and never learns that a re-sync is a thing (data model §7.1).
+ */
+export interface GameSummary extends GameRow {
+  createdAt: Date
+  finishedAt: Date | null
+  teams: number
+  /** `null` once the template has been deleted — the game is self-contained and stays playable. */
+  templateRevision: number | null
+}
+
+export function listGames(database: KwizDatabase): GameSummary[] {
+  const { db } = database
+
+  const rows = db
+    .select({
+      id: game.id,
+      status: game.status,
+      code: game.code,
+      quizName: game.quizName,
+      sourceQuizId: game.sourceQuizId,
+      quizRevision: game.quizRevision,
+      createdAt: game.createdAt,
+      finishedAt: game.finishedAt,
+      templateRevision: quiz.revision,
+    })
+    .from(game)
+    .leftJoin(quiz, eq(quiz.id, game.sourceQuizId))
+    .orderBy(desc(game.createdAt))
+    .all()
+
+  const teamCounts = new Map(
+    db
+      .select({ gameId: gameTeam.gameId, count: sql<number>`count(*)` })
+      .from(gameTeam)
+      .groupBy(gameTeam.gameId)
+      .all()
+      .map((row) => [row.gameId, row.count]),
+  )
+
+  return rows.map((row) => ({ ...row, teams: teamCounts.get(row.id) ?? 0 }))
+}
+
+/**
+ * PRD 2 §5's `winner: Quizzly…` column, for every finished game at once.
+ *
+ * **From `game_team.score`, not from a replay.** The score is a projection kept in step by
+ * `appendAndProject`, so it is already correct; folding every finished game's log to render a
+ * dashboard row would make the list slower with every quiz a master has ever run.
+ *
+ * A tie returns every team on the top score, because "winner: A" when B drew with them is a lie the
+ * dashboard would tell silently.
+ */
+export function gameWinners(database: KwizDatabase): Map<string, string[]> {
+  const rows = database.db
+    .select({
+      gameId: gameTeam.gameId,
+      name: gameTeam.name,
+      score: gameTeam.score,
+      status: game.status,
+    })
+    .from(gameTeam)
+    .innerJoin(game, eq(game.id, gameTeam.gameId))
+    .where(eq(game.status, 'FINISHED'))
+    .all()
+
+  const best = new Map<string, { score: number; names: string[] }>()
+  for (const row of rows) {
+    const current = best.get(row.gameId)
+    if (!current || row.score > current.score) {
+      best.set(row.gameId, { score: row.score, names: [row.name] })
+    } else if (row.score === current.score) {
+      current.names.push(row.name)
+    }
+  }
+
+  return new Map([...best].map(([gameId, entry]) => [gameId, entry.names]))
+}
+
+/** True when a `SETUP` game is behind its template and a re-sync would bring something new. */
+export function isStale(summary: GameSummary): boolean {
+  return (
+    summary.status === 'SETUP' &&
+    summary.templateRevision !== null &&
+    summary.templateRevision > summary.quizRevision
+  )
+}
+
+/**
+ * What deleting this game would cost, for §12.1's confirmation.
+ *
+ * Counted rather than estimated, and **named in the dialog**, because the fear that stops masters
+ * cleaning up is not knowing what goes — the same reason §5's quiz delete says what survives.
+ */
+export interface GameLoss {
+  teams: number
+  answers: number
+  quizName: string
+}
+
+export function gameLoss(database: KwizDatabase, gameId: string): GameLoss | undefined {
+  const row = database.db
+    .select({ quizName: game.quizName })
+    .from(game)
+    .where(eq(game.id, gameId))
+    .get()
+  if (!row) return undefined
+
+  const count = (table: typeof gameTeam | typeof gameAnswer): number =>
+    database.db
+      .select({ n: sql<number>`count(*)` })
+      .from(table)
+      .where(eq(table.gameId, gameId))
+      .get()?.n ?? 0
+
+  return { teams: count(gameTeam), answers: count(gameAnswer), quizName: row.quizName }
+}
+
+/**
+ * Data model §10 — deleting a game **cascades** to its copy subtree, teams, devices, events, drafts
+ * and all four projections. One statement, because every one of those tables hangs off `game.id`.
+ *
+ * Offered per game (§12.1) and deliberately **not** in bulk (Q5): a master who ran a game by mistake
+ * must be able to remove it, but a "delete everything older than N" sweep is destructive over the
+ * only copy of their history, and it solves a storage problem that does not exist — game copies are
+ * a couple of hundred rows and attachment files are shared by checksum.
+ *
+ * The quiz is untouched. `sourceQuizId` points *at* the quiz, not the other way round.
+ */
+export function deleteGame(database: KwizDatabase, gameId: string): boolean {
+  const result = database.db.delete(game).where(eq(game.id, gameId)).run()
+  return result.changes > 0
 }

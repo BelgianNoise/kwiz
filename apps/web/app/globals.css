@@ -161,3 +161,25 @@
     font-family: var(--font-sans);
   }
 }
+
+/*
+ * PRD 4 §6.1's equaliser — a fixed decorative loop, never real spectrum analysis.
+ *
+ * Its one job is to prove sound is playing, and its going still is the "no sound" signal. Defined
+ * here rather than inline because a keyframes rule cannot live in a style attribute.
+ */
+@keyframes kwiz-eq {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* §15 — motion is decorative here, so it goes away entirely when the viewer asks for that. */
+@media (prefers-reduced-motion: reduce) {
+  [style*='kwiz-eq'] {
+    animation: none !important;
+  }
+}

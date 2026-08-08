@@ -50,6 +50,12 @@ const SPEC_PATHS = [
   'adjustments/:adjustmentId/revoke',
   'regenerate-code',
   'resync',
+  // PRD 2 §11.2 and §13.4 — added to the spec in slice 4, when it turned out `TEAM_ADDED` and
+  // `TEAM_UPDATED` existed as events with no action that could cause them.
+  'teams',
+  'teams/:teamId',
+  // §12.1 — the cascade was in data model §10 and the menu item in the PRD, with no action between.
+  'delete',
 ]
 
 describe('the action catalogue', () => {
@@ -57,8 +63,8 @@ describe('the action catalogue', () => {
     const implemented = ROUTES.map((route) => route.pattern.join('/'))
 
     expect([...implemented].sort()).toEqual([...SPEC_PATHS].sort())
-    // 37 here plus `POST /api/games/join`, which is the 38 the spec lists.
-    expect(implemented).toHaveLength(37)
+    // 40 here plus `POST /api/games/join`, which is the 41 the spec lists.
+    expect(implemented).toHaveLength(40)
   })
 
   it('requires a device token on exactly the four player actions', () => {

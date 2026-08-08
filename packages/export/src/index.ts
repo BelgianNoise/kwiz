@@ -1,15 +1,30 @@
 /**
- * `@kwiz/export` — the export zip: writing, reading, manifest and validation
- * (protocol §8).
+ * `@kwiz/export` — the export zip: writing, reading, manifest and validation (protocol §8).
  *
- * The zip and its manifest are wholly untrusted input, which is why
- * `SCHEMA_VERSION_UNSUPPORTED`, `CHECKSUM_MISMATCH` and `MANIFEST_INVALID` exist as typed
- * errors (conventions §4) rather than one generic import failure.
+ * The zip and its manifest are wholly untrusted input, which is why `SCHEMA_VERSION_UNSUPPORTED`,
+ * `CHECKSUM_MISMATCH` and `MANIFEST_INVALID` exist as typed errors (conventions §4) rather than one
+ * generic import failure. A master learns *which* file is damaged, not that something went wrong.
  *
- * **No zip library is chosen yet.** conventions §1's dependency table does not name one,
- * and slice 0 has no reason to pick — see the slice-0 entry in `slice-log.md`. Whoever
- * implements the format flags the addition per agent-workflow §3.4.
- *
- * The contents arrive in build-order slice 4.
+ * The zip library is **`fflate`**, added in slice 4 per agent-workflow §3.4: small, no dependencies
+ * of its own, and synchronous in both directions, which suits a format read and written whole.
  */
-export {}
+
+export {
+  exportFileName,
+  manifestSchema,
+  ATTACHMENT_DIR,
+  GAMES_FILE,
+  MANIFEST_FILE,
+  QUIZ_FILE,
+  type Manifest,
+} from './manifest'
+
+export {
+  readExport,
+  writeExport,
+  type AttachmentBytes,
+  type ExportInput,
+  type ParsedExport,
+} from './zip'
+
+export { SCHEMA_VERSION } from './version'

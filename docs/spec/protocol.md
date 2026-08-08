@@ -876,10 +876,21 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/adjustments/:id/revoke` | `{}` — idempotent |
 | `POST /api/games/:gameId/regenerate-code` | `{}` — `SETUP` only. The server mints the code (conventions §2); a client-supplied one would let two games collide |
 | `POST /api/games/:gameId/resync` | `{}` — `SETUP` only (data model §7.1) |
+| `POST /api/games/:gameId/teams` | `{ name, colour, startingScore?, reason? }` — **legal at every status** (PRD 2 §11.2). A non-zero `startingScore` also writes a `SCORE_ADJUSTED`, so a late team's opening balance is an ordinary adjustment and stays revocable (D41). The server mints both ids |
+| `POST /api/games/:gameId/teams/:teamId` | `{ name?, colour? }` — rename or recolour, legal at every status **including `FINISHED`** (PRD 2 §13.4) |
+| `POST /api/games/:gameId/delete` | `{}` — cascades to the copy subtree, teams, devices, events, drafts and all four projections (data model §10). The quiz is untouched. **Per game only**; there is no bulk prune (Q5) |
 
-**That is 38 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
-actions (D50) arrived after that number was written. Counted here because "every action is
-zod-validated" is only checkable against a correct total.
+> **These two were missing from this catalogue.** `TEAM_ADDED` and `TEAM_UPDATED` were in the event
+> catalogue (§4.1) with no action that could cause them, so a team could only ever be created by
+> game instantiation — while PRD 2 §11.2 requires `[+ Add team]` at every status from both the
+> config surface and master control, and §13.4 requires renaming after the game ends. Added in
+> slice 4. **Deleting a game** was absent for the same reason — data model §10 describes the cascade
+> and PRD 2 §12.1 offers the menu item, but no action reached it. The count below moves 38 → 41.
+
+**That is 41 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+actions (D50) arrived after that number was written, and the two team actions plus the game delete
+above arrived in slice 4. Counted here because "every action is zod-validated" is only checkable against a correct
+total.
 
 `resync` is the one action with **no domain command**: both halves of it are outside
 `packages/domain`. The precondition that matters is whether `game_answer` or `game_buzz` rows exist
@@ -1029,6 +1040,28 @@ Rebuilding on import makes **every import a live test of data model invariant I1
 `game_device` rows are exported so a device's team binding survives a machine move. The
 tokens are meaningless on a machine those phones will never reach again, but exporting
 them costs nothing and keeps replay faithful.
+
+> **`teams` and `devices` are exported but not *imported* — they are rebuilt by replay.**
+> Both are written by `applyProjection` from `TEAM_ADDED` and `DEVICE_JOINED`, so in this
+> implementation they are as derived as `game_answer` is; the four tables named above are
+> not the complete list of what replay owns. Inserting the exported rows *and* replaying
+> the log inserts each row twice. They stay in the file because a zip should be readable
+> without replaying anything, and because the spec above promises them. Found by the
+> round-trip test: `UNIQUE constraint failed: game_team.id`.
+
+> **The join code is rewritten in event payloads when a game is imported.** A code must be
+> unique among joinable games (data model §6.1), so importing a `SETUP` or `LIVE` game
+> generates a new one — but `CODE_REGENERATED` carries a code and `GAME_CREATED` does too,
+> so replaying them unchanged puts the source's code straight back and fails the unique
+> index. This is not optional prettiness: "import as a separate copy" (PRD 2 §14.2) exists
+> precisely to place a copy beside its original on one machine. The payload is rewritten
+> rather than the row patched afterwards, because a projection may only be written by its
+> event.
+
+> **Under `COPY`, only uuid-shaped strings in a payload are remapped.** Walking the payload
+> structurally is what keeps a new event type from being forgotten, but remapping *every*
+> string renames a team called `Aardappel` to a uuid. Every id in this system is a uuidv7
+> and no prompt, answer or team name is uuid-shaped, so shape is the discriminator.
 
 ### 8.3 Import
 

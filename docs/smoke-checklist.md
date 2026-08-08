@@ -110,6 +110,59 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       independently of the route table, so an endpoint dropped or renamed fails there rather than
       being discovered by a surface that cannot call it.
 
+### After slice 4 — the config surface
+
+- [ ] **Boot with no `data/settings.json`.** `/admin` redirects to `/admin/setup` once, and only
+      once — after choosing an address it never nags again. This is D10's whole point and the
+      easiest thing to regress by touching the dashboard.
+- [ ] The picker lists this machine's real interfaces and marks the unusable ones. On a laptop with
+      Docker or WSL, **those must not read `reachable`** — that is the dead QR code §4 exists to
+      prevent. `network.test.ts` covers the rules; this row is whether *your* machine looks right.
+- [ ] `[Test with my phone]` → scan → the screen says **"Your phone reached this machine."** Do it
+      from an actual phone at least once per slice that touches `lib/server/*`: it is the only
+      check that exercises the page-writes/route-reads path the singleton fixes, and it fails
+      silently when that breaks.
+- [ ] Edit the saved address in `settings.json` to one this machine does not have. The dashboard
+      shows the stale banner **and still works** — a stale address is a warning, not a block.
+- [ ] Pre-flight on a deliberately broken quiz: an empty prompt, a finale with fewer than five
+      keywords, an uneven board. Every finding links to the round that owns it, and
+      **`[Play anyway]` is present** — pre-flight never blocks (§10).
+- [ ] Game setup: add and remove a team and watch the finale arithmetic move. Leave a name blank
+      and confirm it is stored as `Team n`, not empty. Open a colour picker and confirm the other
+      teams' colours are *marked*, not disabled.
+- [ ] The game hub shows the code large, a scannable QR, and `http://<address>:<port>/play/<code>`
+      — not a relative path. Regenerate the code and confirm both update.
+- [ ] Settings → Storage: drop a junk file into `data/attachments/`, reload, confirm it is offered
+      as reclaimable with the right count and size, reclaim it, and confirm **the referenced file
+      is still there**. This is the one button in the app that deletes a master's files.
+- [ ] Export a quiz with games, then import the same zip back. It must land as a **second** quiz
+      with a **different join code**, and the imported game's scores must be present — they exist
+      only if replay rebuilt them. Then re-export the copy and confirm the collision dialog names
+      both sides and says which is older **in words**.
+- [ ] Import a zip that is not a Kwiz file, and one whose `schemaVersion` is bumped by hand. Both
+      refuse with a specific message, and **nothing is written** — the quiz list is unchanged.
+- [ ] Switch the admin locale to Dutch and walk one screen of each kind. A missing key is a build
+      error, so what this catches is layout: Dutch runs 20–30% longer.
+- [ ] **Drag a round, and try to drag one past the finale.** The handle is real, not decoration —
+      it did nothing for most of slice 4 and nothing failed. Then do the same with `↑`/`↓`: both
+      routes must refuse identically (§15.2), or the keyboard is a way around §6.1.
+- [ ] `[+ Add team]` on a **live** game: the dialog must state what they missed, what their ceiling
+      now is versus everyone else's, and suggest half the missed points. Add with the starting
+      score, then confirm it appears as an ordinary revocable adjustment rather than a magic
+      opening balance.
+- [ ] Upload an image and a sound file to a question, and try a text file renamed `.png`. The last
+      one is refused by its **bytes**, not its extension, and names the formats that work.
+- [ ] **The game overflow menu has all three items** — export this game, abandon, delete — and the
+      delete confirmation names the real team and answer counts. Delete one and confirm the **quiz
+      survives**; that fear is why masters never tidy up.
+- [ ] Reorder a Jeopardy column left and right. Column order is what the room reads.
+- [ ] Pick a custom team colour of dark navy: it is **accepted, with a warning**, not refused.
+- [ ] **`[Preview on main screen]` on three questions**: one short and text-only, one with an image,
+      one with a deliberately enormous prompt. The first fills the stage, the second becomes the
+      `HERO` layout, and the third shrinks — but **never below 4% of the frame height**, because
+      below that the back tables cannot read it and it is a content problem for pre-flight, not a
+      rendering one. A board tile must show its **ladder** value, not the question row's own (O3).
+
 ### After slice 1 — schema & migrations
 
 - [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.
