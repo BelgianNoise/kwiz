@@ -122,6 +122,14 @@ export const ROUTES: readonly Route[] = [
   route('revoke-adjustment', 'adjustments/:adjustmentId/revoke', 'MASTER'),
   route('regenerate-code', 'regenerate-code', 'MASTER'),
   route('resync', 'resync', 'MASTER'),
+  /*
+   * PRD 2 §11.2 and §13.4. Absent from protocol §7.2's first catalogue even though `TEAM_ADDED` and
+   * `TEAM_UPDATED` are in the event catalogue — the events existed with no way to cause them. Both
+   * are legal at every status: a table arrives during round 1, and a misspelled name is worth fixing
+   * after the game has finished.
+   */
+  route('add-team', 'teams', 'MASTER'),
+  route('update-team', 'teams/:teamId', 'MASTER'),
 ] as const
 
 export interface MatchedRoute {
@@ -563,6 +571,56 @@ function execute(
       return withNoBody(body, () =>
         run({ type: 'REVOKE_ADJUSTMENT', adjustmentId: params.adjustmentId ?? '' }),
       )
+
+    case 'add-team': {
+      const parsed = parseBody(
+        z.object({
+          name: z.string().min(1),
+          colour: z.string().min(1),
+          /** §11.2's inline opening balance. Absent or zero writes no adjustment at all. */
+          startingScore: z.number().int().optional(),
+          reason: z.string().min(1).optional(),
+        }),
+        body,
+      )
+      if (!parsed.ok || !parsed.data) return parsed
+
+      const startingScore = parsed.data.startingScore ?? 0
+      return run({
+        type: 'ADD_TEAM',
+        // Server-minted, like every other id: a client-chosen one is a collision waiting to happen.
+        teamId: uuidv7(),
+        name: parsed.data.name,
+        colour: parsed.data.colour,
+        ...(startingScore === 0
+          ? {}
+          : {
+              startingScore: {
+                adjustmentId: uuidv7(),
+                delta: startingScore,
+                reason: parsed.data.reason ?? 'joined late',
+              },
+            }),
+      })
+    }
+
+    case 'update-team': {
+      const parsed = parseBody(
+        z.object({
+          name: z.string().min(1).optional(),
+          colour: z.string().min(1).optional(),
+        }),
+        body,
+      )
+      if (!parsed.ok || !parsed.data) return parsed
+
+      return run({
+        type: 'UPDATE_TEAM',
+        teamId: params.teamId ?? '',
+        ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }),
+        ...(parsed.data.colour === undefined ? {} : { colour: parsed.data.colour }),
+      })
+    }
 
     case 'regenerate-code':
       return withNoBody(body, () =>

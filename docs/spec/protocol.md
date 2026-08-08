@@ -876,10 +876,19 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/adjustments/:id/revoke` | `{}` — idempotent |
 | `POST /api/games/:gameId/regenerate-code` | `{}` — `SETUP` only. The server mints the code (conventions §2); a client-supplied one would let two games collide |
 | `POST /api/games/:gameId/resync` | `{}` — `SETUP` only (data model §7.1) |
+| `POST /api/games/:gameId/teams` | `{ name, colour, startingScore?, reason? }` — **legal at every status** (PRD 2 §11.2). A non-zero `startingScore` also writes a `SCORE_ADJUSTED`, so a late team's opening balance is an ordinary adjustment and stays revocable (D41). The server mints both ids |
+| `POST /api/games/:gameId/teams/:teamId` | `{ name?, colour? }` — rename or recolour, legal at every status **including `FINISHED`** (PRD 2 §13.4) |
 
-**That is 38 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
-actions (D50) arrived after that number was written. Counted here because "every action is
-zod-validated" is only checkable against a correct total.
+> **These two were missing from this catalogue.** `TEAM_ADDED` and `TEAM_UPDATED` were in the event
+> catalogue (§4.1) with no action that could cause them, so a team could only ever be created by
+> game instantiation — while PRD 2 §11.2 requires `[+ Add team]` at every status from both the
+> config surface and master control, and §13.4 requires renaming after the game ends. Added in
+> slice 4; the count below moves from 38 to 40.
+
+**That is 40 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+actions (D50) arrived after that number was written, and the two team actions above arrived in
+slice 4. Counted here because "every action is zod-validated" is only checkable against a correct
+total.
 
 `resync` is the one action with **no domain command**: both halves of it are outside
 `packages/domain`. The precondition that matters is whether `game_answer` or `game_buzz` rows exist

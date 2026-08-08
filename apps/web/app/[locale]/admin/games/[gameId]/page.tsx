@@ -1,4 +1,5 @@
 import { findGame, isStale, listGames, loadQuizTree } from '@kwiz/db'
+import { missedSoFar } from '@kwiz/domain'
 import { notFound } from 'next/navigation'
 
 import { GameDetail } from '@/components/admin/game-detail'
@@ -41,8 +42,32 @@ export default async function GameDetailPage({
   const join = joinUrl(settings, runtime.config.PORT, game.code)
   const qr = settings.networkAddress ? await qrSvg(join) : null
 
+  /**
+   * §11.2's arithmetic, computed **here** rather than in the dialog. It is a pure fold over the state
+   * the server already holds, so shipping the numbers costs nothing and the client never has a second
+   * opinion about what a team missed.
+   *
+   * `null` before the game starts: nothing has been missed, so the dialog drops that section entirely
+   * rather than showing four zeroes.
+   */
+  const missed = state && state.status !== 'SETUP' ? missedSoFar(state) : null
+
+  /*
+   * Number and total separately, because the two places they are used want different things: the
+   * header says "Round 2 of 5", the adjustment reason says "joined during round 2". Pre-joining them
+   * into one string is how the audit trail ends up reading "joined during round 2/5".
+   */
+  const roundIndex =
+    state?.content.rounds.findIndex((round) => round.id === state.currentRoundId) ?? -1
+  const round =
+    state && roundIndex >= 0
+      ? { number: roundIndex + 1, total: state.content.rounds.length }
+      : null
+
   return (
     <GameDetail
+      missed={missed}
+      round={round}
       game={{
         id: game.id,
         code: game.code,

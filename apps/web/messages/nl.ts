@@ -357,6 +357,7 @@ const nl: Messages = {
       staleBody:
         'Teams, toestellen en de code blijven. Vragen worden uit de quiz vernieuwd.',
       resync: 'Vernieuwen',
+      addTeam: 'Team toevoegen',
       abandon: 'Spel afbreken',
       abandonTitle: 'Dit spel afbreken?',
       abandonBody:
@@ -402,6 +403,22 @@ const nl: Messages = {
       },
     },
 
+    addTeam: {
+      title: 'Team toevoegen',
+      titleMidGame: 'Team toevoegen tijdens het spel?',
+      inProgress: 'Ronde {round} van {total} is bezig.',
+      missed:
+        'Dit team heeft {questions, plural, one {# vraag} other {# vragen}} gemist, samen {points} punten.',
+      ceiling: 'Hun maximaal haalbare score is nu {theirs} (anderen: {others}).',
+      startingScore: 'Startscore',
+      startOnZero: 'Op 0 beginnen',
+      givePoints: 'Geef ze',
+      halfOfMissed: 'punten - de helft van wat ze misten is {suggested}',
+      adjustmentReason: 'ingestapt tijdens ronde {round}',
+      recordedAs: 'Vastgelegd als scorecorrectie met de reden "{reason}".',
+      cancel: 'Annuleren',
+      addTeam: 'Team toevoegen',
+    },
     export: {
       title: '"{name}" exporteren',
       body: 'Alles wat nodig is om deze quiz op een andere machine te draaien.',

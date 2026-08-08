@@ -877,6 +877,75 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (state.status !== 'SETUP') return deny('NOT_IN_SETUP', `game is ${state.status}`)
       return allow([{ type: 'CODE_REGENERATED', payload: { code: command.code } }])
 
+    /**
+     * PRD 2 §11.2 — **no status guard, deliberately.** A table arriving during round 1 is normal in
+     * a pub and PRD 1 does not block late joins; the gate is a dialog that shows what they missed,
+     * not a refusal here.
+     *
+     * `position` is appended, because ordering is an explicit column and never insertion order
+     * (CLAUDE.md §2.7). Two teams may share a name (§2.7 again), so nothing is checked for
+     * uniqueness — the id is the identity.
+     */
+    case 'ADD_TEAM': {
+      if (state.teams.has(command.teamId)) {
+        // Idempotent on retry, the same way submission is (D8): the same team added twice is the
+        // network having doubted itself, not a second table.
+        return NOTHING_TO_DO
+      }
+
+      const added: GameEvent[] = [
+        {
+          type: 'TEAM_ADDED',
+          payload: {
+            teamId: command.teamId,
+            name: command.name,
+            colour: command.colour,
+            position: state.teams.size,
+          },
+        },
+      ]
+
+      /*
+       * §11.2's inline generosity, written as an **ordinary** `SCORE_ADJUSTED` with a generated
+       * reason (D15). That is the whole point of doing it here: it lands in the audit trail like any
+       * other adjustment and can be revoked (D41), rather than being a magic opening balance.
+       */
+      if (command.startingScore && command.startingScore.delta !== 0) {
+        added.push({
+          type: 'SCORE_ADJUSTED',
+          payload: {
+            adjustmentId: command.startingScore.adjustmentId,
+            teamId: command.teamId,
+            delta: command.startingScore.delta,
+            reason: command.startingScore.reason,
+            // Silent: the room does not need a banner about bookkeeping for a team just arriving.
+            announced: false,
+          },
+        })
+      }
+
+      return allow(added)
+    }
+
+    /** Legal at every status, including `FINISHED` — a misspelled name is worth fixing (§13.4). */
+    case 'UPDATE_TEAM': {
+      if (!state.teams.has(command.teamId)) {
+        return deny('TEAM_NOT_FOUND', `no team ${command.teamId}`)
+      }
+      if (command.name === undefined && command.colour === undefined) return NOTHING_TO_DO
+
+      return allow([
+        {
+          type: 'TEAM_UPDATED',
+          payload: {
+            teamId: command.teamId,
+            ...(command.name === undefined ? {} : { name: command.name }),
+            ...(command.colour === undefined ? {} : { colour: command.colour }),
+          },
+        },
+      ])
+    }
+
     default: {
       // Unreachable while every command is handled, and a **compile error** the moment one is added
       // without a decision — which is the point of spelling it out rather than falling off the end.

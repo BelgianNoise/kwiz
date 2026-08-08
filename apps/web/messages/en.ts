@@ -396,6 +396,7 @@ const en = {
       staleBody:
         'Teams, devices and the join code are kept. Questions are refreshed from the quiz.',
       resync: 'Re-sync',
+      addTeam: 'Add team',
       abandon: 'Abandon game',
       abandonTitle: 'Abandon this game?',
       abandonBody: 'It ends without being marked finished. The room is mid-quiz.',
@@ -438,6 +439,23 @@ const en = {
       },
     },
 
+    /** PRD 2 §11.2 / O5 — a table arriving mid-game, and the arithmetic that makes it a decision. */
+    addTeam: {
+      title: 'Add a team',
+      titleMidGame: 'Add a team mid-game?',
+      inProgress: 'Round {round} of {total} is in progress.',
+      missed:
+        'This team has missed {questions, plural, one {# question} other {# questions}} worth {points} points.',
+      ceiling: 'Their maximum possible score is now {theirs} (others: {others}).',
+      startingScore: 'Starting score',
+      startOnZero: 'Start on 0',
+      givePoints: 'Give them',
+      halfOfMissed: 'points - half of what they missed is {suggested}',
+      adjustmentReason: 'joined during round {round}',
+      recordedAs: 'Recorded as a score adjustment with the reason "{reason}".',
+      cancel: 'Cancel',
+      addTeam: 'Add team',
+    },
     /** PRD 2 §14.1 — sizes are computed, not estimated. */
     export: {
       title: 'Export "{name}"',

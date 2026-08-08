@@ -210,6 +210,20 @@ export const api = {
    * server knows or should care about.
    */
   regenerateCode: (gameId: string) => send(`/api/games/${gameId}/regenerate-code`, {}),
+
+  /**
+   * §11.2 — legal at every status, so this is the same call before doors open and mid-round. The
+   * optional `startingScore` rides along and becomes an ordinary, revocable adjustment (D41).
+   */
+  addTeam: (
+    gameId: string,
+    input: { name: string; colour: string; startingScore?: number; reason?: string },
+  ) => send(`/api/games/${gameId}/teams`, input),
+  updateTeam: (
+    gameId: string,
+    teamId: string,
+    patch: { name?: string; colour?: string },
+  ) => send(`/api/games/${gameId}/teams/${teamId}`, patch),
   resyncGame: (gameId: string) => send(`/api/games/${gameId}/resync`, {}),
   abandonGame: (gameId: string) => send(`/api/games/${gameId}/abandon`, {}),
 

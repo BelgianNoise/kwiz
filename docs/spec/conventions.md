@@ -623,7 +623,7 @@ type says one thing, the runtime enforces another, and the compiler is satisfied
 
 | Place | Why |
 | --- | --- |
-| **POST bodies** — all 38 actions (protocol §7.1–§7.2) | Untrusted input. Rejects as `VALIDATION_ERROR` (§4) |
+| **POST bodies** — all 40 actions (protocol §7.1–§7.2) | Untrusted input. Rejects as `VALIDATION_ERROR` (§4) |
 | **JSON columns** — `question.config`, `round.config`, `game_event.payload` | A JSON column without a validator is a bug (data model §2) |
 | **`game_event.payload` on append** | Per-type schemas in a discriminated union on `type`. Catches a malformed event *before* it becomes permanent in an append-only table |
 | **`game_event.payload` on replay** | Read back from disk as `unknown`. Validating on replay catches corruption and, more usefully, a log written by an older build |

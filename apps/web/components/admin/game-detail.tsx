@@ -1,15 +1,18 @@
 'use client'
 
+import type { MissedSoFar } from '@kwiz/domain'
 import {
   AlertTriangle,
   ChevronLeft,
   ExternalLink,
   MoreHorizontal,
+  Plus,
   RefreshCw,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
+import { AddTeamDialog } from '@/components/admin/add-team-dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { LiveTeams } from '@/components/admin/live-teams'
 import { Badge } from '@/components/ui/badge'
@@ -52,11 +55,23 @@ export interface TeamRow {
  * while people arrive. The two launch buttons open new tabs, since the two surfaces live on two
  * displays — and both URLs carry this `gameId`, because per D21 there is no "current game".
  */
-export function GameDetail({ game, teams }: { game: GameDetailData; teams: TeamRow[] }) {
+export function GameDetail({
+  game,
+  teams,
+  missed,
+  round,
+}: {
+  game: GameDetailData
+  teams: TeamRow[]
+  /** §11.2 — `null` while `SETUP`, when there is nothing to have missed. */
+  missed: MissedSoFar | null
+  round: { number: number; total: number } | null
+}) {
   const t = useTranslations('admin.game')
   const dashboard = useTranslations('admin.dashboard')
   const router = useRouter()
 
+  const [addingTeam, setAddingTeam] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [abandoning, setAbandoning] = useState(false)
 
@@ -174,6 +189,27 @@ export function GameDetail({ game, teams }: { game: GameDetailData; teams: TeamR
 
       {/* Live over the `MASTER_CONTROL` stream rather than polling (§12, D2). */}
       <LiveTeams gameId={game.id} initial={teams} />
+
+      {/*
+        §11.2 — available at **every** status. A table arriving during round 1 is normal, and the
+        dialog is where the decision gets made, so there is nothing to gate here.
+      */}
+      <div>
+        <Button variant="secondary" size="sm" onClick={() => setAddingTeam(true)}>
+          <Plus className="size-4" />
+          {t('addTeam')}
+        </Button>
+      </div>
+
+      <AddTeamDialog
+        open={addingTeam}
+        gameId={game.id}
+        teamCount={teams.length}
+        takenColours={teams.map((team) => team.colour)}
+        missed={missed}
+        round={round}
+        onClose={() => setAddingTeam(false)}
+      />
 
       <p className="text-muted-foreground text-sm">
         {t('rounds', { rounds: game.rounds, questions: game.questions })}
