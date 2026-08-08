@@ -210,4 +210,17 @@ export const api = {
   regenerateCode: (gameId: string) => send(`/api/games/${gameId}/regenerate-code`, {}),
   resyncGame: (gameId: string) => send(`/api/games/${gameId}/resync`, {}),
   abandonGame: (gameId: string) => send(`/api/games/${gameId}/abandon`, {}),
+
+  // ─── this machine (PRD 2 §4, §16) ───
+
+  chooseAddress: (address: string) => send('/api/settings/network/choose', { address }),
+  setMute: (muted: boolean) => send('/api/settings/sound/mute', { muted }),
+  reclaimSpace: () =>
+    send<{ removed: number; bytes: number }>('/api/settings/storage/reclaim', {}),
+
+  /** §4's probe. A GET, so it goes through `send` with no body — the same envelope as everything else. */
+  probeStatus: (address: string) =>
+    send<{ reached: boolean; userAgent: string | null }>(
+      `/api/probe?address=${encodeURIComponent(address)}`,
+    ),
 }

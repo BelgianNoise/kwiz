@@ -110,6 +110,7 @@ const en = {
     /** PRD 2 §5 — quizzes above games, and finished games out of the way. */
     dashboard: {
       title: 'Kwiz',
+      settings: 'Settings',
       quizzes: 'Quizzes',
       newQuiz: 'New quiz',
       import: 'Import…',
@@ -389,6 +390,7 @@ const en = {
       devicesJoined: '{count} of {total} devices joined',
       rounds: '{rounds} rounds, {questions} questions',
       notStarted: 'not started',
+      noAddress: 'Choose a network address to show a QR code players can scan.',
       staleTitle: 'Template updated since this game was created',
       staleBody:
         'Teams, devices and the join code are kept. Questions are refreshed from the quiz.',
@@ -401,6 +403,62 @@ const en = {
       deleteBody:
         'This game, its {teams} teams and all its answers go. The quiz itself is kept.',
       exportGame: 'Export this game',
+    },
+
+    /** PRD 2 §16 — "small and boring on purpose". */
+    settings: {
+      title: 'Settings',
+      network: 'Network',
+      noAddress: 'No address chosen yet, so join links stay relative to this browser.',
+      addressStale:
+        'This address is no longer on any adapter. Pick it again before the room arrives.',
+      changeAddress: 'Change address',
+      language: 'Language',
+      languageHint: 'This device only. It does not change what players see.',
+      sound: 'Sound',
+      muteAll: 'Mute all quiz sounds',
+      storage: 'Storage',
+      dataDir: 'Data directory',
+      databaseSize: 'Database',
+      attachments: 'Attachments',
+      attachmentSummary: '{count, plural, one {# file} other {# files}}, {size}',
+      reclaim: 'Reclaim space',
+      reclaimable: '{count, plural, one {# unused file} other {# unused files}}, {size}',
+      nothingToReclaim: 'Nothing to reclaim.',
+      reclaimed: 'Removed {count, plural, one {# file} other {# files}}, freeing {size}.',
+      about: 'About',
+      schemaVersion: 'Export format',
+      migrationStatus: 'Database',
+      migration: {
+        UP_TO_DATE: 'Up to date',
+        CREATED: 'Created and migrated',
+        APPLIED: 'Migrations applied',
+        DECLINED: 'Migrations pending - the server is running read-only',
+      },
+    },
+  },
+
+  /** PRD 2 §4 / D10 — the screen that stops a dead QR code from being the first thing a room sees. */
+  setup: {
+    heading: 'Which address should players use?',
+    body: 'This laptop has several. Players need the one on the same network as their phones.',
+    noAddresses: 'No network addresses found. Is this machine connected to a network?',
+    continue: 'Continue',
+    reason: {
+      PRIVATE: 'reachable',
+      PUBLIC: 'public address',
+      VIRTUAL: 'no route from other devices',
+      LOOPBACK: 'this machine only',
+      LINK_LOCAL: 'no network assigned',
+    },
+    probe: {
+      start: 'Test with my phone',
+      waiting: 'Scan this with a phone on the venue wifi.',
+      confirmed: 'Your phone reached this machine.',
+      cancel: 'Cancel',
+      /** Rendered on the phone, so it is player copy: short, and it answers "did it work?". */
+      reached: 'You reached the quiz laptop.',
+      reachedBody: 'This network works. Hand the phone back to the quiz master.',
     },
   },
 }

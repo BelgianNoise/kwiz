@@ -26,6 +26,10 @@ import { api } from '@/lib/client/api'
 export interface GameDetailData {
   id: string
   code: string
+  /** Absolute once §4's address is chosen, relative until then — never a guess (§4). */
+  joinUrl: string
+  /** `null` until an address is chosen: a QR code for a relative path leads nowhere. */
+  qr: string | null
   status: 'SETUP' | 'LIVE' | 'FINISHED' | 'ABANDONED'
   quizName: string
   stale: boolean
@@ -106,12 +110,26 @@ export function GameDetail({ game, teams }: { game: GameDetailData; teams: TeamR
             </Button>
           ) : null}
         </div>
+        <p className="text-muted-foreground font-mono text-sm break-all">
+          {game.joinUrl}
+        </p>
+
         {/*
-          The join URL is relative until PRD 2 §4's network picker exists: the server does not know
-          which of the laptop's addresses a phone can reach, and guessing produces a QR code that
-          resolves to nothing (PRD 1 §14's first risk).
+          §12 — the QR code beside the code, not instead of it. A phone with a dead camera, a guest
+          who cannot find their camera app, and a code read aloud across a room are all normal, so
+          the six characters stay the primary route in.
+
+          Trusted markup: `qrcode`'s own SVG output for a string this server built.
         */}
-        <p className="text-muted-foreground text-sm">/play/{game.code}</p>
+        {game.qr ? (
+          <div
+            className="[&_svg]:size-40 [&_svg]:rounded-lg [&_svg]:bg-white [&_svg]:p-2"
+            // oxlint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: game.qr }}
+          />
+        ) : (
+          <p className="text-muted-foreground text-sm">{t('noAddress')}</p>
+        )}
       </section>
 
       <div className="flex flex-wrap gap-3">

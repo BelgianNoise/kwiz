@@ -2,7 +2,9 @@ import { findGame, isStale, listGames, loadQuizTree } from '@kwiz/db'
 import { notFound } from 'next/navigation'
 
 import { GameDetail } from '@/components/admin/game-detail'
+import { qrSvg } from '@/lib/server/qr'
 import { getRuntime } from '@/lib/server/runtime'
+import { joinUrl, readSettings } from '@/lib/server/settings'
 
 /**
  * PRD 2 §12 — the hub for one game, before, during and after.
@@ -20,6 +22,7 @@ export default async function GameDetailPage({
   const runtime = await getRuntime()
   const { gameId } = await params
 
+  const settings = readSettings(runtime.paths.dir)
   const game = findGame(runtime.database, gameId)
   const summary = listGames(runtime.database).find((entry) => entry.id === gameId)
   if (!game || !summary) notFound()
@@ -30,11 +33,21 @@ export default async function GameDetailPage({
     ? loadQuizTree(runtime.database, game.sourceQuizId)
     : undefined
 
+  /**
+   * §12's QR code, built here from §4's chosen address (D10). Rendered only once an address exists:
+   * a QR code for a relative path is a QR code that resolves to nothing on a phone, which is the
+   * exact failure §4's picker was added to prevent.
+   */
+  const join = joinUrl(settings, runtime.config.PORT, game.code)
+  const qr = settings.networkAddress ? await qrSvg(join) : null
+
   return (
     <GameDetail
       game={{
         id: game.id,
         code: game.code,
+        joinUrl: join,
+        qr,
         status: game.status,
         quizName: game.quizName,
         stale: isStale(summary),

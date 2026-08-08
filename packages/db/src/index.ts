@@ -71,6 +71,7 @@ export {
 export {
   findAttachmentFile,
   insertTemplateAttachment,
+  referencedChecksums,
   type AttachmentFile,
   type NewAttachment,
 } from './attachments'

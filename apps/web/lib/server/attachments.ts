@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, rename, stat, unlink } from 'node:fs/promises'
+import { mkdir, readdir, rename, stat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -360,4 +360,109 @@ export async function findBrokenAttachments(
 
   // oxlint-enable no-await-in-loop
   return broken
+}
+
+export interface StorageStats {
+  dataDir: string
+  databaseBytes: number
+  attachmentCount: number
+  attachmentBytes: number
+  /** Files on disk that no row references — what `Reclaim space` would remove (§16). */
+  orphanCount: number
+  orphanBytes: number
+}
+
+/**
+ * PRD 2 §16's Storage section. Reads the directory rather than summing `sizeBytes` columns, because
+ * the number a master cares about is **what is actually on their disk** — and the gap between the two
+ * is exactly the orphaned files this section exists to surface.
+ */
+export async function storageStats(
+  paths: DataPaths,
+  referenced: ReadonlySet<string>,
+): Promise<StorageStats> {
+  const database = await stat(/*turbopackIgnore: true*/ paths.dbFile).catch(
+    () => undefined,
+  )
+  const files = await readdir(/*turbopackIgnore: true*/ paths.attachments).catch(() => [])
+
+  let attachmentBytes = 0
+  let orphanCount = 0
+  let orphanBytes = 0
+
+  // oxlint-disable no-await-in-loop
+  for (const name of files) {
+    const info = await stat(
+      /*turbopackIgnore: true*/ join(/*turbopackIgnore: true*/ paths.attachments, name),
+    ).catch(() => undefined)
+    if (!info?.isFile()) continue
+
+    attachmentBytes += info.size
+    if (!referenced.has(checksumOf(name))) {
+      orphanCount += 1
+      orphanBytes += info.size
+    }
+  }
+  // oxlint-enable no-await-in-loop
+
+  return {
+    dataDir: paths.dir,
+    databaseBytes: database?.size ?? 0,
+    attachmentCount: files.length,
+    attachmentBytes,
+    orphanCount,
+    orphanBytes,
+  }
+}
+
+/**
+ * Data model §8's reconciliation pass, surfaced as §16's `Reclaim space`.
+ *
+ * **The direction of the risk is the whole design.** Rows are deleted without their files, so the
+ * recoverable failure — an orphaned file — is the one that happens, and this pass is what clears it.
+ * That also means this must never delete a file whose checksum is referenced by *either* table: a
+ * template attachment deleted while a game still plays it keeps its file for exactly that reason.
+ *
+ * It is user-facing (§16) because a replaced image leaves the old file behind, and on a laptop that
+ * is the master's own disk filling up with nothing they can see.
+ */
+export async function reclaimSpace(
+  paths: DataPaths,
+  referenced: ReadonlySet<string>,
+): Promise<{ removed: number; bytes: number }> {
+  const files = await readdir(/*turbopackIgnore: true*/ paths.attachments).catch(() => [])
+  let removed = 0
+  let bytes = 0
+
+  // oxlint-disable no-await-in-loop
+  for (const name of files) {
+    if (referenced.has(checksumOf(name))) continue
+
+    const path = join(/*turbopackIgnore: true*/ paths.attachments, name)
+    const info = await stat(/*turbopackIgnore: true*/ path).catch(() => undefined)
+    if (!info?.isFile()) continue
+
+    // A failed unlink is not worth aborting the sweep: the file stays orphaned and the next pass
+    // tries again, which is the same recoverable direction the design already chose.
+    const gone = await unlink(/*turbopackIgnore: true*/ path).then(
+      () => true,
+      () => false,
+    )
+    if (gone) {
+      removed += 1
+      bytes += info.size
+    }
+  }
+  // oxlint-enable no-await-in-loop
+
+  return { removed, bytes }
+}
+
+/**
+ * `<sha256>.<ext>` → `<sha256>`. Split on the *first* dot: the hash never contains one, so anything
+ * after it is extension, and a file that somehow has none still yields its whole name for comparison.
+ */
+function checksumOf(fileName: string): string {
+  const dot = fileName.indexOf('.')
+  return dot === -1 ? fileName : fileName.slice(0, dot)
 }

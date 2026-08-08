@@ -11,6 +11,7 @@ import {
 } from '@kwiz/db'
 
 import { createGameRegistry, type GameRegistry } from './registry'
+import { singleton } from './singleton'
 import { createTransport, type RealtimeTransport } from './transport'
 
 /**
@@ -33,12 +34,16 @@ export interface Runtime {
   transport: RealtimeTransport
 }
 
-let pending: Promise<Runtime> | undefined
-
+/**
+ * Memoised on the **promise**, not the value: two requests arriving together must not both boot.
+ *
+ * Held in a `singleton` rather than a module-level variable because Next evaluates this module twice
+ * — once per layer — and a second copy would mean a second SQLite connection, a second projection
+ * registry and a second transport, with a page and an API route each holding a different one. It was
+ * visible as `[kwiz] database up to date` printed twice at boot.
+ */
 export function getRuntime(): Promise<Runtime> {
-  // Memoised on the promise, not the value: two requests arriving together must not both boot.
-  pending ??= build()
-  return pending
+  return singleton('runtime', build)
 }
 
 async function build(): Promise<Runtime> {

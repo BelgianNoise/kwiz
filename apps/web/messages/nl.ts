@@ -96,6 +96,7 @@ const nl: Messages = {
   admin: {
     dashboard: {
       title: 'Kwiz',
+      settings: 'Instellingen',
       quizzes: 'Quizzen',
       newQuiz: 'Nieuwe quiz',
       import: 'Importeren…',
@@ -349,6 +350,8 @@ const nl: Messages = {
       devicesJoined: '{count} van {total} toestellen aangemeld',
       rounds: '{rounds} rondes, {questions} vragen',
       notStarted: 'niet gestart',
+      noAddress:
+        'Kies een netwerkadres om een QR-code te tonen die spelers kunnen scannen.',
       staleTitle: 'De quiz is bijgewerkt sinds dit spel is aangemaakt',
       staleBody:
         'Teams, toestellen en de code blijven. Vragen worden uit de quiz vernieuwd.',
@@ -361,7 +364,64 @@ const nl: Messages = {
       deleteTitle: 'Dit spel verwijderen?',
       deleteBody:
         'Dit spel, zijn {teams} teams en alle antwoorden gaan weg. De quiz blijft.',
-      exportGame: 'Dit spel exporteren',
+      exportGame: 'Deze game exporteren',
+    },
+
+    settings: {
+      title: 'Instellingen',
+      network: 'Netwerk',
+      noAddress:
+        'Nog geen adres gekozen, dus joinlinks blijven relatief aan deze browser.',
+      addressStale:
+        'Dit adres zit op geen enkele adapter meer. Kies het opnieuw voor de zaal aankomt.',
+      changeAddress: 'Adres wijzigen',
+      language: 'Taal',
+      languageHint: 'Alleen dit apparaat. Het verandert niets aan wat spelers zien.',
+      sound: 'Geluid',
+      muteAll: 'Alle quizgeluiden dempen',
+      storage: 'Opslag',
+      dataDir: 'Datamap',
+      databaseSize: 'Database',
+      attachments: 'Bijlagen',
+      attachmentSummary: '{count, plural, one {# bestand} other {# bestanden}}, {size}',
+      reclaim: 'Ruimte vrijmaken',
+      reclaimable:
+        '{count, plural, one {# ongebruikt bestand} other {# ongebruikte bestanden}}, {size}',
+      nothingToReclaim: 'Niets vrij te maken.',
+      reclaimed:
+        '{count, plural, one {# bestand} other {# bestanden}} verwijderd, {size} vrijgemaakt.',
+      about: 'Over',
+      schemaVersion: 'Exportformaat',
+      migrationStatus: 'Database',
+      migration: {
+        UP_TO_DATE: 'Bij',
+        CREATED: 'Aangemaakt en gemigreerd',
+        APPLIED: 'Migraties uitgevoerd',
+        DECLINED: 'Migraties in behandeling - de server draait alleen-lezen',
+      },
+    },
+  },
+
+  setup: {
+    heading: 'Welk adres moeten spelers gebruiken?',
+    body: 'Deze laptop heeft er meerdere. Spelers hebben het adres nodig op hetzelfde netwerk als hun telefoon.',
+    noAddresses:
+      'Geen netwerkadressen gevonden. Is deze machine met een netwerk verbonden?',
+    continue: 'Doorgaan',
+    reason: {
+      PRIVATE: 'bereikbaar',
+      PUBLIC: 'publiek adres',
+      VIRTUAL: 'geen route vanaf andere apparaten',
+      LOOPBACK: 'alleen deze machine',
+      LINK_LOCAL: 'geen netwerk toegewezen',
+    },
+    probe: {
+      start: 'Testen met mijn telefoon',
+      waiting: 'Scan dit met een telefoon op de wifi van de zaal.',
+      confirmed: 'Je telefoon heeft deze machine bereikt.',
+      cancel: 'Annuleren',
+      reached: 'Je hebt de quizlaptop bereikt.',
+      reachedBody: 'Dit netwerk werkt. Geef de telefoon terug aan de quizmaster.',
     },
   },
 }

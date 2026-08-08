@@ -1,10 +1,17 @@
 import { isStale, listGames, listQuizzes } from '@kwiz/db'
+import { Settings } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
+import { redirect } from 'next/navigation'
 
 import { GameList } from '@/components/admin/game-list'
+import { NetworkBanner } from '@/components/admin/network-banner'
 import { QuizList } from '@/components/admin/quiz-list'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { Button } from '@/components/ui/button'
+import { Link } from '@/i18n/navigation'
+import { isAddressStale } from '@/lib/server/network'
 import { getRuntime } from '@/lib/server/runtime'
+import { readSettings } from '@/lib/server/settings'
 
 /**
  * PRD 2 §5 — the dashboard. Quizzes above games, because `[Play]` is the verb a master reaches for.
@@ -18,9 +25,23 @@ import { getRuntime } from '@/lib/server/runtime'
  */
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}) {
   const runtime = await getRuntime()
   const t = await getTranslations('admin.dashboard')
+
+  /**
+   * D10 — **first run goes to §4, once.** The picker is not a nag: it is skipped forever after an
+   * address is chosen, and §16 is how a master gets back to it. Redirecting rather than rendering a
+   * prompt is deliberate, because a dashboard offering `[Play]` before the network is settled leads
+   * straight to the dead-QR-code failure §4 exists to prevent.
+   */
+  const settings = readSettings(runtime.paths.dir)
+  const { locale } = await params
+  if (settings.networkAddress === null) redirect(`/${locale}/admin/setup`)
 
   const quizzes = listQuizzes(runtime.database).map((quiz) => ({
     ...quiz,
@@ -36,10 +57,22 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-10 p-6 sm:p-10">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-        <LanguageSwitcher />
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <Button asChild variant="ghost" size="icon" aria-label={t('settings')}>
+            <Link href="/admin/settings">
+              <Settings className="size-4" />
+            </Link>
+          </Button>
+        </div>
       </header>
+
+      {/* §4 — a saved address that no longer exists is the second most likely way setup fails. */}
+      {isAddressStale(settings.networkAddress) ? (
+        <NetworkBanner address={settings.networkAddress} />
+      ) : null}
 
       <QuizList quizzes={quizzes} />
 
