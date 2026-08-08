@@ -260,6 +260,7 @@ const en = {
       showOnPlayers: 'Show on player devices',
       showOnPlayersHint: 'Images only. Audio and video play on the main screen.',
       deleteAttachment: 'Remove file',
+      previewOnScreen: 'Preview on main screen',
       masterNotes: 'Master notes',
       /** §7.1 — labelled with its guarantee, which is why a master will trust it (invariant 7). */
       masterNotesHint: 'Never shown to anyone else.',
@@ -440,6 +441,11 @@ const en = {
       },
     },
 
+    /** PRD 2 §7.1 / O4 — the real PRD 4 renderer, scaled, in a mock OPEN state. */
+    preview: {
+      title: 'On the main screen',
+      body: 'The projected screen at its real proportions. Check the prompt fits and the image survives a projector.',
+    },
     /** PRD 2 §11.2 / O5 — a table arriving mid-game, and the arithmetic that makes it a decision. */
     addTeam: {
       title: 'Add a team',

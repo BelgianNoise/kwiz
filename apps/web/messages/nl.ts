@@ -231,6 +231,7 @@ const nl: Messages = {
       showOnPlayersHint:
         'Alleen afbeeldingen. Audio en video spelen op het grote scherm.',
       deleteAttachment: 'Bestand verwijderen',
+      previewOnScreen: 'Voorbeeld op hoofdscherm',
       masterNotes: 'Notities voor jezelf',
       masterNotesHint: 'Wordt nooit aan iemand anders getoond.',
       keywords: 'Kernwoorden',
@@ -404,6 +405,10 @@ const nl: Messages = {
       },
     },
 
+    preview: {
+      title: 'Op het hoofdscherm',
+      body: 'Het geprojecteerde scherm op ware verhoudingen. Kijk of de vraag past en of het beeld een beamer overleeft.',
+    },
     addTeam: {
       title: 'Team toevoegen',
       titleMidGame: 'Team toevoegen tijdens het spel?',

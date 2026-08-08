@@ -152,6 +152,11 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       opening balance.
 - [ ] Upload an image and a sound file to a question, and try a text file renamed `.png`. The last
       one is refused by its **bytes**, not its extension, and names the formats that work.
+- [ ] **`[Preview on main screen]` on three questions**: one short and text-only, one with an image,
+      one with a deliberately enormous prompt. The first fills the stage, the second becomes the
+      `HERO` layout, and the third shrinks — but **never below 4% of the frame height**, because
+      below that the back tables cannot read it and it is a content problem for pre-flight, not a
+      rendering one. A board tile must show its **ladder** value, not the question row's own (O3).
 
 ### After slice 1 — schema & migrations
 

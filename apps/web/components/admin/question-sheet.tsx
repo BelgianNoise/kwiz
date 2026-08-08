@@ -6,7 +6,7 @@ import {
   type QuestionContent,
   type RoundContent,
 } from '@kwiz/domain'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Monitor } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
@@ -16,6 +16,7 @@ import { FreeTextSection } from '@/components/admin/question-sections/free-text-
 import { KeywordSection } from '@/components/admin/question-sections/keyword-section'
 import { MultipleChoiceSection } from '@/components/admin/question-sections/multiple-choice-section'
 import { SaveIndicator } from '@/components/admin/save-indicator'
+import { ScreenPreview } from '@/components/admin/screen-preview'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -124,10 +125,10 @@ function QuestionForm({
   onChanged: () => void
 }) {
   const t = useTranslations('admin.question')
-  const common = useTranslations('common')
 
   const [method, setMethod] = useState<AnswerMethod>(question.answerMethod)
   const [noTimer, setNoTimer] = useState(question.timerMs === null)
+  const [previewing, setPreviewing] = useState(false)
 
   const prompt = useAutosave<string>((value) =>
     api.updateQuestion(question.id, { prompt: value }),
@@ -307,10 +308,25 @@ function QuestionForm({
           />
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          {/*
+            §7.1 / O4 — the real PRD 4 renderer, scaled. It catches the two failures that are common
+            and completely invisible on a laptop: a prompt that overflows at projector scale, and a
+            dark image that disappears under projector contrast.
+          */}
+          <Button variant="secondary" size="sm" onClick={() => setPreviewing(true)}>
+            <Monitor className="size-4" />
+            {t('previewOnScreen')}
+          </Button>
           <SaveIndicator status={notes.status} savedAt={notes.savedAt} />
-          <span className="sr-only">{common('close')}</span>
         </div>
+
+        <ScreenPreview
+          open={previewing}
+          question={question}
+          points={question.points}
+          onClose={() => setPreviewing(false)}
+        />
       </div>
     </>
   )

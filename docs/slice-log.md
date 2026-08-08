@@ -58,10 +58,7 @@ gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one 
 
 - **Post-game review and correction (PRD 2 §13)** — build-order defers it to slice 8, where the
   event log it reads and rewrites actually has content.
-- **§7.1's `[Preview on main screen ↗]` (O4)** — it opens *the real PRD 4 renderer* in a mock `OPEN`
-  state, and that renderer does not exist until slice 6. Adding a button now would mean either a
-  second throwaway renderer or a link to nothing, and the whole value of O4 is that it shows the
-  actual projected output at true type scale. **Slice 6 should add it**, not reinvent it.
+- Nothing from §7.1 or §11.2. **O4's preview is built** — see below.
 - **`[Copy from last game]` copies names and colours only.** Nothing else on a team survives, and
   nothing else should.
 
@@ -69,6 +66,8 @@ gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one 
 
 Three things were built but not *finished*, and none of them would have failed a test:
 
+- **O4's preview was skipped on a bad reading of its dependency.** "It needs PRD 4's renderer" was
+  true and led to the wrong conclusion: the renderer is what the preview *is*.
 - **The `⠿` drag handles did nothing.** Rounds and questions reordered by `↑`/`↓` buttons only,
   while the list showed a grab handle — §15.2 asks for both routes and §6.1 for the drop to be
   refused past the pinned finale. Now one hook, sharing the buttons' own predicate so the two
@@ -82,6 +81,29 @@ Three things were built but not *finished*, and none of them would have failed a
 The lesson worth carrying: `pnpm check` was green through all three. **Re-read your slice's
 build-order bullets one at a time against the running app before declaring it done** — an
 affordance that renders is not an affordance that works.
+
+### Slice 6 inherits three real components, not stubs
+
+O4's `[Preview on main screen]` was first deferred here on the grounds that it needs PRD 4's
+renderer. That was the wrong call: the preview *is* a scaled-down projector, so building it means
+building the stage — and building the stage twice is exactly what O4 exists to prevent. So
+`components/screen/` now holds the beginning of PRD 4, used by PRD 2:
+
+- **`StageFrame`** — a fixed 1920×1080 box, CSS-scaled to fit. This is §2.2's letterbox rule made
+  mechanical, and it is what makes the preview honest: overflow is a question about *proportions*,
+  and a stage re-laid-out into a small box answers a different question.
+- **`FittedText`** — §2.4's fitting, binary-searched in `useLayoutEffect` so no unfitted frame is
+  ever painted, clamped at §2.1's 4vh floor.
+- **`QuestionStage` + `resolveLayout`** — §6's five named layouts. The resolver is a separate plain
+  module and is tested; the renderer is not, per D18.
+
+**Sizes inside the frame are `cqh`, never `vh`.** A `transform: scale()` does not change what `vh`
+means — it stays relative to the viewport — so `5vh` would be one size in the preview and another on
+the projector, which is the single discrepancy this component cannot have. `container-type: size`
+makes `1cqh` exactly 1% of the frame, so every number in PRD 4 §2.1 transcribes directly.
+
+Slice 6 should **import these and add the remaining stages**, and wire the timer's countdown from
+`deadlineAt` (D52) — `Timer` already takes the value as a prop for that reason.
 
 ### What the next agent would otherwise rediscover
 
