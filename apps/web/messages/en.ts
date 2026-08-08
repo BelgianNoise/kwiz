@@ -306,6 +306,102 @@ const en = {
         'For {teams} teams at {penalty}s, about {suggested} questions are usually needed to get down to one survivor. You have {have}.',
       keywordCount: '{count, plural, one {# keyword} other {# keywords}}',
     },
+
+    /** PRD 2 §10 — run when [Play] is pressed. §1.1 is why it exists. */
+    preflight: {
+      heading: '{name} - ready to play?',
+      problems:
+        '{count, plural, one {# problem must be fixed} other {# problems must be fixed}}',
+      warnings:
+        '{count, plural, one {# thing worth a look} other {# things worth a look}}',
+      healthy:
+        '{questions} questions, {attachments} attachments verified, {rounds} rounds',
+      fix: 'Fix',
+      view: 'View',
+      /** §10 — deliberately available even with errors: blocking protects data at the event's cost. */
+      playAnyway: 'Play anyway',
+      fixProblems: 'Fix problems',
+      setUpGame: 'Set up the game',
+      round: 'Round {number}',
+      code: {
+        EMPTY_PROMPT: 'no question text',
+        NO_ACCEPTED_ANSWER: 'no correct answer',
+        MC_NEEDS_ONE_CORRECT: 'needs two to four options with exactly one correct',
+        DO_NO_SCORING_MODE: 'no scoring mode chosen',
+        ATTACHMENT_MISSING: 'a file is missing from disk or has changed',
+        FINALE_KEYWORD_COUNT: 'needs exactly five keywords, has {count}',
+        MULTIPLE_FINALES: 'a quiz can only have one finale',
+        FINALE_NOT_LAST: 'the finale has to be the last round',
+        FINALE_RATE_MISSING: 'no points-to-seconds rate set',
+        KEYWORDS_OUTSIDE_FINALE: 'keyword questions only belong in a finale',
+        FINALE_QUESTION_NOT_KEYWORDS: 'a finale question has to be a keyword question',
+        ROUND_EMPTY: 'no questions in this round',
+        SINGLE_ACCEPTED_ANSWER: 'only one accepted answer, so near-misses come to you',
+        SHORT_TIMER: 'only {seconds}s to answer',
+        JEOPARDY_UNEVEN_COLUMNS: 'columns are uneven - the tallest has {tallest}',
+        JEOPARDY_EMPTY_TILES: '{empty} empty tiles',
+        FINALE_RATE_SUSPICIOUS:
+          'the top team would start with only {seconds}s - the rate may be inverted',
+        FINALE_TOO_FEW_QUESTIONS:
+          '{teams} teams usually need about {suggested} questions; you have {have}',
+      },
+    },
+
+    /** PRD 2 §11 — game setup, against the clock in a noisy room (§1.1). */
+    setup: {
+      heading: 'New game from "{name}"',
+      teams: 'Teams',
+      addTeam: 'Add team',
+      /** §11 — the same pub tends to have the same teams, and re-typing eight names costs time. */
+      copyFromLast: 'Copy from last game',
+      teamName: 'Team name',
+      defaultTeamName: 'Team {number}',
+      colour: 'Colour',
+      colourTaken: 'already used',
+      removeTeam: 'Remove team',
+      playerLanguage: 'Player language',
+      playerLanguageHint: 'Players can change this on their own phone.',
+      createGame: 'Create game',
+      /** §11.1 — shown only when the quiz ends in a finale, because the penalty depends on this. */
+      finaleHeading: 'This quiz ends with a finale.',
+      teamsPlaying: '{count, plural, one {# team playing} other {# teams playing}}',
+      penaltyReach: 'With {teams} teams, 5 keywords can remove up to {seconds}s.',
+      penaltyWarning: 'At this penalty a single question can end the round.',
+      rateFromQuiz: '{rate} points = 1 second (from the quiz)',
+      questionsOk: 'About {suggested} are usually needed for these {teams} teams.',
+      questionsShort:
+        'The finale has {have, plural, one {# question} other {# questions}}. About {suggested} are usually needed for these {teams} teams.',
+      lowerPenalty: 'Lower the penalty',
+    },
+
+    /** PRD 2 §12 — the hub for one game, before, during and after. */
+    game: {
+      join: 'Join',
+      code: 'Code',
+      regenerate: 'New code',
+      /** §12 — the obvious fear is that a new code kicks everyone out. It does not. */
+      regenerateTitle: 'Generate a new code?',
+      regenerateBody: 'Devices that have already joined keep working.',
+      openMainScreen: 'Open main screen',
+      openControl: 'Open control screen',
+      teams: 'Teams',
+      devices: '{count, plural, =0 {no devices} one {# device} other {# devices}}',
+      devicesJoined: '{count} of {total} devices joined',
+      rounds: '{rounds} rounds, {questions} questions',
+      notStarted: 'not started',
+      staleTitle: 'Template updated since this game was created',
+      staleBody:
+        'Teams, devices and the join code are kept. Questions are refreshed from the quiz.',
+      resync: 'Re-sync',
+      abandon: 'Abandon game',
+      abandonTitle: 'Abandon this game?',
+      abandonBody: 'It ends without being marked finished. The room is mid-quiz.',
+      deleteGame: 'Delete game',
+      deleteTitle: 'Delete this game?',
+      deleteBody:
+        'This game, its {teams} teams and all its answers go. The quiz itself is kept.',
+      exportGame: 'Export this game',
+    },
   },
 }
 

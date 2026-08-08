@@ -200,4 +200,14 @@ export const api = {
     defaultPlayerLocale: Locale
     finale?: { secondsPerPoint: number; penaltySeconds: number }
   }) => send<{ gameId: string; code: string }>('/api/games', input),
+
+  /*
+   * Three of slice 3's play-half actions (protocol §7.2) that the **config** surface drives rather
+   * than master control: PRD 2 §12's `[↻]`, its re-sync banner and its overflow menu. They go through
+   * the same endpoints as everything else — the surface a request comes from is not a thing the
+   * server knows or should care about.
+   */
+  regenerateCode: (gameId: string) => send(`/api/games/${gameId}/regenerate-code`, {}),
+  resyncGame: (gameId: string) => send(`/api/games/${gameId}/resync`, {}),
+  abandonGame: (gameId: string) => send(`/api/games/${gameId}/abandon`, {}),
 }

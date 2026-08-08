@@ -272,6 +272,97 @@ const nl: Messages = {
         'Bij {teams} teams en {penalty}s zijn ongeveer {suggested} vragen nodig om op een overlever uit te komen. Je hebt {have}.',
       keywordCount: '{count, plural, one {# kernwoord} other {# kernwoorden}}',
     },
+
+    preflight: {
+      heading: '{name} - klaar om te spelen?',
+      problems:
+        '{count, plural, one {# probleem moet opgelost worden} other {# problemen moeten opgelost worden}}',
+      warnings:
+        '{count, plural, one {# punt om naar te kijken} other {# punten om naar te kijken}}',
+      healthy:
+        '{questions} vragen, {attachments} bijlagen gecontroleerd, {rounds} rondes',
+      fix: 'Oplossen',
+      view: 'Bekijken',
+      playAnyway: 'Toch spelen',
+      fixProblems: 'Problemen oplossen',
+      setUpGame: 'Spel opzetten',
+      round: 'Ronde {number}',
+      code: {
+        EMPTY_PROMPT: 'geen vraagtekst',
+        NO_ACCEPTED_ANSWER: 'geen juist antwoord',
+        MC_NEEDS_ONE_CORRECT: 'heeft twee tot vier opties nodig met precies een juiste',
+        DO_NO_SCORING_MODE: 'geen scorewijze gekozen',
+        ATTACHMENT_MISSING: 'een bestand ontbreekt of is gewijzigd',
+        FINALE_KEYWORD_COUNT: 'heeft precies vijf kernwoorden nodig, heeft {count}',
+        MULTIPLE_FINALES: 'een quiz kan maar een finale hebben',
+        FINALE_NOT_LAST: 'de finale moet de laatste ronde zijn',
+        FINALE_RATE_MISSING: 'geen punten-naar-seconden ingesteld',
+        KEYWORDS_OUTSIDE_FINALE: 'kernwoordvragen horen alleen in een finale',
+        FINALE_QUESTION_NOT_KEYWORDS: 'een finalevraag moet een kernwoordvraag zijn',
+        ROUND_EMPTY: 'geen vragen in deze ronde',
+        SINGLE_ACCEPTED_ANSWER: 'maar een goed antwoord, dus bijna-goed komt bij jou',
+        SHORT_TIMER: 'maar {seconds}s om te antwoorden',
+        JEOPARDY_UNEVEN_COLUMNS: 'kolommen zijn ongelijk - de langste heeft {tallest}',
+        JEOPARDY_EMPTY_TILES: '{empty} lege tegels',
+        FINALE_RATE_SUSPICIOUS:
+          'het beste team start met maar {seconds}s - de verhouding staat misschien omgekeerd',
+        FINALE_TOO_FEW_QUESTIONS:
+          '{teams} teams hebben meestal ongeveer {suggested} vragen nodig; je hebt {have}',
+      },
+    },
+
+    setup: {
+      heading: 'Nieuw spel van "{name}"',
+      teams: 'Teams',
+      addTeam: 'Team toevoegen',
+      copyFromLast: 'Overnemen van vorig spel',
+      teamName: 'Teamnaam',
+      defaultTeamName: 'Team {number}',
+      colour: 'Kleur',
+      colourTaken: 'al in gebruik',
+      removeTeam: 'Team verwijderen',
+      playerLanguage: 'Taal voor spelers',
+      playerLanguageHint: 'Spelers kunnen dit op hun eigen telefoon wijzigen.',
+      createGame: 'Spel aanmaken',
+      finaleHeading: 'Deze quiz eindigt met een finale.',
+      teamsPlaying: '{count, plural, one {# team doet mee} other {# teams doen mee}}',
+      penaltyReach: 'Bij {teams} teams halen 5 kernwoorden tot {seconds}s weg.',
+      penaltyWarning: 'Bij deze straf kan een enkele vraag de ronde beeindigen.',
+      rateFromQuiz: '{rate} punten = 1 seconde (uit de quiz)',
+      questionsOk: 'Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
+      questionsShort:
+        'De finale heeft {have, plural, one {# vraag} other {# vragen}}. Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
+      lowerPenalty: 'Straf verlagen',
+    },
+
+    game: {
+      join: 'Meedoen',
+      code: 'Code',
+      regenerate: 'Nieuwe code',
+      regenerateTitle: 'Nieuwe code aanmaken?',
+      regenerateBody: 'Toestellen die al meedoen blijven werken.',
+      openMainScreen: 'Groot scherm openen',
+      openControl: 'Regiescherm openen',
+      teams: 'Teams',
+      devices:
+        '{count, plural, =0 {geen toestellen} one {# toestel} other {# toestellen}}',
+      devicesJoined: '{count} van {total} toestellen aangemeld',
+      rounds: '{rounds} rondes, {questions} vragen',
+      notStarted: 'niet gestart',
+      staleTitle: 'De quiz is bijgewerkt sinds dit spel is aangemaakt',
+      staleBody:
+        'Teams, toestellen en de code blijven. Vragen worden uit de quiz vernieuwd.',
+      resync: 'Vernieuwen',
+      abandon: 'Spel afbreken',
+      abandonTitle: 'Dit spel afbreken?',
+      abandonBody:
+        'Het eindigt zonder als afgelopen te worden gemarkeerd. De zaal is bezig.',
+      deleteGame: 'Spel verwijderen',
+      deleteTitle: 'Dit spel verwijderen?',
+      deleteBody:
+        'Dit spel, zijn {teams} teams en alle antwoorden gaan weg. De quiz blijft.',
+      exportGame: 'Dit spel exporteren',
+    },
   },
 }
 

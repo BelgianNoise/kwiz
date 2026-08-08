@@ -55,7 +55,6 @@ export function FinaleEditor({
   round: RoundContent
 }) {
   const t = useTranslations('admin.finale')
-  const question = useTranslations('admin.question')
   const roundCopy = useTranslations('admin.round')
   const common = useTranslations('common')
   const router = useRouter()
@@ -338,8 +337,6 @@ export function FinaleEditor({
           if (target) void api.deleteQuestion(target.id).then(refresh)
         }}
       />
-
-      <span className="sr-only">{question('keywords')}</span>
     </main>
   )
 }
