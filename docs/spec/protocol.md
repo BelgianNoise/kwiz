@@ -1030,6 +1030,28 @@ Rebuilding on import makes **every import a live test of data model invariant I1
 tokens are meaningless on a machine those phones will never reach again, but exporting
 them costs nothing and keeps replay faithful.
 
+> **`teams` and `devices` are exported but not *imported* — they are rebuilt by replay.**
+> Both are written by `applyProjection` from `TEAM_ADDED` and `DEVICE_JOINED`, so in this
+> implementation they are as derived as `game_answer` is; the four tables named above are
+> not the complete list of what replay owns. Inserting the exported rows *and* replaying
+> the log inserts each row twice. They stay in the file because a zip should be readable
+> without replaying anything, and because the spec above promises them. Found by the
+> round-trip test: `UNIQUE constraint failed: game_team.id`.
+
+> **The join code is rewritten in event payloads when a game is imported.** A code must be
+> unique among joinable games (data model §6.1), so importing a `SETUP` or `LIVE` game
+> generates a new one — but `CODE_REGENERATED` carries a code and `GAME_CREATED` does too,
+> so replaying them unchanged puts the source's code straight back and fails the unique
+> index. This is not optional prettiness: "import as a separate copy" (PRD 2 §14.2) exists
+> precisely to place a copy beside its original on one machine. The payload is rewritten
+> rather than the row patched afterwards, because a projection may only be written by its
+> event.
+
+> **Under `COPY`, only uuid-shaped strings in a payload are remapped.** Walking the payload
+> structurally is what keeps a new event type from being forgotten, but remapping *every*
+> string renames a team called `Aardappel` to a uuid. Every id in this system is a uuidv7
+> and no prompt, answer or team name is uuid-shaped, so shape is the discriminator.
+
 ### 8.3 Import
 
 ```

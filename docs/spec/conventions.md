@@ -662,6 +662,20 @@ Do **not** use it for action bodies. An action's input is rarely a table row: `s
 takes `{ gameQuestionId, text? }`, not a `game_answer` row, and generating from the table
 would expose fields no client may set.
 
+**The export payload is the case this was written for** (protocol §8): `quiz.json` and
+`games.json` are exactly fifteen tables' columns, so they are generated. Two details that
+only surface once you try it:
+
+- **Dates are revived before validation, not refined per column.** `timestamp_ms` columns
+  cross the wire as ISO strings, and passing `createSelectSchema` a runtime-built
+  refinement map defeats its per-column typing — TypeScript gives up with *"type
+  instantiation is excessively deep"* on a table with a dozen columns. Converting the
+  strings first keeps the generated schema exactly as generated. Which columns to convert
+  is read from the table's own metadata, so a date column added later needs no edit.
+- **Do not revive with a `JSON.parse` reviver.** It cannot tell a timestamp column from a
+  question whose accepted answer happens to be `2026-08-08T18:22:04.000Z`. Structure is
+  knowable; string contents are not.
+
 ---
 
 ## 11. Definition of done

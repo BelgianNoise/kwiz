@@ -12,6 +12,86 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
+
+**Status:** complete · `pnpm check` green · **512 tests** · lint silent · every screen driven by
+hand against a real quiz, a real LAN address and a real zip
+
+### What was built
+
+PRD 2, end to end: the landing page and dashboard, the quiz editor, the three round editors
+(question set, Jeopardy board, DSMTW finale) with the question sheet, pre-flight, game setup, the
+game hub, the first-run network picker, settings, and export/import.
+
+Underneath: `packages/domain` gained the team palette and the pure `preflight()` rules;
+`packages/db` gained every template writer plus the export/import repositories; `packages/export`
+gained the zip format. One new route table (`/api/authoring/*`, 21 routes), one for this machine
+(`/api/settings/*`), and `/api/transfer` for the two calls that are not JSON.
+
+### Deviations from the specs — all four recorded in the specs themselves
+
+1. **`game_team` and `game_device` are projections here** (protocol §8.2). They are written by
+   `applyProjection` from `TEAM_ADDED` and `DEVICE_JOINED`, so the spec's list of four
+   replay-owned tables is incomplete. The export carries them; the import ignores them and lets
+   replay rebuild them, or every row inserts twice.
+2. **The join code lives in event payloads**, so importing a joinable game rewrites it there rather
+   than patching the row afterwards — a projection may only be written by its event.
+3. **`drizzle-zod` date handling** (conventions §10.3): revive the ISO strings before validating.
+   Per-column refinements built at runtime defeat its typing and TypeScript gives up.
+4. **An accepted buzz credits the team** — found in slice 3, but PRD 1 §8.4 and protocol §4.4 were
+   only reconciled then; see that entry.
+
+### Raised and not resolved
+
+- **`localGames` in the import collision dialog counts games whose `sourceQuizId` matches.** For an
+  imported-as-copy quiz that is right. For a quiz whose games were themselves imported under a
+  different id it is right too. It has not been exercised against a *replaced* quiz whose games
+  predate the identity, because nothing yet creates that state.
+- **The export is built in memory** (`zipSync`). Correct at PRD 1 §2.1's scale and stated in the
+  code; a library of gigabyte videos needs a streaming writer. That is a revisit trigger, not a bug.
+- **`Reclaim space` reads the referenced set outside a transaction.** Safe in the direction that
+  matters — a row inserted mid-sweep points at a file that was already referenced — and the reverse
+  race just leaves a file for the next pass. Worth a second look if reconciliation ever runs
+  automatically rather than on a button.
+
+### Deliberately left out
+
+- **Post-game review and correction (PRD 2 §13)** — build-order defers it to slice 8, where the
+  event log it reads and rewrites actually has content.
+- **`[Copy from last game]` copies names and colours only.** Nothing else on a team survives, and
+  nothing else should.
+
+### What the next agent would otherwise rediscover
+
+**Next evaluates `lib/server/*` twice** — once in the server-component layer, once in the
+route-handler layer. Module-level state is therefore **not** shared between a page and an API
+route. This had been quietly opening two SQLite connections, two projection registries and two
+transports since slice 3; `[kwiz] database up to date` printed twice at boot and nobody looked. It
+first *broke* something here: PRD 2 §4's probe is written by a page and read by a route, so the
+phone reached the machine and the setup screen never noticed. Everything process-wide now goes
+through `lib/server/singleton.ts`, which also survives HMR. **Put any new server-side singleton
+through it.**
+
+- **The dev server's HMR websocket does not reach the in-app browser pane.** Hot updates never
+  arrive, so a message-file edit appears to have done nothing. Restart the dev server rather than
+  debugging the code. Several apparent bugs this slice were a stale bundle.
+- **Radix opens menus on pointerdown**, so a programmatic `.click()` on a `DropdownMenuTrigger`
+  does nothing. Drive it with a real click. Likewise the confirm dialogs are `role="alertdialog"`,
+  not `role="dialog"` — a probe for the latter finds nothing and looks like a broken dialog.
+- **Popover and dialog content is portalled outside `<main>`**, so `get_page_text` (which reads
+  `main`) misses it entirely. Query the DOM instead.
+- **The team palette is a hue wheel, not the array order.** `assignedColour(n)` walks
+  `PALETTE_BY_ASSIGNMENT` (Red, Cyan, Amber, Violet, …) so the first four teams are maximally
+  distinct; `TEAM_PALETTE` is the display order in the picker. They are different sequences on
+  purpose.
+- **Crockford Base32 keeps `1` and `8`** and excludes `I`, `L`, `O`, `U`. A join code containing
+  `1` is not a bug — that check has been made twice now.
+- **`settings.json` lives in the data dir, not the database.** The chosen network address is true
+  of one machine on one wifi and must not travel with a copied `kwiz.db`. It is also why
+  `chooseAddress` validates against the live interface list rather than a format check.
+- **A quiz named like a path is sanitised into the export filename**, and the `content-disposition`
+  header is built from the sanitised value. Do not reintroduce the raw name there.
+
 ## Slice 3 — Transport: SSE, actions, attachments
 
 **Status:** complete · `pnpm check` green · **440 tests** · lint silent · `pnpm build` clean, no
