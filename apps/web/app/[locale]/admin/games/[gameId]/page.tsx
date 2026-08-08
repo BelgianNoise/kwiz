@@ -59,7 +59,7 @@ export default async function GameDetailPage({
    * into one string is how the audit trail ends up reading "joined during round 2/5".
    */
   const roundIndex =
-    state?.content.rounds.findIndex((round) => round.id === state.currentRoundId) ?? -1
+    state?.content.rounds.findIndex((entry) => entry.id === state.currentRoundId) ?? -1
   const round =
     state && roundIndex >= 0
       ? { number: roundIndex + 1, total: state.content.rounds.length }
@@ -86,7 +86,7 @@ export default async function GameDetailPage({
         rounds: state?.content.rounds.length ?? 0,
         questions:
           state?.content.rounds.reduce(
-            (total, round) => total + round.questions.length,
+            (total, entry) => total + entry.questions.length,
             0,
           ) ?? 0,
         hasTemplate: template !== undefined,

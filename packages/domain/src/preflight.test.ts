@@ -175,6 +175,8 @@ describe('errors — the data model invariants', () => {
           position: 0,
           durationMs: null,
           showOnPlayerDevices: false,
+          originalName: 'kid-a.mp3',
+          sizeBytes: 4_211_233,
         },
       ],
     })

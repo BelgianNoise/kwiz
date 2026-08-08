@@ -4,27 +4,26 @@ import {
   assignedColour,
   dsmtwFinaleRoundConfigSchema,
   finaleRound,
-  isColourTaken,
   LOCALES,
   pointsPerSecond,
   quizPoints,
   secondsForScore,
   suggestFinaleQuestions,
-  TEAM_PALETTE,
   type Locale,
   type QuizContent,
 } from '@kwiz/domain'
-import { AlertTriangle, Check, ChevronLeft, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, GripVertical, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
+import { ColourPicker } from '@/components/admin/colour-picker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Link, useRouter } from '@/i18n/navigation'
 import { api } from '@/lib/client/api'
+import { useReorder } from '@/lib/client/use-reorder'
 
 interface DraftTeam {
   key: string
@@ -54,6 +53,7 @@ export function GameSetup({
   const t = useTranslations('admin.setup')
   const finaleCopy = useTranslations('admin.finale')
   const language = useTranslations('common.language')
+  const common = useTranslations('common')
   const router = useRouter()
 
   /** The same label the authoring editor uses, because it is the same number (§9, §11.1). */
@@ -91,6 +91,22 @@ export function GameSetup({
   )
   const finaleQuestions = finale?.questions.length ?? 0
   const reach = penalty * 5 * Math.max(0, teams.length - 1)
+
+  /** Local only — the teams do not exist until `[Create game]`, so this is an array move. */
+  const reorder = useReorder({
+    canDrag: () => teams.length > 1,
+    canDrop: () => true,
+    onMove: (key, direction, steps) => {
+      const from = teams.findIndex((team) => team.key === key)
+      const to = direction === 'DOWN' ? from + steps : from - steps
+      if (from < 0 || to < 0 || to >= teams.length) return
+
+      const next = [...teams]
+      const [moved] = next.splice(from, 1)
+      if (moved) next.splice(to, 0, moved)
+      setTeams(next)
+    },
+  })
 
   const named = (team: DraftTeam, index: number): string =>
     team.name.trim() === ''
@@ -168,7 +184,28 @@ export function GameSetup({
 
         <ul className="space-y-2">
           {teams.map((team, index) => (
-            <li key={team.key} className="flex items-center gap-2">
+            <li
+              key={team.key}
+              {...reorder.rowProps(team.key, index)}
+              className={[
+                'flex items-center gap-2',
+                reorder.draggingId === team.key ? 'opacity-40' : '',
+                reorder.overId === team.key ? 'border-primary border-t-2' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {/*
+                §11 — teams are ordered, and the order is what every surface reads (`position`).
+                Reordering here is local: nothing exists server-side until `[Create game]`.
+              */}
+              <span
+                className="text-muted-foreground cursor-grab active:cursor-grabbing"
+                title={common('dragToReorder')}
+                aria-hidden
+              >
+                <GripVertical className="size-4" />
+              </span>
               <ColourPicker
                 colour={team.colour}
                 taken={teams
@@ -303,56 +340,5 @@ export function GameSetup({
         </Button>
       </footer>
     </main>
-  )
-}
-
-/**
- * PRD 1 §9.3's palette. **Taken colours are marked, not disabled** (§11): the palette guarantees
- * mutual distinguishability for the first several teams, and beyond that a master may want a
- * near-match on purpose. Colour is never the sole identifier anyway (§9.5).
- */
-function ColourPicker({
-  colour,
-  taken,
-  onPick,
-}: {
-  colour: string
-  taken: string[]
-  onPick: (colour: string) => void
-}) {
-  const t = useTranslations('admin.setup')
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={t('colour')}
-          className="border-border size-8 shrink-0 rounded-full border"
-          style={{ backgroundColor: colour }}
-        />
-      </PopoverTrigger>
-      <PopoverContent className="w-64">
-        <ul className="grid grid-cols-4 gap-2">
-          {TEAM_PALETTE.map((entry) => (
-            <li key={entry.hex}>
-              <button
-                type="button"
-                className="flex w-full flex-col items-center gap-1"
-                onClick={() => onPick(entry.hex)}
-              >
-                <span
-                  className="border-border size-8 rounded-full border"
-                  style={{ backgroundColor: entry.hex }}
-                />
-                <span className="text-muted-foreground text-[10px] leading-none">
-                  {isColourTaken(entry.hex, taken) ? t('colourTaken') : entry.name}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
   )
 }

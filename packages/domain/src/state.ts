@@ -25,6 +25,15 @@ export interface MediaContent {
   durationMs: number | null
   /** `IMAGE` only; audio and video are main-screen-only and not configurable (D27, I3). */
   showOnPlayerDevices: boolean
+  /**
+   * Authoring display only (PRD 2 §7.1, data model §4.7) — **never** part of an audience view.
+   *
+   * The on-disk name is the content hash, so this is the master's own filename kept purely so a
+   * question with three images is tellable apart. Payload filters construct rather than strip
+   * (CLAUDE.md §2.3), so neither field reaches a view unless someone adds it by name.
+   */
+  originalName: string
+  sizeBytes: number
 }
 
 export interface OptionContent {

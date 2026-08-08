@@ -157,6 +157,8 @@ export function loadQuizTree(
             position: file.position,
             durationMs: file.durationMs,
             showOnPlayerDevices: file.showOnPlayerDevices,
+            originalName: file.originalName,
+            sizeBytes: file.sizeBytes,
           })),
         })),
     })),

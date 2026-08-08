@@ -1,15 +1,11 @@
 'use client'
 
-import {
-  assignedColour,
-  isColourTaken,
-  TEAM_PALETTE,
-  type MissedSoFar,
-} from '@kwiz/domain'
+import { assignedColour, type MissedSoFar } from '@kwiz/domain'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
+import { ColourPicker } from '@/components/admin/colour-picker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,7 +17,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useRouter } from '@/i18n/navigation'
 import { api } from '@/lib/client/api'
@@ -133,39 +128,7 @@ export function AddTeamDialog({
               onChange={(event) => setName(event.target.value)}
             />
           </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label={setup('colour')}
-                className="border-border mb-1 size-9 shrink-0 rounded-full border"
-                style={{ backgroundColor: colour }}
-              />
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-              <ul className="grid grid-cols-4 gap-2">
-                {TEAM_PALETTE.map((entry) => (
-                  <li key={entry.hex}>
-                    <button
-                      type="button"
-                      className="flex w-full flex-col items-center gap-1"
-                      onClick={() => setColour(entry.hex)}
-                    >
-                      <span
-                        className="border-border size-8 rounded-full border"
-                        style={{ backgroundColor: entry.hex }}
-                      />
-                      <span className="text-muted-foreground text-[10px] leading-none">
-                        {isColourTaken(entry.hex, takenColours)
-                          ? setup('colourTaken')
-                          : entry.name}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </PopoverContent>
-          </Popover>
+          <ColourPicker colour={colour} taken={takenColours} onPick={setColour} />
         </div>
 
         {/* Offered only when there is something to compensate for. */}

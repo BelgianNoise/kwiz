@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useId, useState } from 'react'
 
+import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,6 +39,7 @@ export function MultipleChoiceSection({
   onChanged: () => void
 }) {
   const t = useTranslations('admin.question')
+  const common = useTranslations('common')
 
   const prefix = useId()
   const [options, setOptions] = useState<DraftOption[]>(() =>
@@ -53,6 +55,16 @@ export function MultipleChoiceSection({
         ],
   )
   const [nextKey, setNextKey] = useState(options.length)
+  const [removing, setRemoving] = useState<number | undefined>()
+
+  /** Removing the correct option has to leave a correct one behind (I4). */
+  const remove = (index: number): void => {
+    const next = options.filter((_, i) => i !== index)
+    if (!next.some((candidate) => candidate.isCorrect) && next[0]) {
+      next[0] = { ...next[0], isCorrect: true }
+    }
+    update(next)
+  }
 
   const save = useAutosave<DraftOption[]>((value) =>
     api
@@ -113,12 +125,17 @@ export function MultipleChoiceSection({
               disabled={options.length <= 2}
               aria-label={`${t('options')} ${index + 1}`}
               onClick={() => {
-                const next = options.filter((_, i) => i !== index)
-                // Removing the correct one has to leave a correct one behind.
-                if (!next.some((candidate) => candidate.isCorrect) && next[0]) {
-                  next[0] = { ...next[0], isCorrect: true }
+                /*
+                 * §15.2 lists **option** among the structural deletes that need confirming, beside
+                 * round, category and question. Typed text is work, and an `✕` next to a text field
+                 * is easy to hit for the field beside the one you meant. Empty options skip it —
+                 * there is nothing to lose and a dialog would only be in the way.
+                 */
+                if (option.text.trim() !== '') {
+                  setRemoving(index)
+                  return
                 }
-                update(next)
+                remove(index)
               }}
             >
               <X className="size-4" />
@@ -126,6 +143,18 @@ export function MultipleChoiceSection({
           </div>
         ))}
       </RadioGroup>
+
+      <ConfirmDialog
+        open={removing !== undefined}
+        title={t('deleteOptionTitle')}
+        body={removing === undefined ? '' : (options[removing]?.text ?? '')}
+        confirmLabel={common('delete')}
+        onCancel={() => setRemoving(undefined)}
+        onConfirm={() => {
+          if (removing !== undefined) remove(removing)
+          setRemoving(undefined)
+        }}
+      />
 
       {options.length < 4 ? (
         <Button

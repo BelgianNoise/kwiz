@@ -137,6 +137,8 @@ export function loadGameContent(
       position: media.position,
       durationMs: media.durationMs,
       showOnPlayerDevices: media.showOnPlayerDevices,
+      originalName: media.originalName,
+      sizeBytes: media.sizeBytes,
     })),
   })
 

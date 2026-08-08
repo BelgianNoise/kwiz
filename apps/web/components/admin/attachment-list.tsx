@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/client/api'
+import { formatBytes } from '@/lib/client/format'
 import { verifyPlayable } from '@/lib/client/verify-playable'
 
 /**
@@ -97,11 +98,37 @@ export function AttachmentList({
                 )}
               </span>
 
-              <span className="flex-1 truncate text-sm">
-                {media.durationMs === null
-                  ? media.kind
-                  : `${media.kind} · ${formatDuration(media.durationMs)}`}
+              {/* §7.1's row: the master's own filename, its size, and how long it runs. */}
+              <span className="min-w-0 flex-1 text-sm">
+                <span className="block truncate">{media.originalName}</span>
+                <span className="text-muted-foreground block text-xs">
+                  {formatBytes(media.sizeBytes)}
+                  {media.durationMs === null
+                    ? ''
+                    : ` · ${formatDuration(media.durationMs)}`}
+                </span>
               </span>
+
+              {/*
+                §7.1's `▶`. Playability was verified at upload (O6), but that was a headless media
+                element — this is the master hearing the clip is the *right* clip, which no automatic
+                check can answer. `preload="none"` so opening a question with four tracks does not
+                fetch four files.
+              */}
+              {media.kind === 'AUDIO' ? (
+                /*
+                  No `<track>`: this is the master privately checking a clip is the *right* clip, not
+                  media presenting information to an audience. A caption track would have to be
+                  invented, and an empty one claims captions exist where none do.
+                */
+                // oxlint-disable-next-line jsx-a11y/media-has-caption
+                <audio
+                  controls
+                  preload="none"
+                  src={`/api/attachment/${media.id}`}
+                  className="h-8"
+                />
+              ) : null}
 
               <span className="text-muted-foreground flex items-center gap-1 text-sm">
                 <Check className="size-3" />

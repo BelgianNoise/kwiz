@@ -21,7 +21,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { QuestionSheet } from '@/components/admin/question-sheet'
@@ -75,7 +75,25 @@ export function FinaleEditor({
   /** §9's field asks "[2] points = 1 second"; the stored value is seconds per point. */
   const [rate, setRate] = useState(pointsPerSecond(config.secondsPerPoint))
   const [penalty, setPenalty] = useState(config.penaltySeconds)
+  /**
+   * §9 — *"defaulting to a typical count and remembered per quiz"*. Per **quiz**, so a master with a
+   * pub game and a corporate game does not have to re-pick each time they open one.
+   *
+   * `localStorage` rather than the database: it is an authoring assumption about a game that does
+   * not exist yet, not quiz content, and it must not travel in an export (§14) to a machine where
+   * someone else's room size is wrong.
+   */
   const [teams, setTeams] = useState(4)
+
+  useEffect(() => {
+    const saved = Number(globalThis.localStorage?.getItem(assumedTeamsKey(quiz.id)))
+    if (Number.isInteger(saved) && saved >= 2) setTeams(saved)
+  }, [quiz.id])
+
+  const rememberTeams = (count: number): void => {
+    setTeams(count)
+    globalThis.localStorage?.setItem(assumedTeamsKey(quiz.id), String(count))
+  }
 
   const [openIndex, setOpenIndex] = useState<number | undefined>()
   const [deleting, setDeleting] = useState<QuestionContent | undefined>()
@@ -201,7 +219,7 @@ export function FinaleEditor({
             </span>
             <Select
               value={String(teams)}
-              onValueChange={(next) => setTeams(Number(next))}
+              onValueChange={(next) => rememberTeams(Number(next))}
             >
               <SelectTrigger
                 className="w-40"
@@ -381,4 +399,9 @@ export function FinaleEditor({
       />
     </main>
   )
+}
+
+/** Namespaced and per quiz, so two quizzes in one browser do not share an assumption. */
+function assumedTeamsKey(quizId: string): string {
+  return `kwiz.assumedTeams.${quizId}`
 }

@@ -233,6 +233,7 @@ const en = {
       /** §8 and §9.1 — stated as a fact, not shown as a disabled control (D34, I18). */
       lockedBuzzer: 'Jeopardy tiles are always buzzer questions.',
       lockedKeywords: 'A finale question is always a keyword question.',
+      deleteOptionTitle: 'Delete this option?',
       correctAnswer: 'Correct answer',
       alsoAccept: 'Also accept',
       addAlternative: 'Add alternative',
@@ -366,6 +367,8 @@ const en = {
       teamName: 'Team name',
       defaultTeamName: 'Team {number}',
       colour: 'Colour',
+      customColour: 'Custom',
+      colourTooDark: 'Too dark to read on the projected screen.',
       colourTaken: 'already used',
       removeTeam: 'Remove team',
       playerLanguage: 'Player language',
