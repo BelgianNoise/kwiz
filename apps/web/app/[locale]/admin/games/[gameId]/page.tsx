@@ -1,4 +1,4 @@
-import { findGame, isStale, listGames, loadQuizTree } from '@kwiz/db'
+import { findGame, gameLoss, isStale, listGames, loadQuizTree } from '@kwiz/db'
 import { missedSoFar } from '@kwiz/domain'
 import { notFound } from 'next/navigation'
 
@@ -24,6 +24,7 @@ export default async function GameDetailPage({
   const { gameId } = await params
 
   const settings = readSettings(runtime.paths.dir)
+  const loss = gameLoss(runtime.database, gameId)
   const game = findGame(runtime.database, gameId)
   const summary = listGames(runtime.database).find((entry) => entry.id === gameId)
   if (!game || !summary) notFound()
@@ -70,6 +71,12 @@ export default async function GameDetailPage({
       round={round}
       game={{
         id: game.id,
+        sourceQuizId: game.sourceQuizId,
+        // Counted server-side so §12.1's confirmation states the real loss, not a guess.
+        loss: {
+          teams: loss?.teams ?? 0,
+          answers: loss?.answers ?? 0,
+        },
         code: game.code,
         joinUrl: join,
         qr,

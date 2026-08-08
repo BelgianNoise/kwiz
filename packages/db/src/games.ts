@@ -2,7 +2,7 @@ import { codeFromBytes, normaliseCode, type GameStatus } from '@kwiz/domain'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
-import { game, gameDevice, gameTeam, quiz } from './schema'
+import { game, gameAnswer, gameDevice, gameTeam, quiz } from './schema'
 
 /**
  * Resolution: turning a code or a device token into a game, and minting a code that is free.
@@ -180,4 +180,50 @@ export function isStale(summary: GameSummary): boolean {
     summary.templateRevision !== null &&
     summary.templateRevision > summary.quizRevision
   )
+}
+
+/**
+ * What deleting this game would cost, for §12.1's confirmation.
+ *
+ * Counted rather than estimated, and **named in the dialog**, because the fear that stops masters
+ * cleaning up is not knowing what goes — the same reason §5's quiz delete says what survives.
+ */
+export interface GameLoss {
+  teams: number
+  answers: number
+  quizName: string
+}
+
+export function gameLoss(database: KwizDatabase, gameId: string): GameLoss | undefined {
+  const row = database.db
+    .select({ quizName: game.quizName })
+    .from(game)
+    .where(eq(game.id, gameId))
+    .get()
+  if (!row) return undefined
+
+  const count = (table: typeof gameTeam | typeof gameAnswer): number =>
+    database.db
+      .select({ n: sql<number>`count(*)` })
+      .from(table)
+      .where(eq(table.gameId, gameId))
+      .get()?.n ?? 0
+
+  return { teams: count(gameTeam), answers: count(gameAnswer), quizName: row.quizName }
+}
+
+/**
+ * Data model §10 — deleting a game **cascades** to its copy subtree, teams, devices, events, drafts
+ * and all four projections. One statement, because every one of those tables hangs off `game.id`.
+ *
+ * Offered per game (§12.1) and deliberately **not** in bulk (Q5): a master who ran a game by mistake
+ * must be able to remove it, but a "delete everything older than N" sweep is destructive over the
+ * only copy of their history, and it solves a storage problem that does not exist — game copies are
+ * a couple of hundred rows and attachment files are shared by checksum.
+ *
+ * The quiz is untouched. `sourceQuizId` points *at* the quiz, not the other way round.
+ */
+export function deleteGame(database: KwizDatabase, gameId: string): boolean {
+  const result = database.db.delete(game).where(eq(game.id, gameId)).run()
+  return result.changes > 0
 }

@@ -103,14 +103,17 @@ export {
 } from './drafts'
 
 export {
+  deleteGame,
   findDeviceByToken,
   findGame,
+  gameLoss,
   findJoinableGameByCode,
   generateUnusedCode,
   isStale,
   listGames,
   touchDevice,
   JOINABLE_STATUSES,
+  type GameLoss,
   type GameRow,
   type GameSummary,
 } from './games'

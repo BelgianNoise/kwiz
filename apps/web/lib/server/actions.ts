@@ -6,6 +6,7 @@ import {
   findDeviceByToken,
   generateUnusedCode,
   questionDrafts,
+  deleteGame,
   resyncGame,
   saveDraft,
   touchDevice,
@@ -130,6 +131,11 @@ export const ROUTES: readonly Route[] = [
    */
   route('add-team', 'teams', 'MASTER'),
   route('update-team', 'teams/:teamId', 'MASTER'),
+  /*
+   * §12.1 — per game, never in bulk (data model Q5). Like `resync` it has **no domain command**: it
+   * removes the game the state would be folded from, so there is nothing left to decide against.
+   */
+  route('delete-game', 'delete', 'MASTER'),
 ] as const
 
 export interface MatchedRoute {
@@ -635,6 +641,22 @@ function execute(
      * data model §7.1 — owned by `@kwiz/db` end to end, because the copy subtree and the event have
      * to commit together and the precondition is a row count rather than anything in `GameState`.
      */
+    /**
+     * Data model §10 — cascades to the copy subtree, teams, devices, events, drafts and all four
+     * projections. The quiz is untouched, which is what the confirmation says out loud.
+     *
+     * The registry entry is evicted rather than updated: there is no game left to hold state for,
+     * and a stale entry would let a reconnecting stream serve a view of something deleted.
+     */
+    case 'delete-game':
+      return withNoBody(body, () => {
+        if (!deleteGame(runtime.database, gameId)) {
+          return fail('GAME_NOT_FOUND', `no game ${gameId}`)
+        }
+        runtime.registry.evict(gameId)
+        return ok()
+      })
+
     case 'resync': {
       const result = resyncGame(runtime.database, gameId, () => new Date(now))
       if (!result.ok) return result

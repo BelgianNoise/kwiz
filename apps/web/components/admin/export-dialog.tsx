@@ -33,18 +33,24 @@ export function ExportDialog({
   quizId,
   quizName,
   games,
+  onlyGameId,
   open,
   onClose,
 }: {
   quizId: string
   quizName: string
   games: number
+  /**
+   * §14.1's "Export this game" — narrows to one game. With it set, the quiz-only option is not
+   * offered: the master asked for a game, and an export without it would be a different thing.
+   */
+  onlyGameId?: string
   open: boolean
   onClose: () => void
 }) {
   const t = useTranslations('admin.export')
 
-  const [includeGames, setIncludeGames] = useState(false)
+  const [includeGames, setIncludeGames] = useState(onlyGameId !== undefined)
   const [includeAttachments, setIncludeAttachments] = useState(true)
   const [size, setSize] = useState<{ bytes: number; attachments: number } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,18 +59,27 @@ export function ExportDialog({
     if (!open) return undefined
 
     let current = true
-    void api.exportSize(quizId, { includeGames, includeAttachments }).then((result) => {
+    const scope = {
+      includeGames,
+      includeAttachments,
+      ...(onlyGameId ? { onlyGameId } : {}),
+    }
+    void api.exportSize(quizId, scope).then((result) => {
       // The dialog may have closed, or the options changed again, while this was in flight.
       if (current && result.ok && result.data) setSize(result.data)
     })
     return () => {
       current = false
     }
-  }, [open, quizId, includeGames, includeAttachments])
+  }, [open, quizId, includeGames, includeAttachments, onlyGameId])
 
   const download = async (): Promise<void> => {
     setBusy(true)
-    const result = await api.downloadExport(quizId, { includeGames, includeAttachments })
+    const result = await api.downloadExport(quizId, {
+      includeGames,
+      includeAttachments,
+      ...(onlyGameId ? { onlyGameId } : {}),
+    })
     setBusy(false)
     if (result.ok) onClose()
   }
@@ -77,12 +92,13 @@ export function ExportDialog({
           <DialogDescription>{t('body')}</DialogDescription>
         </DialogHeader>
 
+        {/* With a game named, there is no scope to choose — the menu item already chose it. */}
         <RadioGroup
           value={includeGames ? 'WITH_GAMES' : 'QUIZ_ONLY'}
           onValueChange={(next) => setIncludeGames(next === 'WITH_GAMES')}
           className="gap-3"
         >
-          <div className="flex items-start gap-3">
+          <div className={onlyGameId === undefined ? 'flex items-start gap-3' : 'hidden'}>
             <RadioGroupItem value="QUIZ_ONLY" id="export-quiz-only" className="mt-1" />
             <Label htmlFor="export-quiz-only" className="flex flex-col items-start gap-1">
               <span>{t('quizOnly')}</span>
@@ -92,7 +108,7 @@ export function ExportDialog({
             </Label>
           </div>
           {/* Offered only when there is history to take — an empty option is a question with no answer. */}
-          {games > 0 ? (
+          {games > 0 && onlyGameId === undefined ? (
             <div className="flex items-start gap-3">
               <RadioGroupItem
                 value="WITH_GAMES"

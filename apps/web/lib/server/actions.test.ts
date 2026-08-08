@@ -54,6 +54,8 @@ const SPEC_PATHS = [
   // `TEAM_UPDATED` existed as events with no action that could cause them.
   'teams',
   'teams/:teamId',
+  // §12.1 — the cascade was in data model §10 and the menu item in the PRD, with no action between.
+  'delete',
 ]
 
 describe('the action catalogue', () => {
@@ -61,8 +63,8 @@ describe('the action catalogue', () => {
     const implemented = ROUTES.map((route) => route.pattern.join('/'))
 
     expect([...implemented].sort()).toEqual([...SPEC_PATHS].sort())
-    // 39 here plus `POST /api/games/join`, which is the 40 the spec lists.
-    expect(implemented).toHaveLength(39)
+    // 40 here plus `POST /api/games/join`, which is the 41 the spec lists.
+    expect(implemented).toHaveLength(40)
   })
 
   it('requires a device token on exactly the four player actions', () => {

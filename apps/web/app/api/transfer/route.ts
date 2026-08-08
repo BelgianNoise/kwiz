@@ -26,6 +26,8 @@ const optionsSchema = z.object({
   quizId: z.string().min(1),
   includeGames: z.boolean().default(false),
   includeAttachments: z.boolean().default(true),
+  /** §14.1 — narrows the export to one game. Implies `includeGames`, since that is the ask. */
+  onlyGameId: z.string().min(1).optional(),
   /** `size` answers §14.1's dialog; `download` returns the zip itself. */
   intent: z.enum(['size', 'download']).default('size'),
 })

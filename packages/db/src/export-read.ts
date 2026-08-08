@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
 import type { GameExport, QuizFile } from './export-schema'
@@ -43,7 +43,15 @@ export interface QuizExport {
 export function collectQuizExport(
   database: KwizDatabase,
   quizId: string,
-  options: { includeGames: boolean; includeAttachments: boolean },
+  options: {
+    includeGames: boolean
+    includeAttachments: boolean
+    /**
+     * PRD 2 §14.1's *"Export this game"* — **quiz + this game only**, from the game hub's overflow
+     * menu. Absent means every game the quiz has, which is what the quiz-level dialog asks for.
+     */
+    onlyGameId?: string
+  },
 ): QuizExport | undefined {
   const { db } = database
 
@@ -106,7 +114,9 @@ export function collectQuizExport(
     ),
   }
 
-  const games = options.includeGames ? collectGames(database, quizId) : []
+  const games = options.includeGames
+    ? collectGames(database, quizId, options.onlyGameId)
+    : []
 
   /**
    * Both halves contribute, because a game copy may reference a file whose template row has since
@@ -136,10 +146,22 @@ export function collectQuizExport(
   return { quiz: quizFile, games, attachments: [...files.values()] }
 }
 
-function collectGames(database: KwizDatabase, quizId: string): GameExport[] {
+function collectGames(
+  database: KwizDatabase,
+  quizId: string,
+  onlyGameId?: string,
+): GameExport[] {
   const { db } = database
 
-  const rows = db.select().from(game).where(eq(game.sourceQuizId, quizId)).all()
+  const rows = db
+    .select()
+    .from(game)
+    .where(
+      onlyGameId === undefined
+        ? eq(game.sourceQuizId, quizId)
+        : and(eq(game.sourceQuizId, quizId), eq(game.id, onlyGameId)),
+    )
+    .all()
 
   return rows.map((gameRow) => {
     // Every game-copy table carries `gameId` (data model §5), so each is one predicate — no walking

@@ -34,6 +34,8 @@ const sha256 = (bytes: Uint8Array): string =>
 export interface ExportOptions {
   includeGames: boolean
   includeAttachments: boolean
+  /** §14.1's "Export this game" — quiz + that one game, from the game hub's overflow menu. */
+  onlyGameId?: string
 }
 
 /**

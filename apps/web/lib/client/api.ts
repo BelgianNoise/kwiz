@@ -226,6 +226,8 @@ export const api = {
   ) => send(`/api/games/${gameId}/teams/${teamId}`, patch),
   resyncGame: (gameId: string) => send(`/api/games/${gameId}/resync`, {}),
   abandonGame: (gameId: string) => send(`/api/games/${gameId}/abandon`, {}),
+  /** §12.1 — per game, never in bulk (data model Q5). Cascades; the quiz is untouched. */
+  deleteGame: (gameId: string) => send(`/api/games/${gameId}/delete`, {}),
 
   // ─── this machine (PRD 2 §4, §16) ───
 
@@ -245,7 +247,7 @@ export const api = {
   /** §14.1 — real numbers before the master commits to a copy onto a slow USB stick. */
   exportSize: (
     quizId: string,
-    options: { includeGames: boolean; includeAttachments: boolean },
+    options: { includeGames: boolean; includeAttachments: boolean; onlyGameId?: string },
   ) =>
     send<{ bytes: number; attachments: number; games: number }>('/api/transfer', {
       quizId,
@@ -261,7 +263,7 @@ export const api = {
    */
   downloadExport: async (
     quizId: string,
-    options: { includeGames: boolean; includeAttachments: boolean },
+    options: { includeGames: boolean; includeAttachments: boolean; onlyGameId?: string },
   ): Promise<ActionResult> => {
     try {
       const response = await fetch('/api/transfer', {

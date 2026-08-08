@@ -14,6 +14,7 @@ import { useState } from 'react'
 
 import { AddTeamDialog } from '@/components/admin/add-team-dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
+import { ExportDialog } from '@/components/admin/export-dialog'
 import { LiveTeams } from '@/components/admin/live-teams'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,10 @@ import { api } from '@/lib/client/api'
 
 export interface GameDetailData {
   id: string
+  /** The quiz this game was copied from — `null` once that quiz has been deleted (data model §10). */
+  sourceQuizId: string | null
+  /** §12.1's confirmation names the loss, because not knowing what goes is what stops masters tidying. */
+  loss: { teams: number; answers: number }
   code: string
   /** Absolute once §4's address is chosen, relative until then — never a guess (§4). */
   joinUrl: string
@@ -72,6 +77,8 @@ export function GameDetail({
   const router = useRouter()
 
   const [addingTeam, setAddingTeam] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [abandoning, setAbandoning] = useState(false)
 
@@ -97,6 +104,12 @@ export function GameDetail({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {/* §14.1 — quiz + **this** game only, which is what "export this game" means. */}
+              {game.sourceQuizId ? (
+                <DropdownMenuItem onSelect={() => setExporting(true)}>
+                  {t('exportGame')}
+                </DropdownMenuItem>
+              ) : null}
               {game.status === 'SETUP' || game.status === 'LIVE' ? (
                 <DropdownMenuItem
                   variant="destructive"
@@ -105,6 +118,10 @@ export function GameDetail({
                   {t('abandon')}
                 </DropdownMenuItem>
               ) : null}
+              {/* Any status (§12.1). Per game, never in bulk — see `deleteGame`. */}
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                {t('deleteGame')}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -225,6 +242,31 @@ export function GameDetail({
         onConfirm={() => {
           setRegenerating(false)
           void api.regenerateCode(game.id).then(refresh)
+        }}
+      />
+
+      {game.sourceQuizId ? (
+        <ExportDialog
+          open={exporting}
+          quizId={game.sourceQuizId}
+          quizName={game.quizName}
+          games={1}
+          onlyGameId={game.id}
+          onClose={() => setExporting(false)}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={deleting}
+        title={t('deleteTitle')}
+        body={t('deleteBody', { teams: game.loss.teams, answers: game.loss.answers })}
+        confirmLabel={t('deleteGame')}
+        onCancel={() => setDeleting(false)}
+        onConfirm={() => {
+          setDeleting(false)
+          // Back to the dashboard: staying on the page of something that no longer exists would
+          // render a 404 the master did not ask for.
+          void api.deleteGame(game.id).then(() => router.push('/admin'))
         }}
       />
 
