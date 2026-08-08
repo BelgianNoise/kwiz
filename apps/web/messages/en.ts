@@ -185,6 +185,127 @@ const en = {
         '{count, plural, =0 {This round has no questions.} one {Its # question is deleted too.} other {Its # questions are deleted too.}}',
       preflight: 'Check',
     },
+
+    /** PRD 2 §7 — the QUESTION_SET round editor and its side sheet. */
+    round: {
+      backToQuiz: 'Quiz',
+      title: 'Title',
+      defaultPoints: 'Default points',
+      defaultTimer: 'Default timer',
+      seconds: 's',
+      noTimer: 'No timer',
+      questions: 'Questions',
+      addQuestion: 'Add question',
+      empty: 'No questions yet.',
+      untitled: 'Untitled question',
+      /** §7 — a round default silently rewriting a round's scoring is a nasty surprise. */
+      cascadeTitle: 'Change the default for this round?',
+      cascadeBody:
+        '{count, plural, =0 {No questions inherit this default.} one {# question will change from {from} to {to}.} other {# questions will change from {from} to {to}.}}',
+      deleteQuestionTitle: 'Delete this question?',
+      ready: 'Ready',
+      incomplete: 'Incomplete',
+    },
+
+    /** PRD 2 §7.1 — the question sheet, over the list rather than on its own page. */
+    question: {
+      heading: 'Question {index} of {total}',
+      previous: 'Previous question',
+      next: 'Next question',
+      prompt: 'Prompt',
+      promptPlaceholder: 'Who released "Kid A" in 2000?',
+      answerMethod: 'Answer method',
+      method: {
+        FREE_TEXT: 'Free text',
+        MULTIPLE_CHOICE: 'Multiple choice',
+        BUZZER: 'Buzzer',
+        DO: 'Do / challenge',
+        KEYWORDS: 'Keywords',
+      },
+      points: 'Points',
+      timer: 'Timer',
+      noTimer: 'No timer',
+      /** §8 and §9.1 — stated as a fact, not shown as a disabled control (D34, I18). */
+      lockedBuzzer: 'Jeopardy tiles are always buzzer questions.',
+      lockedKeywords: 'A finale question is always a keyword question.',
+      correctAnswer: 'Correct answer',
+      alsoAccept: 'Also accept',
+      addAlternative: 'Add alternative',
+      /** §7.2 — telling the master here turns a live-game problem into an authoring one (D22). */
+      matchingNote:
+        'Matching is exact after lowercasing and trimming. Anything else comes to you to accept or deny during the game.',
+      buzzerNote:
+        'You will judge spoken answers yourself. This is shown on your control screen and revealed to the room afterwards.',
+      options: 'Options',
+      optionsHint: 'Two to four, and pick the correct one.',
+      addOption: 'Add option',
+      scoring: 'Scoring',
+      scoringMode: {
+        WINNER_TAKES_ALL: 'Winner takes all',
+        PER_TEAM_SCORE: 'Score each team',
+      },
+      tiePayout: 'If several teams tie',
+      payout: { FULL: 'Each gets full points', SPLIT: 'Split the points' },
+      /** §7.2 — `points` doubling as the per-team maximum is genuinely non-obvious (D24). */
+      perTeamNote:
+        'Each team gets 0-{points} points. Change "Points" above to change the maximum.',
+      attachments: 'Attachments',
+      addAttachment: 'Add file',
+      /** O6 — verified in the browser before it is uploaded at all. */
+      checking: 'Checking...',
+      playable: 'Playable',
+      showOnPlayers: 'Show on player devices',
+      showOnPlayersHint: 'Images only. Audio and video play on the main screen.',
+      deleteAttachment: 'Remove file',
+      masterNotes: 'Master notes',
+      /** §7.1 — labelled with its guarantee, which is why a master will trust it (invariant 7). */
+      masterNotesHint: 'Never shown to anyone else.',
+      keywords: 'Keywords',
+      keywordsHint: 'Exactly five.',
+      keywordRequired: 'Required',
+      wordShape: '{count, plural, one {# word} other {# words}}',
+      /** §9.1 — the shape is what the room sees, and it changes authoring decisions (D53). */
+      keywordShapeNote:
+        'The room sees blurred word shapes until you mark each one. "wrought iron" shows as two blurred words of 7 and 4 letters.',
+    },
+
+    /** PRD 2 §8 — the board is authored as a board, because that is what the room will see. */
+    board: {
+      valueLadder: 'Value ladder',
+      addRow: 'Add row',
+      addCategory: 'Add category',
+      categoryName: 'Category name',
+      renameCategory: 'Rename category',
+      deleteCategoryTitle: 'Delete "{name}"?',
+      deleteCategoryBody:
+        '{count, plural, =0 {It has no tiles.} one {Its # tile is deleted too.} other {Its # tiles are deleted too.}}',
+      everyTileBuzzer: 'Every tile is a buzzer question - any team can buzz in.',
+      addTile: 'Add a tile',
+      emptyBoard: 'No categories yet. Add one to start building the board.',
+      emptyTiles: '{count, plural, one {# empty tile} other {# empty tiles}}',
+      incompleteTiles:
+        '{count, plural, one {# incomplete question} other {# incomplete questions}}',
+    },
+
+    /** PRD 2 §9 — the finale editor: a list of keyword questions plus the two numbers. */
+    finale: {
+      pinnedNote: 'Pinned as the last round. A quiz can have at most one finale.',
+      rate: 'Points to seconds',
+      rateSuffix: 'points = 1 second',
+      /** §9 — the conversion shown *working*, not just entered. */
+      rateWorked: 'A team on {score} pts starts with {seconds}s.',
+      rateQuizTotal:
+        'Your quiz is worth {points} pts - a strong team is about {seconds}s.',
+      penalty: 'Penalty per keyword',
+      penaltySuffix: 's off every other team',
+      penaltyNote: 'Set at game setup too, once you know how many teams play.',
+      suggested: '{have} of ~{suggested} suggested',
+      assumeTeams: 'Assume {count} teams',
+      /** §9 — a shortfall is a warning, never a block: over-supplying costs nothing (D58). */
+      shortfall:
+        'For {teams} teams at {penalty}s, about {suggested} questions are usually needed to get down to one survivor. You have {have}.',
+      keywordCount: '{count, plural, one {# keyword} other {# keywords}}',
+    },
   },
 }
 

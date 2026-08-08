@@ -112,7 +112,7 @@ export function preflight(
     if (round.type === 'JEOPARDY') checkBoard(round, warn)
 
     for (const question of round.questions) {
-      checkQuestion(question, round, { error, warn, broken })
+      findings.push(...questionFindings(question, round, broken))
     }
   }
 
@@ -146,13 +146,45 @@ export function preflight(
 interface Reporters {
   error: (code: PreflightCode, where?: Partial<PreflightFinding>) => void
   warn: (code: PreflightCode, where?: Partial<PreflightFinding>) => void
-  broken: ReadonlySet<string>
+}
+
+/**
+ * Everything wrong with **one** question — which is both a part of `preflight` and the whole of the
+ * `✓`/`⚠` readiness marker PRD 2 §7 puts on every row.
+ *
+ * Exported for exactly that reason: the marker and pre-flight must never disagree. A master who sees
+ * a tick and then a pre-flight error on the same question has been told two different things by the
+ * same program, and will stop trusting the cheaper one.
+ */
+export function questionFindings(
+  question: QuestionContent,
+  round: RoundContent,
+  broken: ReadonlySet<string> = new Set(),
+): PreflightFinding[] {
+  const findings: PreflightFinding[] = []
+  const error = (code: PreflightCode, where: Partial<PreflightFinding> = {}): void => {
+    findings.push({ severity: 'ERROR', code, ...where })
+  }
+  const warn = (code: PreflightCode, where: Partial<PreflightFinding> = {}): void => {
+    findings.push({ severity: 'WARNING', code, ...where })
+  }
+
+  checkQuestion(question, round, { error, warn }, broken)
+  return findings
+}
+
+/** True when a question has nothing that would block play — the `✓` on its row. */
+export function isQuestionReady(question: QuestionContent, round: RoundContent): boolean {
+  return questionFindings(question, round).every(
+    (finding) => finding.severity !== 'ERROR',
+  )
 }
 
 function checkQuestion(
   question: QuestionContent,
   round: RoundContent,
-  { error, warn, broken }: Reporters,
+  { error, warn }: Reporters,
+  broken: ReadonlySet<string>,
 ): void {
   const where = { roundId: round.id, questionId: question.id }
   const isFinale = round.type === 'DSMTW_FINALE'

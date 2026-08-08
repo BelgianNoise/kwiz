@@ -162,6 +162,116 @@ const nl: Messages = {
         '{count, plural, =0 {Deze ronde heeft geen vragen.} one {De # vraag wordt ook verwijderd.} other {De # vragen worden ook verwijderd.}}',
       preflight: 'Controleren',
     },
+
+    round: {
+      backToQuiz: 'Quiz',
+      title: 'Titel',
+      defaultPoints: 'Standaard punten',
+      defaultTimer: 'Standaard tijd',
+      seconds: 's',
+      noTimer: 'Geen tijd',
+      questions: 'Vragen',
+      addQuestion: 'Vraag toevoegen',
+      empty: 'Nog geen vragen.',
+      untitled: 'Vraag zonder tekst',
+      cascadeTitle: 'Standaard van deze ronde wijzigen?',
+      cascadeBody:
+        '{count, plural, =0 {Geen vragen nemen deze standaard over.} one {# vraag gaat van {from} naar {to}.} other {# vragen gaan van {from} naar {to}.}}',
+      deleteQuestionTitle: 'Deze vraag verwijderen?',
+      ready: 'Klaar',
+      incomplete: 'Onvolledig',
+    },
+
+    question: {
+      heading: 'Vraag {index} van {total}',
+      previous: 'Vorige vraag',
+      next: 'Volgende vraag',
+      prompt: 'Vraag',
+      promptPlaceholder: 'Wie bracht "Kid A" uit in 2000?',
+      answerMethod: 'Antwoordvorm',
+      method: {
+        FREE_TEXT: 'Vrije tekst',
+        MULTIPLE_CHOICE: 'Meerkeuze',
+        BUZZER: 'Buzzer',
+        DO: 'Doen / opdracht',
+        KEYWORDS: 'Kernwoorden',
+      },
+      points: 'Punten',
+      timer: 'Tijd',
+      noTimer: 'Geen tijd',
+      lockedBuzzer: 'Jeopardy-tegels zijn altijd buzzervragen.',
+      lockedKeywords: 'Een finalevraag is altijd een kernwoordvraag.',
+      correctAnswer: 'Juiste antwoord',
+      alsoAccept: 'Ook goed',
+      addAlternative: 'Alternatief toevoegen',
+      matchingNote:
+        'Er wordt exact vergeleken, na kleine letters en trimmen. Al het andere komt bij jou terecht om goed of fout te keuren tijdens het spel.',
+      buzzerNote:
+        'Je beoordeelt gesproken antwoorden zelf. Dit staat op je regiescherm en wordt daarna aan de zaal getoond.',
+      options: 'Opties',
+      optionsHint: 'Twee tot vier, en kies de juiste.',
+      addOption: 'Optie toevoegen',
+      scoring: 'Scoren',
+      scoringMode: {
+        WINNER_TAKES_ALL: 'Winnaar krijgt alles',
+        PER_TEAM_SCORE: 'Elk team apart',
+      },
+      tiePayout: 'Bij gelijkspel',
+      payout: { FULL: 'Ieder de volle punten', SPLIT: 'Punten delen' },
+      perTeamNote:
+        'Elk team krijgt 0-{points} punten. Wijzig "Punten" hierboven voor het maximum.',
+      attachments: 'Bijlagen',
+      addAttachment: 'Bestand toevoegen',
+      checking: 'Controleren...',
+      playable: 'Speelbaar',
+      showOnPlayers: 'Op telefoons tonen',
+      showOnPlayersHint:
+        'Alleen afbeeldingen. Audio en video spelen op het grote scherm.',
+      deleteAttachment: 'Bestand verwijderen',
+      masterNotes: 'Notities voor jezelf',
+      masterNotesHint: 'Wordt nooit aan iemand anders getoond.',
+      keywords: 'Kernwoorden',
+      keywordsHint: 'Precies vijf.',
+      keywordRequired: 'Verplicht',
+      wordShape: '{count, plural, one {# woord} other {# woorden}}',
+      keywordShapeNote:
+        'De zaal ziet vage woordvormen tot je ze aanwijst. "wrought iron" toont als twee vage woorden van 7 en 4 letters.',
+    },
+
+    board: {
+      valueLadder: 'Waardeladder',
+      addRow: 'Rij toevoegen',
+      addCategory: 'Categorie toevoegen',
+      categoryName: 'Categorienaam',
+      renameCategory: 'Categorie hernoemen',
+      deleteCategoryTitle: '"{name}" verwijderen?',
+      deleteCategoryBody:
+        '{count, plural, =0 {Er zijn geen tegels.} one {De # tegel wordt ook verwijderd.} other {De # tegels worden ook verwijderd.}}',
+      everyTileBuzzer: 'Elke tegel is een buzzervraag - elk team mag buzzen.',
+      addTile: 'Tegel toevoegen',
+      emptyBoard: 'Nog geen categorieen. Voeg er een toe om het bord te bouwen.',
+      emptyTiles: '{count, plural, one {# lege tegel} other {# lege tegels}}',
+      incompleteTiles:
+        '{count, plural, one {# onvolledige vraag} other {# onvolledige vragen}}',
+    },
+
+    finale: {
+      pinnedNote: 'Staat vast als laatste ronde. Een quiz heeft hoogstens een finale.',
+      rate: 'Punten naar seconden',
+      rateSuffix: 'punten = 1 seconde',
+      rateWorked: 'Een team met {score} ptn start met {seconds}s.',
+      rateQuizTotal:
+        'Je quiz is {points} ptn waard - een sterk team is ongeveer {seconds}s.',
+      penalty: 'Straf per kernwoord',
+      penaltySuffix: 's eraf bij elk ander team',
+      penaltyNote:
+        'Wordt ook bij de spelopzet gevraagd, als je weet hoeveel teams meedoen.',
+      suggested: '{have} van ~{suggested} aangeraden',
+      assumeTeams: 'Uitgaand van {count} teams',
+      shortfall:
+        'Bij {teams} teams en {penalty}s zijn ongeveer {suggested} vragen nodig om op een overlever uit te komen. Je hebt {have}.',
+      keywordCount: '{count, plural, one {# kernwoord} other {# kernwoorden}}',
+    },
   },
 }
 
