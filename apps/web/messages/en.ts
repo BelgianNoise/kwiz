@@ -75,6 +75,7 @@ const en = {
     saving: 'Saving…',
     saveFailed: 'Not saved — check your connection.',
     teams: 'Teams',
+    dragToReorder: 'Drag to reorder',
     moveUp: 'Move up',
     moveDown: 'Move down',
 

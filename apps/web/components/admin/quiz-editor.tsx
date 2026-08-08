@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Link, useRouter } from '@/i18n/navigation'
 import { api } from '@/lib/client/api'
 import { useAutosave } from '@/lib/client/use-autosave'
+import { useReorder } from '@/lib/client/use-reorder'
 
 /**
  * PRD 2 §6 — the quiz editor.
@@ -50,6 +51,35 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
 
   const hasFinale = quiz.rounds.some((round) => round.type === 'DSMTW_FINALE')
   const refresh = (): void => router.refresh()
+
+  /**
+   * §6.1's constraint, stated once and asked by both reorder routes.
+   *
+   * `lastMovable` is the index nothing may pass: with a finale that is the row above it, so neither a
+   * drag nor `↓` can put a round after the pinned one.
+   */
+  const lastMovable = hasFinale ? quiz.rounds.length - 2 : quiz.rounds.length - 1
+  const isPinned = (index: number): boolean => quiz.rounds[index]?.type === 'DSMTW_FINALE'
+
+  const move = (id: string, direction: 'UP' | 'DOWN', steps: number): void => {
+    /*
+     * One request per step, awaited in order. The server only knows `UP`/`DOWN` (protocol §7.1) and
+     * each call renumbers `position`, so firing them in parallel would race on the same rows.
+     */
+    void (async () => {
+      for (let step = 0; step < steps; step += 1) {
+        // oxlint-disable-next-line no-await-in-loop
+        await api.moveRound(id, direction)
+      }
+      refresh()
+    })()
+  }
+
+  const reorder = useReorder({
+    canDrag: (index) => !isPinned(index) && quiz.rounds.length > 1,
+    canDrop: (from, to) => !isPinned(from) && to <= lastMovable,
+    onMove: move,
+  })
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6 sm:p-10">
@@ -106,13 +136,21 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
             {quiz.rounds.map((round, index) => {
               const points = roundPoints(round)
               const pinned = round.type === 'DSMTW_FINALE'
-              // Nothing may move below the finale, so the round above it has no "down".
-              const lastMovable = hasFinale
-                ? quiz.rounds.length - 2
-                : quiz.rounds.length - 1
 
               return (
-                <li key={round.id} className="flex items-center gap-3 p-4">
+                <li
+                  key={round.id}
+                  {...reorder.rowProps(round.id, index)}
+                  className={[
+                    'flex items-center gap-3 p-4',
+                    reorder.draggingId === round.id ? 'opacity-40' : '',
+                    // The drop indicator §6.1 says must not appear past the pinned row — it cannot,
+                    // because `canDrop` refuses those targets before this ever renders.
+                    reorder.overId === round.id ? 'border-primary border-t-2' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <span className="text-muted-foreground w-6 text-center text-sm tabular-nums">
                     {index + 1}
                   </span>
@@ -130,7 +168,11 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
                       <Pin className="size-4" />
                     </span>
                   ) : (
-                    <span className="text-muted-foreground" aria-hidden>
+                    <span
+                      className="text-muted-foreground cursor-grab active:cursor-grabbing"
+                      title={common('dragToReorder')}
+                      aria-hidden
+                    >
                       <GripVertical className="size-4" />
                     </span>
                   )}
@@ -148,15 +190,13 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
                     </p>
                   </div>
 
-                  {/* §15.2 — the keyboard alternative to dragging, refused identically. */}
+                  {/* §15.2 — the keyboard route, refused by the same predicate the drag uses. */}
                   <Button
                     variant="ghost"
                     size="icon"
                     aria-label={common('moveUp')}
                     disabled={pinned || index === 0}
-                    onClick={() => {
-                      void api.moveRound(round.id, 'UP').then(refresh)
-                    }}
+                    onClick={() => move(round.id, 'UP', 1)}
                   >
                     ↑
                   </Button>
@@ -165,9 +205,7 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
                     size="icon"
                     aria-label={common('moveDown')}
                     disabled={pinned || index >= lastMovable}
-                    onClick={() => {
-                      void api.moveRound(round.id, 'DOWN').then(refresh)
-                    }}
+                    onClick={() => move(round.id, 'DOWN', 1)}
                   >
                     ↓
                   </Button>

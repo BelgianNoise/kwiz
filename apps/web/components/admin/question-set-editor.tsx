@@ -16,6 +16,7 @@ import { RoundDefaults } from '@/components/admin/round-defaults'
 import { Button } from '@/components/ui/button'
 import { Link, useRouter } from '@/i18n/navigation'
 import { api } from '@/lib/client/api'
+import { useReorder } from '@/lib/client/use-reorder'
 
 /**
  * PRD 2 §7 — the `QUESTION_SET` round editor.
@@ -43,6 +44,26 @@ export function QuestionSetEditor({
   const [deleting, setDeleting] = useState<QuestionContent | undefined>()
 
   const refresh = (): void => router.refresh()
+
+  /**
+   * §15.2 — both reorder routes, one implementation. A question list has no pinned row, so the only
+   * constraint is the ends, which the buttons already express through `disabled`.
+   */
+  const move = (id: string, direction: 'UP' | 'DOWN', steps: number): void => {
+    void (async () => {
+      for (let step = 0; step < steps; step += 1) {
+        // oxlint-disable-next-line no-await-in-loop
+        await api.moveQuestion(id, direction)
+      }
+      refresh()
+    })()
+  }
+
+  const reorder = useReorder({
+    canDrag: () => round.questions.length > 1,
+    canDrop: () => true,
+    onMove: move,
+  })
 
   const add = async (): Promise<void> => {
     const result = await api.createQuestion(round.id)
@@ -89,11 +110,25 @@ export function QuestionSetEditor({
               const timerMs = entry.timerMs ?? round.defaultTimerMs
 
               return (
-                <li key={entry.id} className="flex items-center gap-3 p-3">
+                <li
+                  key={entry.id}
+                  {...reorder.rowProps(entry.id, index)}
+                  className={[
+                    'flex items-center gap-3 p-3',
+                    reorder.draggingId === entry.id ? 'opacity-40' : '',
+                    reorder.overId === entry.id ? 'border-primary border-t-2' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <span className="text-muted-foreground w-6 text-center text-sm tabular-nums">
                     {index + 1}
                   </span>
-                  <span className="text-muted-foreground" aria-hidden>
+                  <span
+                    className="text-muted-foreground cursor-grab active:cursor-grabbing"
+                    title={common('dragToReorder')}
+                    aria-hidden
+                  >
                     <GripVertical className="size-4" />
                   </span>
 
@@ -137,7 +172,7 @@ export function QuestionSetEditor({
                     aria-label={common('moveUp')}
                     disabled={index === 0}
                     onClick={() => {
-                      void api.moveQuestion(entry.id, 'UP').then(refresh)
+                      move(entry.id, 'UP', 1)
                     }}
                   >
                     ↑
@@ -148,7 +183,7 @@ export function QuestionSetEditor({
                     aria-label={common('moveDown')}
                     disabled={index === round.questions.length - 1}
                     onClick={() => {
-                      void api.moveQuestion(entry.id, 'DOWN').then(refresh)
+                      move(entry.id, 'DOWN', 1)
                     }}
                   >
                     ↓

@@ -67,6 +67,7 @@ const nl: Messages = {
     saving: 'Opslaan…',
     saveFailed: 'Niet opgeslagen — controleer je verbinding.',
     teams: 'Teams',
+    dragToReorder: 'Sleep om te herschikken',
     moveUp: 'Omhoog',
     moveDown: 'Omlaag',
 

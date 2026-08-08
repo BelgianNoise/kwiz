@@ -12,7 +12,14 @@ import {
   type QuizContent,
   type RoundContent,
 } from '@kwiz/domain'
-import { AlertTriangle, Check, ChevronLeft, Pin, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  GripVertical,
+  Pin,
+  Trash2,
+} from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
@@ -31,6 +38,7 @@ import {
 } from '@/components/ui/select'
 import { Link, useRouter } from '@/i18n/navigation'
 import { api } from '@/lib/client/api'
+import { useReorder } from '@/lib/client/use-reorder'
 
 /** A typical pub. Remembered per quiz would be better; it is a local assumption either way (§9). */
 const TEAM_ASSUMPTIONS = [2, 4, 6, 8]
@@ -73,6 +81,23 @@ export function FinaleEditor({
   const [deleting, setDeleting] = useState<QuestionContent | undefined>()
 
   const refresh = (): void => router.refresh()
+
+  /** §15.2 — the finale's question bank reorders like any other list (§9's mockup shows handles). */
+  const move = (id: string, direction: 'UP' | 'DOWN', steps: number): void => {
+    void (async () => {
+      for (let step = 0; step < steps; step += 1) {
+        // oxlint-disable-next-line no-await-in-loop
+        await api.moveQuestion(id, direction)
+      }
+      refresh()
+    })()
+  }
+
+  const reorder = useReorder({
+    canDrag: () => round.questions.length > 1,
+    canDrop: () => true,
+    onMove: move,
+  })
 
   const save = (nextRate: number, nextPenalty: number): void => {
     void api
@@ -220,9 +245,26 @@ export function FinaleEditor({
               ).length
 
               return (
-                <li key={entry.id} className="flex items-center gap-3 p-3">
+                <li
+                  key={entry.id}
+                  {...reorder.rowProps(entry.id, index)}
+                  className={[
+                    'flex items-center gap-3 p-3',
+                    reorder.draggingId === entry.id ? 'opacity-40' : '',
+                    reorder.overId === entry.id ? 'border-primary border-t-2' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <span className="text-muted-foreground w-6 text-center text-sm tabular-nums">
                     {index + 1}
+                  </span>
+                  <span
+                    className="text-muted-foreground cursor-grab active:cursor-grabbing"
+                    title={common('dragToReorder')}
+                    aria-hidden
+                  >
+                    <GripVertical className="size-4" />
                   </span>
                   <button
                     type="button"
@@ -258,7 +300,7 @@ export function FinaleEditor({
                     aria-label={common('moveUp')}
                     disabled={index === 0}
                     onClick={() => {
-                      void api.moveQuestion(entry.id, 'UP').then(refresh)
+                      move(entry.id, 'UP', 1)
                     }}
                   >
                     ↑
@@ -269,7 +311,7 @@ export function FinaleEditor({
                     aria-label={common('moveDown')}
                     disabled={index === round.questions.length - 1}
                     onClick={() => {
-                      void api.moveQuestion(entry.id, 'DOWN').then(refresh)
+                      move(entry.id, 'DOWN', 1)
                     }}
                   >
                     ↓
