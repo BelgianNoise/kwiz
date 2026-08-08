@@ -10,6 +10,7 @@ import {
   deleteRound,
   duplicateQuiz,
   listQuizzes,
+  moveCategory,
   moveRound,
   setAcceptedAnswers,
   setKeywords,
@@ -317,5 +318,37 @@ describe('the quiz itself', () => {
       rounds: 1,
       questions: 2,
     })
+  })
+})
+
+describe('jeopardy categories', () => {
+  /**
+   * §8 — column order is what the room reads left to right, so it is authored rather than incidental.
+   * A swap with the neighbour, because `position` is explicit and contiguous (I7).
+   */
+  it('moves a column left and right, and no-ops at the ends', () => {
+    const roundId = addRound('JEOPARDY', 'Board')
+
+    const names = ['Geography', 'Film', 'Music']
+    const ids = names.map(
+      (name) => unwrap(createCategory(database, roundId, name)).categoryId,
+    )
+
+    const order = (): string[] =>
+      loadQuizTree(database, quizId)
+        ?.rounds.find((r) => r.id === roundId)
+        ?.categories.map((category) => category.name) ?? []
+
+    expect(order()).toEqual(names)
+
+    moveCategory(database, ids[2] ?? '', 'LEFT')
+    expect(order()).toEqual(['Geography', 'Music', 'Film'])
+
+    moveCategory(database, ids[2] ?? '', 'RIGHT')
+    expect(order()).toEqual(names)
+
+    // Off the end is a no-op rather than an error — the UI offers the control at the ends anyway.
+    expect(moveCategory(database, ids[0] ?? '', 'LEFT')).toMatchObject({ ok: true })
+    expect(order()).toEqual(names)
   })
 })

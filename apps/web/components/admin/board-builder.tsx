@@ -120,7 +120,7 @@ export function BoardBuilder({
               gridTemplateColumns: `repeat(${round.categories.length}, minmax(9rem, 1fr))`,
             }}
           >
-            {round.categories.map((category) => (
+            {round.categories.map((category, index) => (
               <div key={category.id} className="flex items-center justify-between gap-1">
                 <span className="truncate text-sm font-semibold uppercase">
                   {category.name}
@@ -138,6 +138,26 @@ export function BoardBuilder({
                       }
                     >
                       {t('renameCategory')}
+                    </DropdownMenuItem>
+                    {/*
+                      §8 — reorder. Left and right rather than up and down, because that is the axis
+                      the columns actually sit on and the board is authored as a board.
+                    */}
+                    <DropdownMenuItem
+                      disabled={index === 0}
+                      onSelect={() => {
+                        void api.moveCategory(category.id, 'LEFT').then(refresh)
+                      }}
+                    >
+                      {t('moveCategoryLeft')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={index === round.categories.length - 1}
+                      onSelect={() => {
+                        void api.moveCategory(category.id, 'RIGHT').then(refresh)
+                      }}
+                    >
+                      {t('moveCategoryRight')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"

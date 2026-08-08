@@ -829,6 +829,50 @@ export function createCategory(
   })
 }
 
+/**
+ * PRD 2 §8's `[edit ▾] → reorder`. Column order is what the room reads left to right, so it is
+ * authored, not incidental.
+ *
+ * A straight swap with the neighbour, exactly like `moveRound`, because `position` is explicit and
+ * contiguous (I7) — the same reason both reorder routes in the UI can send a direction rather than
+ * an index. Off the end is a **no-op, not an error**: the UI offers the control at the ends anyway
+ * and a refusal there would be noise.
+ */
+export function moveCategory(
+  database: KwizDatabase,
+  categoryId: string,
+  direction: 'LEFT' | 'RIGHT',
+  now: Date = new Date(),
+): ActionResult {
+  return database.db.transaction((tx) => {
+    const parent = quizOfCategory(tx, categoryId)
+    if (!parent) return fail('VALIDATION_ERROR', `no category ${categoryId}`)
+
+    const siblings = tx
+      .select({ id: jeopardyCategory.id, position: jeopardyCategory.position })
+      .from(jeopardyCategory)
+      .where(eq(jeopardyCategory.roundId, parent.roundId))
+      .orderBy(jeopardyCategory.position)
+      .all()
+
+    const index = siblings.findIndex((sibling) => sibling.id === categoryId)
+    const moving = siblings[index]
+    const target = siblings[direction === 'LEFT' ? index - 1 : index + 1]
+    if (!moving || !target) return ok()
+
+    tx.update(jeopardyCategory)
+      .set({ position: target.position })
+      .where(eq(jeopardyCategory.id, moving.id))
+      .run()
+    tx.update(jeopardyCategory)
+      .set({ position: moving.position })
+      .where(eq(jeopardyCategory.id, target.id))
+      .run()
+    touchQuiz(tx, parent.quizId, now)
+    return ok()
+  })
+}
+
 export function renameCategory(
   database: KwizDatabase,
   categoryId: string,

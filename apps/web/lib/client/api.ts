@@ -129,6 +129,9 @@ export const api = {
     authoring<{ categoryId: string }>(`rounds/${roundId}/categories`, { name }),
   renameCategory: (categoryId: string, name: string) =>
     authoring(`categories/${categoryId}`, { name }),
+  /** §8 — column order is what the room reads left to right, so it is authored (I7). */
+  moveCategory: (categoryId: string, direction: 'LEFT' | 'RIGHT') =>
+    authoring(`categories/${categoryId}/move`, { direction }),
   deleteCategory: (categoryId: string) => authoring(`categories/${categoryId}/delete`),
 
   // ─── questions ───

@@ -9,6 +9,7 @@ import {
   deleteQuiz,
   deleteRound,
   duplicateQuiz,
+  moveCategory,
   moveQuestion,
   moveRound,
   renameCategory,
@@ -117,6 +118,7 @@ export const AUTHORING_ROUTES: readonly AuthoringRoute[] = [
 
   route('category-create', 'rounds/:roundId/categories'),
   route('category-rename', 'categories/:categoryId'),
+  route('category-move', 'categories/:categoryId/move'),
   route('category-delete', 'categories/:categoryId/delete'),
 
   route('question-create', 'rounds/:roundId/questions'),
@@ -253,6 +255,13 @@ function execute(
       const parsed = parseBody(z.object({ name: z.string().min(1) }), body)
       return parsed.ok
         ? renameCategory(database, categoryId, parsed.data.name, now)
+        : parsed
+    }
+
+    case 'category-move': {
+      const parsed = parseBody(z.object({ direction: z.enum(['LEFT', 'RIGHT']) }), body)
+      return parsed.ok && parsed.data
+        ? moveCategory(database, categoryId, parsed.data.direction, now)
         : parsed
     }
 

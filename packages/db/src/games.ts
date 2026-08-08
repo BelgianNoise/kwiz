@@ -173,6 +173,42 @@ export function listGames(database: KwizDatabase): GameSummary[] {
   return rows.map((row) => ({ ...row, teams: teamCounts.get(row.id) ?? 0 }))
 }
 
+/**
+ * PRD 2 §5's `winner: Quizzly…` column, for every finished game at once.
+ *
+ * **From `game_team.score`, not from a replay.** The score is a projection kept in step by
+ * `appendAndProject`, so it is already correct; folding every finished game's log to render a
+ * dashboard row would make the list slower with every quiz a master has ever run.
+ *
+ * A tie returns every team on the top score, because "winner: A" when B drew with them is a lie the
+ * dashboard would tell silently.
+ */
+export function gameWinners(database: KwizDatabase): Map<string, string[]> {
+  const rows = database.db
+    .select({
+      gameId: gameTeam.gameId,
+      name: gameTeam.name,
+      score: gameTeam.score,
+      status: game.status,
+    })
+    .from(gameTeam)
+    .innerJoin(game, eq(game.id, gameTeam.gameId))
+    .where(eq(game.status, 'FINISHED'))
+    .all()
+
+  const best = new Map<string, { score: number; names: string[] }>()
+  for (const row of rows) {
+    const current = best.get(row.gameId)
+    if (!current || row.score > current.score) {
+      best.set(row.gameId, { score: row.score, names: [row.name] })
+    } else if (row.score === current.score) {
+      current.names.push(row.name)
+    }
+  }
+
+  return new Map([...best].map(([gameId, entry]) => [gameId, entry.names]))
+}
+
 /** True when a `SETUP` game is behind its template and a re-sync would bring something new. */
 export function isStale(summary: GameSummary): boolean {
   return (

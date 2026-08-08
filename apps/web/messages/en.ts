@@ -125,6 +125,9 @@ const en = {
       teamCount: '{count, plural, one {# team} other {# teams}}',
       edited: 'edited {date}',
       code: 'code {code}',
+      roundOf: 'round {number} of {total}',
+      winner: 'winner: {name}',
+      drawBetween: 'a {count}-way draw',
       templateUpdated: 'Template updated',
       resync: 'Re-sync',
       duplicate: 'Duplicate',
@@ -279,6 +282,8 @@ const en = {
       addRow: 'Add row',
       addCategory: 'Add category',
       categoryName: 'Category name',
+      moveCategoryLeft: 'Move left',
+      moveCategoryRight: 'Move right',
       renameCategory: 'Rename category',
       deleteCategoryTitle: 'Delete "{name}"?',
       deleteCategoryBody:

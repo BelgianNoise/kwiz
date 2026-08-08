@@ -1,4 +1,4 @@
-import { loadQuizTree } from '@kwiz/db'
+import { listGames, loadQuizTree } from '@kwiz/db'
 import { notFound } from 'next/navigation'
 
 import { QuizEditor } from '@/components/admin/quiz-editor'
@@ -24,5 +24,10 @@ export default async function QuizEditorPage({
   const quiz = loadQuizTree(runtime.database, quizId)
   if (!quiz) notFound()
 
-  return <QuizEditor quiz={quiz} />
+  // The export dialog offers the "quiz + N played games" option only when there are any (§14.1).
+  const games = listGames(runtime.database).filter(
+    (entry) => entry.sourceQuizId === quizId,
+  ).length
+
+  return <QuizEditor quiz={quiz} games={games} />
 }

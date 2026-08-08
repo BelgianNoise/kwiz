@@ -1,4 +1,4 @@
-import { isStale, listGames, listQuizzes } from '@kwiz/db'
+import { gameWinners, isStale, listGames, listQuizzes } from '@kwiz/db'
 import { Settings } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
@@ -52,6 +52,21 @@ export default async function DashboardPage({
   }))
 
   const games = listGames(runtime.database)
+
+  /*
+   * §5's two at-a-glance columns. The winner comes from the score projection — no replay, so the
+   * list does not get slower with every quiz a master has run. The round *does* need state, but only
+   * for `LIVE` games, of which PRD 1 §2.1 allows five.
+   */
+  const winners = gameWinners(runtime.database)
+  const liveRound = (id: string): { number: number; total: number } | null => {
+    const state = runtime.registry.get(id)
+    const index =
+      state?.content.rounds.findIndex((round) => round.id === state.currentRoundId) ?? -1
+    return state && index >= 0
+      ? { number: index + 1, total: state.content.rounds.length }
+      : null
+  }
   for (const quiz of quizzes) {
     quiz.games = games.filter((game) => game.sourceQuizId === quiz.id).length
   }
@@ -89,6 +104,8 @@ export default async function DashboardPage({
           teams: game.teams,
           createdAt: game.createdAt.toISOString(),
           stale: isStale(game),
+          winners: winners.get(game.id) ?? [],
+          round: game.status === 'LIVE' ? liveRound(game.id) : null,
         }))}
       />
     </main>

@@ -9,14 +9,21 @@ import {
   type RoundContent,
   type RoundType,
 } from '@kwiz/domain'
-import { ChevronLeft, GripVertical, Pin, Trash2 } from 'lucide-react'
+import { ChevronLeft, GripVertical, MoreHorizontal, Pin, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { AddRoundDialog } from '@/components/admin/add-round-dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
+import { ExportDialog } from '@/components/admin/export-dialog'
 import { SaveIndicator } from '@/components/admin/save-indicator'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -36,12 +43,14 @@ import { useReorder } from '@/lib/client/use-reorder'
  *   *before* it, and both reorder routes refuse to move anything past it. The refusal lives in the
  *   repository so the keyboard cannot walk around the rule (§15.2) — this only has to not offer it.
  */
-export function QuizEditor({ quiz }: { quiz: QuizContent }) {
+export function QuizEditor({ quiz, games }: { quiz: QuizContent; games: number }) {
   const t = useTranslations('admin.quiz')
+  const dashboard = useTranslations('admin.dashboard')
   const common = useTranslations('common')
   const router = useRouter()
 
   const [adding, setAdding] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState<RoundContent | undefined>()
 
   const name = useAutosave<string>((value) => api.updateQuiz(quiz.id, { name: value }))
@@ -98,6 +107,30 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
           <Button asChild variant="secondary">
             <Link href={`/admin/quizzes/${quiz.id}/play`}>{t('preflight')}</Link>
           </Button>
+
+          {/*
+            §6 — `[Export]` and `[⋯]` belong here as well as on the dashboard. A master deep in an
+            editor should not have to navigate away to get their work off the machine.
+          */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={quiz.name}>
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setExporting(true)}>
+                {dashboard('export')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void api.duplicateQuiz(quiz.id).then(refresh)
+                }}
+              >
+                {dashboard('duplicate')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -241,6 +274,14 @@ export function QuizEditor({ quiz }: { quiz: QuizContent }) {
           </p>
         ) : null}
       </section>
+
+      <ExportDialog
+        open={exporting}
+        quizId={quiz.id}
+        quizName={quiz.name}
+        games={games}
+        onClose={() => setExporting(false)}
+      />
 
       <AddRoundDialog
         open={adding}

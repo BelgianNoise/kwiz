@@ -15,6 +15,10 @@ export interface GameRow {
   teams: number
   createdAt: string
   stale: boolean
+  /** §5 — every team on the top score, so a draw is not reported as a win. Empty unless finished. */
+  winners: string[]
+  /** §5's `round 2 of 3`. Only a `LIVE` game has one. */
+  round: { number: number; total: number } | null
 }
 
 /**
@@ -71,6 +75,24 @@ export function GameList({ games }: { games: GameRow[] }) {
                         month: 'short',
                       })}{' '}
                   · {t('teamCount', { count: game.teams })}
+                  {/* §5 — what this game *is*, without opening it. */}
+                  {game.round ? (
+                    <>
+                      {' · '}
+                      {t('roundOf', {
+                        number: game.round.number,
+                        total: game.round.total,
+                      })}
+                    </>
+                  ) : null}
+                  {game.winners.length > 0 ? (
+                    <>
+                      {' · '}
+                      {game.winners.length === 1
+                        ? t('winner', { name: game.winners[0] ?? '' })
+                        : t('drawBetween', { count: game.winners.length })}
+                    </>
+                  ) : null}
                 </p>
               </div>
 

@@ -111,6 +111,9 @@ const nl: Messages = {
       teamCount: '{count, plural, one {# team} other {# teams}}',
       edited: 'bewerkt {date}',
       code: 'code {code}',
+      roundOf: 'ronde {number} van {total}',
+      winner: 'winnaar: {name}',
+      drawBetween: 'gelijkspel tussen {count}',
       templateUpdated: 'Quiz is bijgewerkt',
       resync: 'Vernieuwen',
       duplicate: 'Dupliceren',
@@ -247,6 +250,8 @@ const nl: Messages = {
       addRow: 'Rij toevoegen',
       addCategory: 'Categorie toevoegen',
       categoryName: 'Categorienaam',
+      moveCategoryLeft: 'Naar links',
+      moveCategoryRight: 'Naar rechts',
       renameCategory: 'Categorie hernoemen',
       deleteCategoryTitle: '"{name}" verwijderen?',
       deleteCategoryBody:
