@@ -631,8 +631,12 @@ The rule for what deserves the master's attention is game logic and belongs in
 `packages/domain` next to everything else — and it keeps PRD 3 from re-implementing it.
 
 Priority when several conditions hold, highest first (PRD 3 §3.1):
-`ADJUDICATE_BUZZ` › `SCORE_DO` › `BREAK_TIE_FOR_PICK` › `VALIDATE_QUESTION` › `ADVANCE` ›
-`NONE`. Exactly one is active; anything lower-priority appears only as a count.
+`ADJUDICATE_BUZZ` › `FINALE_TURN` › `SCORE_DO` › `BREAK_TIE_FOR_PICK` › `PICK_FINALISTS` ›
+`VALIDATE_QUESTION` › `ADVANCE` › `NONE`. Exactly one is active; anything lower-priority
+appears only as a count. (This prose previously omitted `FINALE_TURN` and
+`PICK_FINALISTS`, contradicting the type union three lines above; `attention()`'s actual
+implementation — and `attention.test.ts`, which requires `FINALE_TURN` to outrank
+`PICK_FINALISTS` — were always correct.)
 
 ### 5.5 `MASTER_CONTROL` detail types
 

@@ -31,14 +31,14 @@ main way this design can go wrong.
 └─────────────────────────────┘  └───────────────────────────────────┘
 
                     ┌─ PLAY ──────────────────────────────────┐
-                    │ game ──┬── game_team                    │
-                    │        ├── game_device                  │
-                    │        ├── game_event    ← SOURCE OF    │
-                    │        │                    TRUTH       │
-                    │        ├── game_answer            ┐     │
-                    │        ├── game_buzz              │ proj│
-                    │        ├── game_score_adjustment  │proj │
-                    │        ├── game_keyword_mark      ┘     │
+                    │ game ──┬── game_team              ┐     │
+                    │        ├── game_device            │     │
+                    │        ├── game_event    ← SOURCE │     │
+                    │        │                  OF TRUTH│ proj│
+                    │        ├── game_answer             │     │
+                    │        ├── game_buzz               │proj │
+                    │        ├── game_score_adjustment   │     │
+                    │        ├── game_keyword_mark       ┘     │
                     │        └── game_answer_draft  (NOT proj) │
                     └─────────────────────────────────────────┘
 ```
@@ -53,11 +53,17 @@ revision number alone cannot, because template rows are mutable.
 **`game_event` is the only source of truth for play** (D4). Everything that happens
 during a game is an appended event; the table is never updated or deleted.
 
-**Projection tables** (`game_answer`, `game_buzz`, `game_score_adjustment`,
-`game_keyword_mark`) are derived
+**Projection tables** (`game_team`, `game_device`, `game_answer`, `game_buzz`,
+`game_score_adjustment`, `game_keyword_mark`) are derived
 caches. They exist so the validation queue and review screens are indexed SQL rather
 than a replay. They are written *exclusively* by the reducer, in the same transaction
 as the event append, and can be dropped and rebuilt from `game_event` at any time.
+`game_team` and `game_device` are the two easiest to mistake for game-copy tables — they
+sit under `game`, not under a `game_round`, but they are written by `applyProjection`
+from `TEAM_ADDED`/`DEVICE_JOINED` and `DEVICE_JOINED`/`DEVICE_SWITCHED_TEAM` exactly like
+the other four, and protocol §8.2 relies on that (see its own correction there — this
+list used to say only four tables, which is what that correction fixed and this
+paragraph now matches).
 
 > **The rule that keeps this honest:** no code path writes a projection without
 > appending the event that caused it, in the same transaction. There is one writer. If
