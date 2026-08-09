@@ -77,10 +77,13 @@ function setMute(input: SettingsInput): ActionResult<{ muted: boolean }> {
  * §16's `Reclaim space`, over data model §8's rule: a file survives if **either** table still
  * references its checksum.
  *
- * The referenced set is read immediately before the sweep and inside no transaction, which is safe in
- * the one direction that matters — a row inserted while the sweep runs points at a file that was
- * already on disk and already referenced, so it cannot be the file being deleted. The reverse race,
- * a row deleted mid-sweep, just leaves its file for the next pass.
+ * The referenced set is read immediately before the sweep and inside no transaction. That is safe
+ * for a *duplicate* upload — its checksum was already on disk and already referenced before this
+ * request existed — but not for a genuinely new one: `receiveAttachment` writes the file before the
+ * caller inserts the row that references it, so a snapshot taken in that gap sees an unreferenced
+ * file that is about to be claimed. `reclaimSpace`'s `RECLAIM_GRACE_MS` is what actually covers that
+ * case, by leaving any recently-written file alone regardless of what this snapshot says. The reverse
+ * race, a row deleted mid-sweep, just leaves its file for the next pass.
  */
 async function reclaim(
   input: SettingsInput,
