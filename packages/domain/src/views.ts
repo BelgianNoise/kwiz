@@ -23,6 +23,7 @@ import {
   roundOf,
   type GameState,
   type MediaContent,
+  type OptionContent,
   type QuestionContent,
   type QuestionPlayState,
 } from './state'
@@ -106,6 +107,14 @@ const mediaRef = (media: MediaContent): MediaRef => ({
   url: `/api/attachment/${media.id}`,
   durationMs: media.durationMs,
 })
+
+/**
+ * `{ id, text }` — no correctness marker before `REVEALED` (invariant 2). Shared between the
+ * main-screen and player views so a future edit adding `isCorrect` back in cannot land at only
+ * one of the two call sites and silently reopen the leak invariant 2 exists to prevent.
+ */
+const publicOptions = (options: OptionContent[]): { id: string; text: string }[] =>
+  options.map((option) => ({ id: option.id, text: option.text }))
 
 const teamPublic = (team: {
   id: string
@@ -376,12 +385,8 @@ function mainScreenQuestion(
   }
 
   if (question.answerMethod === 'MULTIPLE_CHOICE') {
-    // `{ id, text }` — no correctness marker before REVEALED (invariant 2). Ids are UUIDs so
-    // nothing in the payload even ranks the options (protocol §6.3).
-    view.options = question.options.map((option) => ({
-      id: option.id,
-      text: option.text,
-    }))
+    // Ids are UUIDs so nothing in the payload even ranks the options (protocol §6.3).
+    view.options = publicOptions(question.options)
   }
 
   if (question.answerMethod === 'BUZZER') {
@@ -596,10 +601,7 @@ function playerQuestion(
   }
 
   if (question.answerMethod === 'MULTIPLE_CHOICE') {
-    view.options = question.options.map((option) => ({
-      id: option.id,
-      text: option.text,
-    }))
+    view.options = publicOptions(question.options)
   }
 
   if (question.answerMethod === 'BUZZER') {
@@ -726,6 +728,10 @@ export type Attention =
   | {
       kind: 'FINALE_TURN'
       gameQuestionId: string
+      prompt: string
+      masterNotes: string | null
+      questionNumber: number
+      questionTotal: number
       currentTeamId: string
       nextTeamId: string | null
       turnStartedAt: number
@@ -841,7 +847,13 @@ export function toMasterControlView(
   if (round?.type === 'JEOPARDY') {
     const picker = suggestedPicker(state, round.id)
     view.board = {
-      categories: round.categories.map((c) => ({ id: c.id, name: c.name })),
+      // Sorted explicitly, matching `boardView()` above — `packages/domain` is documented not to
+      // depend on the caller having already ordered rows, and `round.categories`' order is an
+      // incidental property of `packages/db`'s queries, not a guarantee this package can rely on.
+      categories: round.categories
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((c) => ({ id: c.id, name: c.name })),
       // `prompt` IS sent here — master-only, and the reason `BoardView` is a separate type.
       tiles: round.questions.map((q) => ({
         id: q.id,
@@ -987,9 +999,15 @@ export function attention(state: GameState, now: number): Attention {
     if (turn) {
       const passed = new Set(passedThisQuestion(state, question.id))
       const order = finaleTurnOrder(state, question.id, now)
+      // Same computation as `finaleView`'s (§5.5's `FinaleTurnDetail` — "Q3 of 6" — P2 #13).
+      const finaleQuestions = round.questions
       return {
         kind: 'FINALE_TURN',
         gameQuestionId: question.id,
+        prompt: question.prompt,
+        masterNotes: question.masterNotes,
+        questionNumber: finaleQuestions.findIndex((q) => q.id === question.id) + 1,
+        questionTotal: finaleQuestions.length,
         currentTeamId: turn.teamId,
         nextTeamId: order.find((teamId) => teamId !== turn.teamId) ?? null,
         turnStartedAt: turn.startedAt,

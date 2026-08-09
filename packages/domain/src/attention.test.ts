@@ -276,6 +276,31 @@ describe('each state is reachable', () => {
     ).toBe('FINALE_TURN')
   })
 
+  /**
+   * P2 #13 — protocol §5.5's `FinaleTurnDetail` carries `prompt`, `masterNotes`,
+   * `questionNumber` and `questionTotal` so the master desk can render "Q1 of 1" without a
+   * second lookup; the pushed view had omitted all four.
+   */
+  it("FINALE_TURN carries the prompt and the question's position in the round", () => {
+    const state = run([
+      ...SETUP,
+      { type: 'ROUND_OPENED', payload: { gameRoundId: 'r3' } },
+      { type: 'FINALE_CONFIGURED', payload: { secondsPerPoint: 1, penaltySeconds: 20 } },
+      { type: 'FINALISTS_SET', payload: { teamIds: [A, B] } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FIN } },
+      { type: 'TURN_STARTED', payload: { teamId: A } },
+    ])
+    const result = attention(state, NOW)
+    if (result.kind !== 'FINALE_TURN')
+      throw new Error(`expected FINALE_TURN, got ${result.kind}`)
+
+    expect(result.prompt).toBe('P')
+    expect(result.masterNotes).toBeNull()
+    // The finale round in this fixture has exactly one question.
+    expect(result.questionNumber).toBe(1)
+    expect(result.questionTotal).toBe(1)
+  })
+
   it('is VALIDATE_QUESTION when an answer needs a human', () => {
     const state = run([
       ...SETUP,
