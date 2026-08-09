@@ -411,6 +411,46 @@ describe('priority when conditions compete (PRD 3 §3.1)', () => {
     expect(kindOf(state)).toBe('ADVANCE')
   })
 
+  /**
+   * PRD 3 §11.2: *"while on break, `attention` stays `NONE`, so control shows the leaderboard"*.
+   * Before slice 5 nothing here looked at the break at all, so an interval with unplayed questions
+   * left still read as `ADVANCE` — a call to action pointed at a room that is at the bar.
+   */
+  it('drops to NONE during a break rather than urging the master on', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+    ])
+    expect(kindOf(state)).toBe('NONE')
+
+    // …and it is exactly a suspension: ending the break restores the same call to action.
+    const resumed = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+      { type: 'BREAK_ENDED', payload: {} },
+    ])
+    expect(kindOf(resumed)).toBe('ADVANCE')
+  })
+
+  /**
+   * The five urgent states keep their place: a break is refused while a question is `OPEN` (§11.2),
+   * so `SCORE_DO` is the only one that can co-occur — and a room watching for a verdict outranks an
+   * interval that has already started.
+   */
+  it('keeps SCORE_DO above a break', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: DO } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+    ])
+    expect(kindOf(state)).toBe('SCORE_DO')
+  })
+
   /** A skipped question awards nothing and needs nothing — it must not hold the master. */
   it('does not ask for validation on a skipped question', () => {
     const state = run([

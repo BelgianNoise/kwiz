@@ -575,8 +575,11 @@ Everything, subject to §1.1's bounded-view rule.
 type MasterControlView = {
   code: string
   joinUrl: string
+  status: GameStatus                      // PRD 3 §4 exists only in SETUP, §10.6 only in FINISHED
   teams: (TeamPublic & { deviceCount: number })[]
-  round: { id: string; title: string; number: number; total: number } | null
+  // `type` because the desk differs per round type, and the client must not infer it from
+  // whether `board` happens to be present.
+  round: { id: string; title: string; type: RoundType; number: number; total: number } | null
 
   // What needs the master's attention RIGHT NOW. This is the whole point of the
   // surface (PRD 1 G4): one thing at a time, chosen by the server.
@@ -596,8 +599,48 @@ type MasterControlView = {
   question: MasterQuestionDetail | null
   board?: MasterBoardView                 // Jeopardy: prompts included, master-only
 
+  // PRD 3 §2.1's timeline — the CURRENT ROUND's questions, so O(questions in a round). That is
+  // the bound MasterBoardView's tiles already carry, and nowhere near D39's O(questions × teams).
+  timeline: TimelineEntry[]
+
+  // PRD 3 §11's "recent adjustments … with [Undo]". Capped and newest first; the full audit is
+  // PRD 2 §13.3's REST read, because an evening's worth of them is unbounded (§1.1).
+  adjustments: MasterAdjustment[]
+
+  // PRD 3 §11.2. `attention` is NONE during a break, so without this the master has no way to
+  // see they are on one, extend it, or resume.
+  break: { startedAt: number; resumesAt: number | null } | null
+
+  scoreboardShown: boolean                // §11.1's toggle has to render its own state (O4)
+
+  // PRD 3 §12's "2 control screens connected". A TRANSPORT fact, not a game fact: it is not in
+  // the log and cannot be replayed, so it is passed into the filter rather than derived inside it.
+  controlScreens: number
+
+  // PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends.
+  // The second tab — pre-finale points — is `teams`, unchanged: a finale scores in seconds.
+  finaleRanking: string[][] | null
+
   // COUNTS ONLY — never the list (§1.1).
   pendingValidationCount: number
+}
+
+type TimelineEntry = {
+  gameQuestionId: string
+  position: number
+  prompt: string                    // master-only, like a tile's; answers "what did I skip?"
+  state: 'PENDING' | 'OPEN' | 'LOCKED' | 'REVEALED' | 'SCORED' | 'SKIPPED'
+  failsPreflight?: PreflightCode    // PRD 2 §10's ⚠, re-derived from the game copy
+}
+
+type MasterAdjustment = {
+  id: string
+  teamId: string
+  delta: number
+  reason: string | null
+  announced: boolean
+  revoked: boolean                  // stays listed when revoked, greyed (D41)
+  createdAt: number
 }
 
 // One question's worth of validation, all teams together (PRD 3 §6.1). Bounded by team
@@ -623,8 +666,23 @@ type ValidationItem = {
   // the master still decides each team separately, but identical text is visually linked
   // so an inconsistent pair is hard to miss. Never auto-applies a verdict.
   hasIdenticalSibling: boolean
+
+  spotlit: boolean                  // PRD 3 §5.3's [● On screen] is a toggle (D40)
 }
 ```
+
+> **The eight fields above `pendingValidationCount` were added in slice 5**, building PRD 3 against
+> this shape. Each is something the desk cannot be built without and none of them was expressible
+> before: a timeline with no question list, a `[Undo]` with no adjustment to undo, a break the master
+> cannot see they are in, a `SETUP` screen with no status to key on. They are recorded here rather
+> than left as a divergence, per agent-workflow §3.3.
+>
+> **`attention` also gained a break rule** in the same slice: PRD 3 §11.2 states that it *"stays
+> `NONE`"* during an interval, and nothing implemented it — a break with unplayed questions left read
+> as `ADVANCE`, a call to action pointed at a room that is at the bar. The break now outranks
+> `VALIDATE_QUESTION` and `ADVANCE` and nothing above them, since those five are the states where a
+> room is genuinely waiting. Only `SCORE_DO` can co-occur at all: a break is refused while a question
+> is `OPEN`.
 
 `attention` is computed **server-side**, not by the client inspecting state and guessing.
 The rule for what deserves the master's attention is game logic and belongs in
@@ -664,7 +722,12 @@ type MasterQuestionDetail = {
 
   buzzes?: BuzzSummary[]
   lockedOutTeamIds?: string[]
-  failsPreflight?: string             // PRD 2 §10 "play anyway" marker, if any
+
+  // PRD 2 §10's "play anyway" marker, if any. A `PreflightCode`, never a sentence — copy lives in
+  // the messages module (D11). Re-derived from the game copy through the same `questionFindings`
+  // the authoring row's ✓/⚠ uses, so the two can never disagree; the one check it does not repeat
+  // is ATTACHMENT_MISSING, which is filesystem work `packages/domain` cannot do.
+  failsPreflight?: PreflightCode
 }
 
 type BuzzSummary = {

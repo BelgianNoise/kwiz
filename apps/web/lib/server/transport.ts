@@ -54,7 +54,14 @@ export interface RealtimeTransport {
    * `build` skips that subscriber, which is how "nothing changed for you" is expressed (§3.2).
    */
   broadcast(gameId: string, build: (subscriber: Subscriber) => Frame | null): void
-  count(gameId: string): number
+  /**
+   * Live subscribers on one game, optionally of one audience.
+   *
+   * The audience filter is PRD 3 §12's *"2 control screens connected"* — a fact about sockets rather
+   * than about the game, which is why it is counted here and passed **into** the view filter rather
+   * than derived inside it. Nothing in the event log could ever answer it.
+   */
+  count(gameId: string, audience?: Audience): number
   /** `ABANDONED` or deleted: the final frame has been sent and the stream is over (§3.4). */
   closeAll(gameId: string): void
 }
@@ -85,8 +92,15 @@ export function createTransport(): RealtimeTransport {
       }
     },
 
-    count(gameId) {
-      return byGame.get(gameId)?.size ?? 0
+    count(gameId, audience) {
+      const subscribers = byGame.get(gameId)
+      if (!subscribers) return 0
+      if (!audience) return subscribers.size
+      let total = 0
+      for (const subscriber of subscribers) {
+        if (subscriber.audience === audience) total += 1
+      }
+      return total
     },
 
     closeAll(gameId) {

@@ -159,7 +159,14 @@ export function buildView(
     case 'MAIN_SCREEN':
       return toMainScreenView(state, now, joinUrl)
     case 'MASTER_CONTROL':
-      return toMasterControlView(state, now, joinUrl)
+      // The socket count is a transport fact and cannot come from the log (PRD 3 §12), so it is
+      // handed in here — the one thing on this view that is not a function of `GameState`.
+      return toMasterControlView(
+        state,
+        now,
+        joinUrl,
+        runtime.transport.count(gameId, 'MASTER_CONTROL'),
+      )
     case 'PLAYER':
       // Drafts are not events (protocol §4.8), so they cannot come from `GameState` and are passed
       // in. Omitting them would silently break D45 — two devices on one team would not see each
