@@ -52,7 +52,7 @@ export function BoardDesk({
       {/* D30 — the lowest-score rule ties, and the board is stalled until the master says who. */}
       {tied.length > 1 ? (
         <div className="space-y-2">
-          <h1 className="text-xl font-medium">{t('tieTitle')}</h1>
+          <h1 className="text-xl font-medium">{t('tieTitle', { count: tied.length })}</h1>
           <div className="flex flex-wrap gap-2">
             {tied.map((team, index) => (
               <Button

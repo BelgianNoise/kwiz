@@ -656,7 +656,8 @@ const en = {
       nobodyPicks: 'Nobody is picking yet',
       change: 'Change',
       hint: 'Hover or focus a tile to read its question.',
-      tieTitle: 'Two teams are level. Who picks?',
+      /** Count-aware: the lowest-score rule can tie three or four ways, not only two. */
+      tieTitle: '{count} teams are level. Who picks?',
       played: 'played',
     },
 

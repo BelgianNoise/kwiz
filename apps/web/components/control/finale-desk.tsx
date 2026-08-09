@@ -174,12 +174,18 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
   }
 
   const pass = (): void => run(() => api.passTurn())
+  const start = (): void => {
+    const next = turn.nextTeamId
+    if (next) run(() => api.startTurn(next))
+  }
 
   // §10.3 — this round earns its own bindings, because clicking five buttons under time pressure is
   // where a master falls behind the room.
   useControlKeys((event) => {
     if (event.code === 'Space') {
-      pass()
+      // The same key does both, because to the master they are one motion: hand over, and go.
+      if (turn.currentTeamId === null) start()
+      else pass()
       return true
     }
     const index = digitIndex(event)
@@ -187,7 +193,10 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
     return mark(index, event.shiftKey)
   })
 
-  const current = turn.clocks.find((clock) => clock.onTurn)
+  /** Whose clock the big number is: the team on turn, or the one about to be started. */
+  const waiting =
+    turn.clocks.find((clock) => clock.onTurn) ??
+    turn.clocks.find((clock) => clock.teamId === turn.nextTeamId)
 
   return (
     <section className="mx-auto flex h-full max-w-3xl flex-col gap-5">
@@ -204,24 +213,35 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
         ) : null}
       </header>
 
+      {/* Between turns the waiting team's name and clock take the same place, so the master's eye
+          does not have to move when the clock starts (§10.5: clocks stop while nobody is on turn). */}
       <div className="flex items-center gap-4">
-        <TeamDot colour={colourOf(view, turn.currentTeamId)} className="size-6" />
-        <h2 className="text-4xl font-semibold">{nameOf(turn.currentTeamId)}</h2>
+        <TeamDot
+          colour={colourOf(view, turn.currentTeamId ?? turn.nextTeamId)}
+          className="size-6"
+        />
+        <h2 className="text-4xl font-semibold">
+          {nameOf(turn.currentTeamId ?? turn.nextTeamId)}
+        </h2>
         <span
           className={cn(
             'text-5xl tabular-nums',
-            current && remainingFor(current) <= FINALE_CLOCK_WARN_S && 'text-destructive',
+            waiting !== undefined &&
+              remainingFor(waiting) <= FINALE_CLOCK_WARN_S &&
+              'text-destructive',
           )}
         >
           {/* Whole seconds and no unit: a ticking `84` reads as a clock, `84s` as a setting
               (conventions §8.2). */}
-          {Math.max(0, Math.ceil(current ? remainingFor(current) : 0))}
+          {waiting === undefined ? 0 : Math.max(0, Math.ceil(remainingFor(waiting)))}
         </span>
-        <span className="text-muted-foreground ml-auto text-sm">
-          {turn.nextTeamId
-            ? t('next', { team: nameOf(turn.nextTeamId) })
-            : t('nextNobody')}
-        </span>
+        {turn.currentTeamId ? (
+          <span className="text-muted-foreground ml-auto text-sm">
+            {turn.nextTeamId
+              ? t('next', { team: nameOf(turn.nextTeamId) })
+              : t('nextNobody')}
+          </span>
+        ) : null}
       </div>
 
       <ol className="space-y-1">
@@ -266,6 +286,14 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
               {t('revealRemaining')}
             </Button>
           </>
+        ) : turn.currentTeamId === null ? (
+          // Nobody is on turn: the clock is stopped, and this is what starts it. The team is the
+          // one the fewest-seconds rule chose, named for the same reason `[Pass to …]` is.
+          <Button size="lg" disabled={!turn.nextTeamId} onClick={start}>
+            {turn.nextTeamId
+              ? t('startTurn', { team: nameOf(turn.nextTeamId) })
+              : t('allPassed')}
+          </Button>
         ) : (
           // Names the team, so the handover is one deliberate click rather than a generic "next"
           // the master has to interpret.

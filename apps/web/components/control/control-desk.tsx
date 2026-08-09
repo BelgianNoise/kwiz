@@ -180,6 +180,19 @@ function AttentionZone({ view, api, run }: ZoneProps) {
  * the suggested action under it.
  */
 function AdvanceZone({ view, api, run }: ZoneProps) {
+  /*
+   * The finale is checked **first**. A finale question is not a question in this sense — no answer
+   * method, no accepted answers, nothing to submit — so falling through to the question desk drew a
+   * proxy-answer control for a round nobody types in. Once the round is over the ranking belongs
+   * here (§10.6); before that, the turn desk has already claimed the zone as `FINALE_TURN`.
+   */
+  if (view.round?.type === 'DSMTW_FINALE') {
+    return view.finaleRanking ? (
+      <FinaleRanking view={view} api={api} run={run} />
+    ) : (
+      <Leaderboard view={view} api={api} run={run} />
+    )
+  }
   if (
     view.question &&
     view.question.state !== 'PENDING' &&
@@ -189,9 +202,6 @@ function AdvanceZone({ view, api, run }: ZoneProps) {
   }
   if (view.round?.type === 'JEOPARDY') {
     return <BoardDesk view={view} api={api} run={run} tiedTeamIds={[]} />
-  }
-  if (view.round?.type === 'DSMTW_FINALE' && view.finaleRanking) {
-    return <FinaleRanking view={view} api={api} run={run} />
   }
   return <Leaderboard view={view} api={api} run={run} />
 }

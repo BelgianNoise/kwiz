@@ -1,5 +1,5 @@
 import { findDeviceByToken, touchDevice } from '@kwiz/db'
-import { fail, type Audience } from '@kwiz/domain'
+import { fail, type Audience, type GameState } from '@kwiz/domain'
 
 import { getRuntime, isDatabaseUsable } from './runtime'
 import { publishState, stateFrame, type CommandContext } from './service'
@@ -64,6 +64,8 @@ export async function openStream(
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
   let ping: ReturnType<typeof setInterval> | undefined
+  // Hoisted so `cancel` can exclude this connection when it tells the others the count changed.
+  let subscriber: Subscriber | undefined
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -78,7 +80,7 @@ export async function openStream(
         }
       }
 
-      const subscriber: Subscriber = {
+      const registered: Subscriber = {
         gameId,
         audience,
         ...(teamId === undefined ? {} : { teamId }),
@@ -93,29 +95,62 @@ export async function openStream(
       write({ kind: 'retry', ms: SSE_RETRY_HINT_MS })
 
       /*
+       * **Subscribed before the first frame is built**, so this connection is counted in its own
+       * view. PRD 3 §12's *"2 control screens connected"* is derived from the live subscriber set,
+       * and a desk that connected and then read a count taken a moment earlier would show `1`
+       * forever — the count only changes when someone connects or leaves, which is precisely the
+       * moment it would have missed.
+       */
+      subscriber = registered
+      unsubscribe = runtime.transport.subscribe(registered)
+
+      /*
        * The whole of reconnection: **send the current view** (protocol §3.2). Because views are
        * whole and idempotent, `Last-Event-ID` only ever skips a send — and a value from another game
        * parses as unknown rather than as a number to compare, which is what stops two games' `seq`
        * ranges from silently matching (PRD 1 §6.5).
        */
       if (lastSeq === null || lastSeq !== state.seq) {
-        write(stateFrame(context, state, subscriber))
+        write(stateFrame(context, state, registered))
       }
 
-      unsubscribe = runtime.transport.subscribe(subscriber)
+      // …and the desks already open learn that another one appeared. Not a game event — nothing is
+      // appended (§3.3) — just the same view, rebuilt with a count that has changed.
+      notifyOthers(context, state, registered)
+
       ping = setInterval(() => write({ kind: 'ping' }), SSE_PING_MS)
     },
 
     cancel() {
-      // A closed stream is unregistered and **nothing else happens** — disconnection is not a game
+      // A closed stream is unregistered and **no game state changes** — disconnection is not a game
       // event (§3.3). A team whose phone died has not forfeited anything.
       if (ping) clearInterval(ping)
       unsubscribe?.()
+      // The other desks' screen count just changed, for the same reason as on connect.
+      if (subscriber) notifyOthers(context, state, subscriber)
       runtime.registry.evictIfFinished(gameId, runtime.transport.count(gameId) > 0)
     },
   })
 
   return new Response(stream, { headers: SSE_HEADERS })
+}
+
+/**
+ * Re-push the current view to every subscriber **except** one.
+ *
+ * Used when a connection appears or disappears: no game fact changed, so nothing is appended — but
+ * `MasterControlView.controlScreens` did (PRD 3 §12), and it is the one field on a pushed view that
+ * is a property of the sockets rather than of the log. Excluding the subscriber that caused it keeps
+ * `Last-Event-ID`'s skip meaningful for the connection that just used it.
+ */
+function notifyOthers(
+  context: CommandContext,
+  state: GameState,
+  origin: Subscriber,
+): void {
+  context.runtime.transport.broadcast(context.gameId, (other) =>
+    other === origin ? null : stateFrame(context, state, other),
+  )
 }
 
 /** Re-exported so a route that only needs to push does not have to know about the service. */

@@ -151,6 +151,18 @@ const pendingAnswer = (gameQuestionId: string, teamId: string): GameEvent => ({
 })
 
 describe('each state is reachable', () => {
+  /**
+   * Found by driving the desk: a game with no round open returned no suggestion at all, so the
+   * master was shown a leaderboard and **nothing that could open the first round**.
+   */
+  it('suggests NEXT_ROUND on a live game with no round open', () => {
+    const state = run([SETUP[0]!, SETUP[1]!, { type: 'GAME_STARTED', payload: {} }])
+    const result = attention(state, NOW)
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('NEXT_ROUND')
+    // …and the view names which one, since `round` is null and cannot carry it.
+    expect(toMasterControlView(state, NOW).nextRoundId).toBe('r1')
+  })
+
   it('is NONE before the game starts', () => {
     expect(kindOf(run([SETUP[0]!, SETUP[1]!]))).toBe('NONE')
   })

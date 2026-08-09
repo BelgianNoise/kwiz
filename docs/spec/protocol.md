@@ -578,13 +578,15 @@ type MasterControlView = {
   status: GameStatus                      // PRD 3 §4 exists only in SETUP, §10.6 only in FINISHED
   teams: (TeamPublic & { deviceCount: number })[]
   // `type` because the desk differs per round type, and the client must not infer it from
-  // whether `board` happens to be present. `nextRoundId` is what ADVANCE / NEXT_ROUND opens —
-  // without it the desk knows a next round exists and cannot name it, and a client that fetched
-  // the quiz tree to press one button would hold a second copy of the running order.
-  round: {
-    id: string; title: string; type: RoundType
-    number: number; total: number; nextRoundId: string | null
-  } | null
+  // whether `board` happens to be present.
+  round: { id: string; title: string; type: RoundType; number: number; total: number } | null
+
+  // What ADVANCE / NEXT_ROUND opens: the round after the current one, or the FIRST round when
+  // none is open. Top-level rather than inside `round`, because the case that needs it most is
+  // the one where `round` is null — a game that has just started. `advanceSuggestion` returns
+  // NEXT_ROUND there too; before slice 5 it returned null, so a freshly started game showed a
+  // leaderboard and offered no way to open its first round at all.
+  nextRoundId: string | null
 
   // What needs the master's attention RIGHT NOW. This is the whole point of the
   // surface (PRD 1 G4): one thing at a time, chosen by the server.

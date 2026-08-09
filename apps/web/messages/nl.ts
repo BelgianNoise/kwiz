@@ -599,7 +599,7 @@ const nl: Messages = {
       nobodyPicks: 'Nog niemand aan de beurt',
       change: 'Wijzigen',
       hint: 'Ga over een vakje of geef het focus om de vraag te lezen.',
-      tieTitle: 'Twee teams staan gelijk. Wie kiest?',
+      tieTitle: '{count} teams staan gelijk. Wie kiest?',
       played: 'gespeeld',
     },
 

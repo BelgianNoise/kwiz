@@ -70,25 +70,42 @@ export function AdvanceButton({ view, api, run }: ZoneProps) {
           : null
       case 'NEXT_ROUND': {
         const round = view.round
-        const next = round?.nextRoundId
-        if (!round || !next) return null
+        const next = view.nextRoundId
+        if (!next) return null
         return {
           label: t('nextRound'),
           /*
            * Close, then open. Both events matter: `ROUND_CLOSED` is what PRD 3 §6.2 hangs the
            * validation sweep on, and skipping it would leave a round that was played and never
            * ended in the log. Chained rather than fired together because the second is refused
-           * while the first has not landed.
+           * while the first has not landed — and there is nothing to close on the very first
+           * round, which is the state a game sits in the moment it starts.
            */
           call: () =>
             run(async () => {
+              if (!round) return api.openRound(next)
               const closed = await api.closeRound(round.id)
               return closed.ok ? api.openRound(next) : closed
             }),
         }
       }
       case 'FINISH':
-        return { label: t('finishGame'), call: () => run(() => api.finish()) }
+        return {
+          label: t('finishGame'),
+          /*
+           * Lock the last question first when one is still open — which is exactly the finale's
+           * own case (§10.6): the round ends on a clock, not on the master closing the question,
+           * so the log would otherwise carry a question that was opened and never closed.
+           */
+          call: () =>
+            run(async () => {
+              if (questionId && view.question?.state === 'OPEN') {
+                const locked = await api.lockQuestion(questionId)
+                if (!locked.ok) return locked
+              }
+              return api.finish()
+            }),
+        }
       default:
         return null
     }

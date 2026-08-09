@@ -789,9 +789,15 @@ export type Attention =
       masterNotes: string | null
       questionNumber: number
       questionTotal: number
-      currentTeamId: string
+      /**
+       * **Null between turns** — a finale question that has just opened, and the gap after a pass
+       * before the next team is started. §10.5 says clocks stop while nobody is on turn, so this is
+       * the same desk with the clock not yet running rather than a screen of its own; `nextTeamId`
+       * is then who `[Start <team>]` would start, by the fewest-seconds rule (PRD 1 §8.8).
+       */
+      currentTeamId: string | null
       nextTeamId: string | null
-      turnStartedAt: number
+      turnStartedAt: number | null
       penaltySeconds: number
       /** The master always sees the text; no other audience does before marking (D53). */
       keywords: {
@@ -870,13 +876,17 @@ export interface MasterControlView {
     type: RoundType
     number: number
     total: number
-    /**
-     * What `ADVANCE / NEXT_ROUND` actually opens. Without it the desk knows a next round exists and
-     * cannot name it — and a client that had to fetch the quiz tree to press one button would be
-     * holding a second copy of the running order.
-     */
-    nextRoundId: string | null
   } | null
+  /**
+   * What `ADVANCE / NEXT_ROUND` opens: the round after the current one, or the **first** round when
+   * none is open yet.
+   *
+   * Top-level rather than inside `round`, because the case that needs it most is the one where
+   * `round` is `null` — a game that has just started and has no round open. Without it the desk
+   * knows a round exists and cannot name it, and a client that fetched the quiz tree to press one
+   * button would be holding a second copy of the running order.
+   */
+  nextRoundId: string | null
   attention: Attention
   question: MasterQuestionDetail | null
   board?: {
@@ -940,9 +950,11 @@ export function toMasterControlView(
           type: round.type,
           number: roundIndex + 1,
           total: state.content.rounds.length,
-          nextRoundId: state.content.rounds[roundIndex + 1]?.id ?? null,
         }
       : null,
+    // `roundIndex` is -1 with nothing open, so this is the first round — which is exactly the case
+    // a freshly started game is in.
+    nextRoundId: state.content.rounds[roundIndex + 1]?.id ?? null,
     attention: attention(state, now),
     question: question && play ? masterQuestionDetail(state, question, play, now) : null,
     timeline: timeline(state, round),
@@ -1167,12 +1179,28 @@ export function attention(state: GameState, now: number): Attention {
     }
   }
 
-  // 2. FINALE_TURN — clocks are running and every second costs a team.
-  if (round?.type === 'DSMTW_FINALE' && question) {
+  /*
+   * 2. FINALE_TURN — clocks are running and every second costs a team.
+   *
+   * Also the state **between** turns: a finale question that has just opened has no turn yet, and
+   * nothing else on the desk could start one. §10.5 says clocks stop while nobody is on turn, so
+   * this is the same screen with the clock not yet running rather than a state of its own — and
+   * `nextTeamId` is then who `[Start <team>]` starts, by the fewest-seconds rule (PRD 1 §8.8).
+   */
+  // …but never once the round is over: the ranking is what needs the master then (§10.6), and a
+  // turn desk with nobody left on it shows an empty team name where a name should be.
+  if (
+    round?.type === 'DSMTW_FINALE' &&
+    question &&
+    play &&
+    state.finale.ranking === null
+  ) {
     const turn = currentFinaleTurn(state)
-    if (turn) {
+    if (turn || (play.state === 'OPEN' && state.finale.finalistIds.length > 0)) {
       const passed = new Set(passedThisQuestion(state, question.id))
       const order = finaleTurnOrder(state, question.id, now)
+      // Every clock is read at the same instant, so the strip is internally consistent (D52).
+      const at = turn?.startedAt ?? now
       // Same computation as `finaleView`'s (§5.5's `FinaleTurnDetail` — "Q3 of 6" — P2 #13).
       const finaleQuestions = round.questions
       return {
@@ -1182,9 +1210,10 @@ export function attention(state: GameState, now: number): Attention {
         masterNotes: question.masterNotes,
         questionNumber: finaleQuestions.findIndex((q) => q.id === question.id) + 1,
         questionTotal: finaleQuestions.length,
-        currentTeamId: turn.teamId,
-        nextTeamId: order.find((teamId) => teamId !== turn.teamId) ?? null,
-        turnStartedAt: turn.startedAt,
+        currentTeamId: turn?.teamId ?? null,
+        // With no turn running this is `order[0]` — the team the rule says goes first.
+        nextTeamId: order.find((teamId) => teamId !== turn?.teamId) ?? null,
+        turnStartedAt: turn?.startedAt ?? null,
         penaltySeconds: state.finale.penaltySeconds ?? 0,
         keywords: question.keywords.map((keyword) => {
           const mark = state.keywordMarks.get(keyword.id)
@@ -1204,8 +1233,8 @@ export function attention(state: GameState, now: number): Attention {
             name: team?.name ?? '',
             colour: team?.colour ?? '',
             // At turn start, not now: the client counts down from `turnStartedAt` (D52).
-            secondsAtTurnStart: finaleRemainingSeconds(state, teamId, turn.startedAt),
-            onTurn: turn.teamId === teamId,
+            secondsAtTurnStart: finaleRemainingSeconds(state, teamId, at),
+            onTurn: turn?.teamId === teamId,
             eliminated: (team?.eliminatedAt ?? null) !== null,
             passedThisQuestion: passed.has(teamId),
           }
@@ -1360,6 +1389,16 @@ function advanceSuggestion(
   play: QuestionPlayState | undefined,
 ): AdvanceSuggestion | null {
   if (state.status !== 'LIVE') return null
+
+  /*
+   * A finished finale outranks the open question it left behind (§10.6). The round ends on one
+   * survivor, on all of them out, or on the questions running out — and at that point the desk
+   * shows the ranking and the only thing left to do is end the game, since a finale is always the
+   * last round (I20). Suggesting `[Close answers]` over the ranking would be both wrong copy and
+   * the wrong step.
+   */
+  if (state.finale.ranking !== null) return 'FINISH'
+
   /*
    * `LOCK` was missing from this union until slice 5, and it is the single most common primary
    * action in a game: while a question is `OPEN` the desk suggested `NEXT_QUESTION`, because the
@@ -1373,7 +1412,12 @@ function advanceSuggestion(
     return 'NEXT_QUESTION'
 
   const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
-  if (!round) return null
+  /*
+   * A live game with no round open — which every game is for the first few seconds after
+   * `[Start the quiz]`. This returned `null` before slice 5's browser pass, so `attention` was
+   * `NONE`, the desk showed a leaderboard, and **there was no way to open the first round at all**.
+   */
+  if (!round) return state.content.rounds.length > 0 ? 'NEXT_ROUND' : null
 
   const unplayed = round.questions.filter(
     (question) => (state.questions.get(question.id)?.state ?? 'PENDING') === 'PENDING',
