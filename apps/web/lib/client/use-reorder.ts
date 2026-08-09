@@ -20,6 +20,33 @@ import { useRef, useState } from 'react'
  * a "move to index" endpoint to save a few round trips over a list this size would be a second way
  * to do one thing.
  */
+
+/**
+ * The keyboard route's decision, pulled out of the event handler so it is a plain function of
+ * inputs — testable without a DOM, and the one place `Alt+↑/↓`'s refusal logic lives rather than
+ * being re-derived at each call site.
+ *
+ * Returns the direction to move in, or `undefined` when the chord is not `Alt+↑/↓`, would walk off
+ * either end of the list, or `canDrag`/`canDrop` refuse it — the three ways this must agree with the
+ * drag route and the `↑`/`↓` buttons rather than becoming a fourth way to state the same rule.
+ */
+export function keyboardReorder(
+  event: { altKey: boolean; key: string },
+  index: number,
+  length: number,
+  canDrag: (index: number) => boolean,
+  canDrop: (from: number, to: number) => boolean,
+): 'UP' | 'DOWN' | undefined {
+  if (!event.altKey) return undefined
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return undefined
+
+  const direction = event.key === 'ArrowUp' ? 'UP' : 'DOWN'
+  const to = direction === 'UP' ? index - 1 : index + 1
+  if (to < 0 || to >= length || !canDrag(index) || !canDrop(index, to)) return undefined
+
+  return direction
+}
+
 export interface Reorder {
   /** The row currently being dragged, so the list can dim it. */
   draggingId: string | undefined
@@ -36,14 +63,20 @@ export interface Reorder {
     onDragLeave: () => void
     onDrop: (event: React.DragEvent) => void
     onDragEnd: () => void
+    /** §15.2's keyboard route — a row must be reachable by `Tab` for `Alt+↑/↓` to land on it. */
+    tabIndex: number
+    onKeyDown: (event: React.KeyboardEvent) => void
   }
 }
 
 export function useReorder({
+  length,
   canDrag,
   canDrop,
   onMove,
 }: {
+  /** The list's current row count — the bound neither `canDrag` nor `canDrop` is asked about. */
+  length: number
   /** False for a pinned row — the finale has one legal position (§6.1). */
   canDrag: (index: number) => boolean
   /** False where the drop indicator must not appear, e.g. past the pinned finale. */
@@ -107,6 +140,17 @@ export function useReorder({
         source.current = undefined
         setDraggingId(undefined)
         setOverId(undefined)
+      },
+      // §15.2 — "drag via `⠿`, plus `Alt+↑/↓` on a focused row".
+      tabIndex: 0,
+      onKeyDown: (event) => {
+        const direction = keyboardReorder(event, index, length, canDrag, canDrop)
+        if (!direction) return
+
+        // Only once refusal is ruled out — an Alt+↑ that does nothing must not also eat the
+        // browser's own handling of the chord.
+        event.preventDefault()
+        onMove(id, direction, 1)
       },
     }),
   }

@@ -85,6 +85,7 @@ export function QuizEditor({ quiz, games }: { quiz: QuizContent; games: number }
   }
 
   const reorder = useReorder({
+    length: quiz.rounds.length,
     canDrag: (index) => !isPinned(index) && quiz.rounds.length > 1,
     canDrop: (from, to) => !isPinned(from) && to <= lastMovable,
     onMove: move,

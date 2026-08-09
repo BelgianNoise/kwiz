@@ -94,6 +94,7 @@ export function GameSetup({
 
   /** Local only — the teams do not exist until `[Create game]`, so this is an array move. */
   const reorder = useReorder({
+    length: teams.length,
     canDrag: () => teams.length > 1,
     canDrop: () => true,
     onMove: (key, direction, steps) => {
