@@ -10,7 +10,7 @@ import {
   type ImportMode,
   type QuizExport,
 } from '@kwiz/db'
-import { fail, ok, type ActionResult } from '@kwiz/domain'
+import { EventPayloadError, fail, ok, type ActionResult } from '@kwiz/domain'
 import {
   readExport,
   writeExport,
@@ -208,12 +208,28 @@ export async function performImport(
     return read.ok ? fail('MANIFEST_INVALID', 'unreadable') : read
 
   const parsed = read.data
-  const result = importQuiz(runtime.database, {
-    quiz: parsed.quiz,
-    games: parsed.games,
-    mode,
-    randomBytes,
-  })
+  let result: ReturnType<typeof importQuiz>
+  try {
+    result = importQuiz(runtime.database, {
+      quiz: parsed.quiz,
+      games: parsed.games,
+      mode,
+      randomBytes,
+    })
+  } catch (error) {
+    /*
+     * P2 #20 — a `games.json` that passed schema validation but carries a payload replay itself
+     * rejects (conventions §10.1's "must fail loudly rather than quietly corrupt a projection")
+     * surfaced as an uncaught exception here instead of the typed refusal every other bad-file
+     * case in this function already returns. The write is still safe either way — the whole
+     * import runs in one transaction (data model §7.1) and rolls back — only the error's *shape*
+     * was inconsistent.
+     */
+    if (error instanceof EventPayloadError) {
+      return fail('MANIFEST_INVALID', `games.json failed replay — ${error.message}`)
+    }
+    throw error
+  }
 
   // oxlint-disable no-await-in-loop
   for (const [checksum, content] of parsed.attachments) {

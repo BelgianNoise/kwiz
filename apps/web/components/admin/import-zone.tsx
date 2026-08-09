@@ -54,7 +54,10 @@ export function ImportZone({ children }: { children: React.ReactNode }) {
         const file = event.dataTransfer.files[0]
         if (file) void inspect(file)
       }}
-      className={dragging ? 'ring-primary rounded-xl ring-2' : ''}
+      // `flex-col gap-10` mirrors the spacing the dashboard's other top-level sections use — this
+      // now wraps more than one of them (§14.2's "anywhere on the dashboard"), and the drop
+      // target growing must not visibly change the layout underneath it.
+      className={`flex flex-col gap-10 ${dragging ? 'ring-primary rounded-xl ring-2' : ''}`}
     >
       <div className="flex items-center justify-between gap-4">
         <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>

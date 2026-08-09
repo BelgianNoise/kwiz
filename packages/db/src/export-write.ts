@@ -299,7 +299,15 @@ function remapEvent<T extends { type: string; payload: unknown }>(
   return { ...event, payload: remapValue(event.payload, id) }
 }
 
-/** Replaces a `code` field wherever one appears in a payload, at any depth. */
+/**
+ * Replaces a top-level `code` field on a payload, if it has one.
+ *
+ * **Top level only** (P2 #19 — this comment previously overclaimed "at any depth," which the
+ * implementation never did). Harmless today: both event types that carry a `code`
+ * (`GAME_CREATED`, `CODE_REGENERATED`) carry it at the top level, and there is no test that would
+ * catch a future nested case failing to protect against the same `game.code` collision `moved`'s
+ * caller exists to avoid. A future event type nesting `code` needs this taught to recurse.
+ */
 function withCode<T extends { type: string; payload: unknown }>(
   event: T,
   code: string,

@@ -90,24 +90,28 @@ export default async function DashboardPage({
         <NetworkBanner address={settings.networkAddress} />
       ) : null}
 
-      {/* §14.2 — the drop target is the dashboard itself, so the zone wraps rather than sits beside. */}
+      {/*
+        §14.2 — "drop a .zip anywhere on the dashboard," and the dashboard is quizzes AND games,
+        not only the quiz list. Wrapping just `QuizList` left the game section outside the drop
+        target, which this comment already claimed wasn't true.
+      */}
       <ImportZone>
         <QuizList quizzes={quizzes} />
-      </ImportZone>
 
-      <GameList
-        games={games.map((game) => ({
-          id: game.id,
-          status: game.status,
-          code: game.code,
-          quizName: game.quizName,
-          teams: game.teams,
-          createdAt: game.createdAt.toISOString(),
-          stale: isStale(game),
-          winners: winners.get(game.id) ?? [],
-          round: game.status === 'LIVE' ? liveRound(game.id) : null,
-        }))}
-      />
+        <GameList
+          games={games.map((game) => ({
+            id: game.id,
+            status: game.status,
+            code: game.code,
+            quizName: game.quizName,
+            teams: game.teams,
+            createdAt: game.createdAt.toISOString(),
+            stale: isStale(game),
+            winners: winners.get(game.id) ?? [],
+            round: game.status === 'LIVE' ? liveRound(game.id) : null,
+          }))}
+        />
+      </ImportZone>
     </main>
   )
 }
