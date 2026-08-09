@@ -307,6 +307,101 @@ export const api = {
     transfer<{ quizId: string; missing: number }>(file, 'import', mode),
 }
 
+/**
+ * protocol §7.2's master actions, as **master control** drives them (PRD 3).
+ *
+ * Bound to one game rather than taking a `gameId` per call, because D21 means every one of them
+ * carries it and a surface that has to remember to thread it will eventually not. There is no
+ * "the current game" anywhere in this file for the same reason.
+ *
+ * **None of these returns game state** (protocol §7): the resulting view arrives on the SSE stream,
+ * so there is exactly one path by which the desk learns anything. A caller that awaits one of these
+ * is waiting for the *refusal*, not for the result.
+ */
+export function control(gameId: string) {
+  const post = (path: string, body: unknown = {}): Promise<ActionResult> =>
+    send(`/api/games/${gameId}/${path}`, body)
+
+  return {
+    // ─── lifecycle (§4, §9.2) ───
+    start: () => post('start'),
+    finish: () => post('finish'),
+    abandon: () => post('abandon'),
+    openRound: (roundId: string) => post(`rounds/${roundId}/open`),
+    closeRound: (roundId: string) => post(`rounds/${roundId}/close`),
+
+    // ─── the question (§5) ───
+    openQuestion: (questionId: string) => post(`questions/${questionId}/open`),
+    lockQuestion: (questionId: string) => post(`questions/${questionId}/lock`),
+    revealQuestion: (questionId: string) => post(`questions/${questionId}/reveal`),
+    scoreQuestion: (questionId: string) => post(`questions/${questionId}/score`),
+    /** §9.1 — pointer-only, never a keystroke: a stray key must not discard a question. */
+    skipQuestion: (questionId: string) => post(`questions/${questionId}/skip`),
+
+    // ─── validation and the reveal (§5.3, §6) ───
+    /** Also the revalidation path: an auto verdict can be overridden by clicking it (§6.1). */
+    validate: (gameQuestionId: string, teamId: string, accepted: boolean) =>
+      post('answers/validate', { gameQuestionId, teamId, accepted }),
+    spotlight: (gameQuestionId: string, teamId: string, spotlit: boolean) =>
+      post('answers/spotlight', { gameQuestionId, teamId, spotlit }),
+    /** §11.3 — the one path allowed to overwrite a submission, and it resets the verdict (D47). */
+    submitForTeam: (
+      gameQuestionId: string,
+      teamId: string,
+      answer: { text?: string; selectedOptionId?: string },
+    ) => post('answers/submit-for-team', { gameQuestionId, teamId, ...answer }),
+
+    // ─── buzzer (§7) ───
+    adjudicate: (buzzId: string, accepted: boolean) =>
+      post(`buzzes/${buzzId}/adjudicate`, { accepted }),
+    /** §7.1's `[Reopen for everyone]` — the master simply misheard (D35 rule 5). */
+    reopenBuzzers: (questionId: string) => post(`questions/${questionId}/reopen-buzzers`),
+
+    // ─── DO (§8) ───
+    /** `[]` is the explicit *"nobody got it"* (D23), not an omission. */
+    doWinners: (questionId: string, teamIds: string[]) =>
+      post(`questions/${questionId}/do-winners`, { teamIds }),
+    doScores: (questionId: string, scores: { teamId: string; score: number }[]) =>
+      post(`questions/${questionId}/do-scores`, { scores }),
+
+    // ─── pacing (§11.1, §11.2) ───
+    showScoreboard: (shown: boolean) => post('scoreboard', { shown }),
+    /** Re-posting during a break is `[Extend break]`; omitting the duration is open-ended. */
+    startBreak: (durationMs?: number) =>
+      post('break', durationMs === undefined ? {} : { durationMs }),
+    endBreak: () => post('break/end'),
+    /** §9's `[Change ▾]` and the tie-break buttons are the same call (D30). */
+    assignPicker: (teamId: string, reason: 'TIE_BREAK' | 'MASTER_OVERRIDE') =>
+      post('picker', { teamId, reason }),
+
+    // ─── the finale (§10) ───
+    setFinalists: (teamIds: string[]) => post('finale/finalists', { teamIds }),
+    startTurn: (teamId: string) => post('finale/turn/start', { teamId }),
+    passTurn: () => post('finale/turn/pass'),
+    markKeyword: (keywordId: string) => post(`finale/keywords/${keywordId}/mark`),
+    /** §10.4 — reverses the mark **and the seconds it took from every other team**. */
+    unmarkKeyword: (keywordId: string) => post(`finale/keywords/${keywordId}/unmark`),
+    revealKeywords: (gameQuestionId: string) => post('finale/reveal', { gameQuestionId }),
+    /**
+     * §10.6 — the browser only reports that a clock has run out; the **server recomputes the exact
+     * instant from the log**, so a slow tab cannot skew the ranking.
+     */
+    eliminate: (teamId: string) => post('finale/eliminate', { teamId }),
+
+    // ─── scores (§11) ───
+    adjustScore: (input: {
+      teamId: string
+      delta: number
+      reason?: string
+      announced: boolean
+    }) => post('adjust-score', input),
+    revokeAdjustment: (adjustmentId: string) =>
+      post(`adjustments/${adjustmentId}/revoke`),
+  }
+}
+
+export type ControlApi = ReturnType<typeof control>
+
 async function transfer<T>(
   file: File,
   intent: 'inspect' | 'import',
