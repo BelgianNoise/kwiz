@@ -20,6 +20,7 @@ import {
 import { questionFindings, type PreflightCode } from './preflight'
 import { revealsCorrectAnswer } from './question-state'
 import {
+  allQuestions,
   findQuestion,
   roundOf,
   type GameState,
@@ -749,6 +750,17 @@ export interface MasterAdjustment {
 /** How many of §11's adjustments ride along on every push. */
 const RECENT_ADJUSTMENTS = 8
 
+/**
+ * What the master's primary button should do next. `LOCK` is `[Close answers]` — the only thing
+ * that ends a question, since the timer is advisory and never does (D8).
+ */
+export type AdvanceSuggestion =
+  | 'LOCK'
+  | 'REVEAL'
+  | 'NEXT_QUESTION'
+  | 'NEXT_ROUND'
+  | 'FINISH'
+
 export type Attention =
   | { kind: 'NONE' }
   | {
@@ -835,7 +847,7 @@ export type Attention =
       items: ValidationItem[]
       remainingQuestions: number
     }
-  | { kind: 'ADVANCE'; suggestion: 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
+  | { kind: 'ADVANCE'; suggestion: AdvanceSuggestion }
 
 export interface MasterControlView {
   code: string
@@ -1252,17 +1264,15 @@ export function attention(state: GameState, now: number): Attention {
   if (state.break) return { kind: 'NONE' }
 
   // 6. VALIDATE_QUESTION — needed before scores are honest, but the room is not blocked.
-  if (question && play && play.state !== 'PENDING' && play.state !== 'SKIPPED') {
-    const items = validationItems(state, play)
-    if (items.some((item) => item.verdict === 'PENDING')) {
-      return {
-        kind: 'VALIDATE_QUESTION',
-        gameQuestionId: question.id,
-        // Grouped by question, all teams together: judging one answer in isolation is what makes
-        // an inconsistent pair invisible (PRD 3 §6.1).
-        items,
-        remainingQuestions: remainingUnvalidatedQuestions(state, question.id),
-      }
+  const validating = questionNeedingValidation(state, question?.id ?? null, play)
+  if (validating) {
+    return {
+      kind: 'VALIDATE_QUESTION',
+      gameQuestionId: validating.id,
+      // Grouped by question, all teams together: judging one answer in isolation is what makes
+      // an inconsistent pair invisible (PRD 3 §6.1).
+      items: validationItems(state, validating.play),
+      remainingQuestions: remainingUnvalidatedQuestions(state, validating.id),
     }
   }
 
@@ -1272,6 +1282,50 @@ export function attention(state: GameState, now: number): Attention {
 
   // 8. NONE — show the leaderboard big.
   return { kind: 'NONE' }
+}
+
+const hasPendingAnswer = (play: QuestionPlayState): boolean =>
+  [...play.answers.values()].some((answer) => answer.verdict === 'PENDING')
+
+/**
+ * Which question `VALIDATE_QUESTION` should be about — and the whole of PRD 3 §6.2's **round-end
+ * sweep**, which until slice 5 did not exist: `attention` only ever looked at the current question,
+ * so once a round closed, every answer deferred during it became unreachable from the desk while
+ * `pendingValidationCount` went on counting them. D6 promises that screen explicitly.
+ *
+ * Two rules, in this order:
+ *
+ * 1. **The current question wins**, which is D42's inline path (§5.1) — the master judges in the
+ *    dead time while one slow team is still typing.
+ * 2. **Otherwise sweep the earliest question still owed a verdict**, but only once the master is no
+ *    longer mid-question. An `OPEN` or `LOCKED` question means they are working; pulling them back
+ *    to round 1 in the middle of it is the one thing worse than deferring.
+ */
+function questionNeedingValidation(
+  state: GameState,
+  currentId: string | null,
+  current: QuestionPlayState | undefined,
+): { id: string; play: QuestionPlayState } | undefined {
+  if (
+    currentId &&
+    current &&
+    current.state !== 'PENDING' &&
+    current.state !== 'SKIPPED' &&
+    hasPendingAnswer(current)
+  ) {
+    return { id: currentId, play: current }
+  }
+
+  if (current && (current.state === 'OPEN' || current.state === 'LOCKED'))
+    return undefined
+
+  // Play order, not `Map` insertion order: the sweep walks the quiz the way it was played.
+  for (const question of allQuestions(state.content)) {
+    const play = state.questions.get(question.id)
+    if (!play || play.state === 'PENDING' || play.state === 'SKIPPED') continue
+    if (hasPendingAnswer(play)) return { id: question.id, play }
+  }
+  return undefined
 }
 
 function remainingUnvalidatedQuestions(state: GameState, exceptId: string): number {
@@ -1287,8 +1341,16 @@ function remainingUnvalidatedQuestions(state: GameState, exceptId: string): numb
 function advanceSuggestion(
   state: GameState,
   play: QuestionPlayState | undefined,
-): 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' | null {
+): AdvanceSuggestion | null {
   if (state.status !== 'LIVE') return null
+  /*
+   * `LOCK` was missing from this union until slice 5, and it is the single most common primary
+   * action in a game: while a question is `OPEN` the desk suggested `NEXT_QUESTION`, because the
+   * fall-through below found unplayed questions in the round. PRD 3 §1.1 says the master must never
+   * have to work out what needs them — a suggestion that points past the live question is worse
+   * than none.
+   */
+  if (play?.state === 'OPEN') return 'LOCK'
   if (play?.state === 'LOCKED') return 'REVEAL'
   if (play && (play.state === 'REVEALED' || play.state === 'SCORED'))
     return 'NEXT_QUESTION'

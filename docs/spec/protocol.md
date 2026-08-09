@@ -591,7 +591,10 @@ type MasterControlView = {
     | { kind: 'BREAK_TIE_FOR_PICK'; tiedTeamIds: string[] }
     | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[] }
     | { kind: 'FINALE_TURN'; detail: FinaleTurnDetail }
-    | { kind: 'ADVANCE'; suggestion: 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
+    // `LOCK` is `[Close answers]`. It was missing until slice 5, which meant the most common
+    // state in a game — a question the room is answering — suggested `NEXT_QUESTION`, pointing
+    // the master past the live question (PRD 3 §5.1: nothing but this closes a question, D8).
+    | { kind: 'ADVANCE'; suggestion: 'LOCK' | 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
 
   // Full detail incl. masterNotes, plus every team's answer with its verdict and a
   // needsValidation flag — so the master can judge inline while the question is still
@@ -677,12 +680,22 @@ type ValidationItem = {
 > cannot see they are in, a `SETUP` screen with no status to key on. They are recorded here rather
 > than left as a divergence, per agent-workflow §3.3.
 >
-> **`attention` also gained a break rule** in the same slice: PRD 3 §11.2 states that it *"stays
-> `NONE`"* during an interval, and nothing implemented it — a break with unplayed questions left read
-> as `ADVANCE`, a call to action pointed at a room that is at the bar. The break now outranks
-> `VALIDATE_QUESTION` and `ADVANCE` and nothing above them, since those five are the states where a
-> room is genuinely waiting. Only `SCORE_DO` can co-occur at all: a break is refused while a question
-> is `OPEN`.
+> **`attention` gained three behaviours** in the same slice, each a rule a PRD states and nothing
+> implemented:
+>
+> - **A break suspends it.** PRD 3 §11.2 says it *"stays `NONE`"* during an interval; a break with
+>   unplayed questions left read as `ADVANCE`, a call to action pointed at a room that is at the bar.
+>   The break now outranks `VALIDATE_QUESTION` and `ADVANCE` and nothing above them, since those five
+>   are the states where a room is genuinely waiting. Only `SCORE_DO` can co-occur at all: a break is
+>   refused while a question is `OPEN`.
+> - **`ADVANCE` gained `LOCK`**, above.
+> - **`VALIDATE_QUESTION` sweeps past questions**, which is PRD 3 §6.2 and D6's original promise. It
+>   previously looked only at the *current* question, so an answer deferred in question 1 became
+>   unreachable from the desk the moment question 2 opened — while `pendingValidationCount` went on
+>   counting it with nothing that could ever clear it. It now prefers the current question (D42's
+>   inline path) and otherwise walks the quiz in play order for the earliest one still owed a verdict
+>   — but never while the current question is `OPEN` or `LOCKED`, because pulling a master back to
+>   round 1 mid-question is worse than the deferral.
 
 `attention` is computed **server-side**, not by the client inspecting state and guessing.
 The rule for what deserves the master's attention is game logic and belongs in

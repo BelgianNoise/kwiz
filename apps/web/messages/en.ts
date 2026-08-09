@@ -524,6 +524,227 @@ const en = {
     },
   },
 
+  /**
+   * PRD 3 — the control desk. Read in **two-second glances** by someone standing with a microphone,
+   * so the copy is short and names the thing rather than describing it: `[Pass to Team 4]`, not
+   * "hand the turn over to the next team".
+   */
+  control: {
+    /** §2's frame: header, status, and the overflow menu. */
+    frame: {
+      round: 'Round {number} of {total}',
+      notStarted: 'Not started',
+      code: 'Code {code}',
+      mainScreen: 'Main screen',
+      connecting: 'Connecting…',
+      /** §12 — passive, because two desks are legitimate and every action is idempotent. */
+      otherScreens:
+        '{count, plural, one {# other control screen} other {# other control screens}}',
+      reconnecting: 'Reconnecting…',
+      menu: 'Game menu',
+      skipQuestion: 'Skip this question',
+      closeRound: 'End this round',
+      openRound: 'Start the next round',
+      finish: 'End the game',
+      abandon: 'Abandon the game',
+      finishTitle: 'End the game?',
+      finishBody: 'The main screen shows the final scores. Nothing more can be played.',
+      abandonTitle: 'Abandon the game?',
+      abandonBody: 'Every screen disconnects. The game is kept but cannot be resumed.',
+      finished: 'This game has finished.',
+      abandoned: 'This game was abandoned.',
+    },
+
+    /** §4 — the only thing this screen is for is finding the table that hasn't scanned yet. */
+    setup: {
+      title: 'Waiting for players',
+      joined: '{joined} of {total} teams have joined.',
+      devices: '{count, plural, one {# device} other {# devices}}',
+      ready: 'ready',
+      notJoined: 'not joined yet',
+      start: 'Start the quiz',
+    },
+
+    /** §5 — the open question, its answers, and the reveal. */
+    question: {
+      points: '{points} pts',
+      notes: 'Note',
+      answer: 'Answer',
+      alsoAccepted: 'also: {answers}',
+      media: 'Audio and video play from here, never from the main screen.',
+      play: 'Play',
+      pause: 'Pause',
+      answersSoFar: 'Answers so far',
+      ofTeams: '{answered} of {total} teams',
+      stillAnswering: 'still answering',
+      timeUp: 'Time up',
+      submitted: '{answered} of {total} submitted',
+      close: 'Close answers',
+      lockedLine: 'Locked · {answered} of {total} answered',
+      unjudged: '{count, plural, one {# unjudged} other {# unjudged}}',
+      allJudged: 'all judged',
+      reveal: 'Reveal answer',
+      revealed: 'Showing “{answer}” to the room',
+      showOnScreen: 'Show on screen',
+      onScreen: 'On screen',
+      spotlightHint: 'Multiple choice shows the whole distribution — nothing to pick.',
+      buzzerNothing: 'One team answered, out loud. Nothing to show.',
+      next: 'Next question',
+      open: 'Open {prompt}',
+      openNext: 'Open the next question',
+      score: 'Award the points',
+      nextRound: 'Start the next round',
+      finishGame: 'End the game',
+      /** §11.3 — only when the team has no device at all, so it never reads as a shortcut. */
+      cantConnect: "can't connect — enter answer",
+      enterFor: 'Answer for {team}',
+      submitFor: 'Save it',
+      enteredByMaster: 'entered by quizmaster',
+      notConfirmed: 'not confirmed',
+      accept: 'Accept',
+      deny: 'Deny',
+      correct: 'correct',
+      wrong: 'wrong',
+      auto: 'auto',
+      failsPreflight: 'Pre-flight flagged this question — you chose to play it anyway.',
+    },
+
+    /** §6 — the round-end sweep, grouped by question so inconsistency is visible. */
+    validate: {
+      title: 'Still to judge',
+      remaining:
+        '{count, plural, =0 {last one} one {# more question after this} other {# more questions after this}}',
+      accepted: 'Accepted: {answers}',
+      identical: 'same answer as another team',
+      done: 'Done with this question',
+    },
+
+    /** §7 — the most time-critical screen in the product. Two buttons, nothing else. */
+    buzz: {
+      buzzedAt: 'buzzed at {seconds}s',
+      timerPaused: 'timer paused',
+      correct: 'Correct',
+      wrong: 'Wrong',
+      alsoBuzzed: 'Also buzzed',
+      lockedOut: 'Locked out',
+      nobodyYet: '—',
+      liveAgain: 'Buzzers are live again.',
+      waiting: 'Waiting for a buzz…',
+      canStillBuzz:
+        '{count, plural, one {# team can still buzz} other {# teams can still buzz}}',
+      reopen: 'Reopen for everyone',
+      nobodyGotIt: 'Nobody got it.',
+    },
+
+    /** §8 — both `DO` modes (D23, D24). */
+    do: {
+      whoWon: 'Who won?',
+      tieHint: 'tap more than one for a tie',
+      nobody: 'Nobody got it',
+      awardEach: 'Award {points} pts each',
+      awardSplit: 'Split {points} pts',
+      award: 'Award {points} pts',
+      scoreEach: 'Score each team',
+      max: 'max {points} each',
+      scored: '{scored} of {total} scored',
+      save: 'Save scores',
+    },
+
+    /** §9 — the board is the master's input device (D16). */
+    jeopardy: {
+      picks: '{team} picks next',
+      nobodyPicks: 'Nobody is picking yet',
+      change: 'Change',
+      hint: 'Hover or focus a tile to read its question.',
+      tieTitle: 'Two teams are level. Who picks?',
+      played: 'played',
+    },
+
+    /** §10 — the finale desk. Clocks are running; every label is as short as it can be. */
+    finale: {
+      whoPlays: 'Who plays the finale?',
+      rate: '{points} points = 1 second',
+      seconds: '{seconds}s',
+      outAtOnce: 'out at once',
+      penaltyLine: 'Penalty per keyword: {penalty}s → up to {max}s off a {pool}s pool',
+      suggested: 'Suggested: {count} questions',
+      start: 'Start the finale',
+      needTwo: 'Pick at least two finalists.',
+      questionOf: 'Q{number} of {total}',
+      next: 'next: {team}',
+      nextNobody: 'last one in',
+      mark: 'mark',
+      unmark: 'Un-mark',
+      markedBy: '{team}',
+      revealedUnguessed: 'nobody',
+      pass: 'Pass to {team}',
+      startTurn: 'Start {team}',
+      allPassed: 'All teams passed',
+      unguessed: '{count, plural, one {# unguessed} other {# unguessed}}',
+      revealRemaining: 'Reveal remaining',
+      nextQuestion: 'Next question',
+      out: 'out {time}',
+      eliminated: 'out',
+      /** §10.6 — the two tabs (D51). */
+      rankingTitle: 'Finale over',
+      survivalTab: 'Survival',
+      pointsTab: 'Points before the finale',
+      place: '#{place}',
+      shared: 'joint #{place}',
+    },
+
+    /** §11 — the right rail, available at all times (D15). */
+    scores: {
+      title: 'Scores',
+      devicesLine: '{joined} of {total} teams connected',
+      noDevice: 'no device',
+      adjust: 'Adjust',
+      adjustTitle: 'Adjust · {team}',
+      amount: 'Amount',
+      reason: 'Reason (optional)',
+      reasonPlaceholder: 'best heckle of the night',
+      announce: 'Announce on the main screen',
+      apply: 'Apply {delta}',
+      recent: 'Recent adjustments',
+      undo: 'Undo',
+      undone: 'undone',
+      showScores: 'Show scores on screen',
+      hideScores: 'Take scores off screen',
+      toValidate:
+        '{count, plural, one {# answer to validate} other {# answers to validate}}',
+      buzzInterrupt: 'A buzz came in — finish or cancel.',
+    },
+
+    /** §11.2 — nothing in this product auto-advances (D8), including the end of a break. */
+    break: {
+      title: 'On a break',
+      startTitle: 'Start a break',
+      minutes: 'Minutes',
+      minutesHint: 'Leave it blank for “back shortly” with no clock.',
+      start: 'Start break',
+      extend: 'Extend break',
+      resume: 'Resume',
+      backIn: 'Back in {time}',
+      noClock: 'No clock — back shortly',
+      blocked: 'Lock or skip the open question first.',
+    },
+
+    /** §2.1 — read-only. Clicking a past question navigates; it never reopens anything. */
+    timeline: {
+      label: 'This round',
+      preflight: 'flagged by pre-flight',
+      current: 'now',
+      state: {
+        PENDING: 'not played',
+        OPEN: 'open',
+        LOCKED: 'closed',
+        REVEALED: 'revealed',
+        SCORED: 'scored',
+        SKIPPED: 'skipped',
+      },
+    },
+  },
+
   /** PRD 2 §4 / D10 — the screen that stops a dead QR code from being the first thing a room sees. */
   setup: {
     heading: 'Which address should players use?',

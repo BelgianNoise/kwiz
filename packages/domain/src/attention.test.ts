@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { GameEvent } from './events/payload'
 import { reduce, type LoggedEvent } from './reduce'
 import type { GameContent, GameState } from './state'
-import { attention } from './views'
+import { attention, toMasterControlView } from './views'
 
 /**
  * PRD 3 §3.1 — **exactly one** attention state is active, and which one is game logic, computed
@@ -327,6 +327,20 @@ describe('each state is reachable', () => {
     ).toBe('ADVANCE')
   })
 
+  /**
+   * `LOCK` was missing from the suggestion union until slice 5, so an open question — the most
+   * common state in a game — suggested `NEXT_QUESTION`, pointing the master past the thing the room
+   * is currently answering.
+   */
+  it('suggests LOCK while a question is open, not NEXT_QUESTION', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('LOCK')
+  })
+
   it('suggests REVEAL on a locked question and NEXT_QUESTION once revealed', () => {
     const locked = run([
       ...SETUP,
@@ -452,6 +466,86 @@ describe('priority when conditions compete (PRD 3 §3.1)', () => {
   })
 
   /** A skipped question awards nothing and needs nothing — it must not hold the master. */
+  it('does not ask for validation on a skipped question', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      pendingAnswer(FREE, A),
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: FREE } },
+    ])
+    expect(kindOf(state)).not.toBe('VALIDATE_QUESTION')
+  })
+})
+
+/**
+ * PRD 3 §6.2's sweep, and D6's original promise: *"at the end of a `QUESTION_SET` round, the admin
+ * is shown each question with each team's answer"*.
+ *
+ * Until slice 5 this did not exist. `attention` looked only at the current question, so an answer
+ * deferred in question 1 became unreachable from the desk the moment question 2 opened — while
+ * `pendingValidationCount` went on counting it, with nothing that could ever clear it.
+ */
+describe('the round-end validation sweep (§6.2)', () => {
+  const deferredThenMovedOn: GameEvent[] = [
+    ...SETUP,
+    { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+    pendingAnswer(FREE, A),
+    { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+    { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE } },
+  ]
+
+  it('comes back to an earlier question once the master is no longer mid-question', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: BUZZ } },
+    ])
+
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('VALIDATE_QUESTION')
+    if (result.kind !== 'VALIDATE_QUESTION') return
+    // The earliest one still owed a verdict, so the sweep walks the quiz in play order.
+    expect(result.gameQuestionId).toBe(FREE)
+    expect(result.items).toHaveLength(1)
+  })
+
+  it('still surfaces it after the round has closed', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'ROUND_CLOSED', payload: { gameRoundId: 'r1' } },
+    ])
+    expect(kindOf(state)).toBe('VALIDATE_QUESTION')
+  })
+
+  /**
+   * The rule that keeps the sweep from being a nuisance: an `OPEN` or `LOCKED` current question
+   * means the master is working, and being pulled back to round 1 mid-question is worse than the
+   * deferral it is trying to fix.
+   */
+  it('does not pull the master backwards while a question is open', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('ADVANCE')
+    // …and the outstanding one is still counted, which is how it stays impossible to forget.
+    expect(toMasterControlView(state, NOW).pendingValidationCount).toBe(1)
+  })
+
+  it('prefers the current question when both are owed a verdict', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      pendingAnswer(BUZZ, B),
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind === 'VALIDATE_QUESTION' && result.gameQuestionId).toBe(BUZZ)
+    // `remainingQuestions` is what §6.2's "question 2 of 3" progress is built from.
+    expect(result.kind === 'VALIDATE_QUESTION' && result.remainingQuestions).toBe(1)
+  })
+
   it('does not ask for validation on a skipped question', () => {
     const state = run([
       ...SETUP,
