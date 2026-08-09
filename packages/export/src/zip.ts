@@ -29,6 +29,15 @@ export interface ExportInput {
   games: GamesFile['games']
   includesGames: boolean
   attachments: AttachmentBytes[]
+  /**
+   * The manifest's file list (protocol §8.1), when it differs from `attachments`. The case that
+   * matters is PRD 2 §14.1's "include attachments" unticked: every checksum the quiz references
+   * must still be listed, so the missing-media report on import (§8.1) is complete, but no bytes
+   * are embedded and `attachments` is empty. Defaults to `attachments` itself, which is correct
+   * whenever every referenced file's bytes are actually included — the manifest is never allowed
+   * to disagree with what a caller building it deliberately, rather than incidentally, chose.
+   */
+  attachmentManifest?: { checksum: string; ext: string; sizeBytes: number }[]
   exportedAt: Date
 }
 
@@ -45,6 +54,8 @@ export interface ExportInput {
  * which compresses genuinely well, is not.
  */
 export function writeExport(input: ExportInput): { fileName: string; bytes: Uint8Array } {
+  const manifestAttachments = input.attachmentManifest ?? input.attachments
+
   const manifest: Manifest = {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: input.exportedAt.toISOString(),
@@ -57,10 +68,10 @@ export function writeExport(input: ExportInput): { fileName: string; bytes: Uint
     counts: {
       rounds: input.quiz.rounds.length,
       questions: input.quiz.questions.length,
-      attachments: input.attachments.length,
+      attachments: manifestAttachments.length,
       games: input.games.length,
     },
-    attachments: input.attachments.map((file) => ({
+    attachments: manifestAttachments.map((file) => ({
       checksum: file.checksum,
       ext: file.ext,
       sizeBytes: file.sizeBytes,

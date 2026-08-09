@@ -36,7 +36,12 @@ import {
 export interface QuizExport {
   quiz: QuizFile
   games: GameExport[]
-  /** Every checksum the zip must carry, from both halves — the file list, deduplicated. */
+  /**
+   * Every attachment the quiz (and its exported games) reference, from both halves, deduplicated —
+   * **always populated**, whether or not the caller goes on to embed the bytes. This is what the
+   * manifest's missing-media report is built from (protocol §8.1), so it must be complete even for
+   * an export that carries no bytes at all (§14.1's "just send me the questions").
+   */
   attachments: { checksum: string; ext: string; sizeBytes: number }[]
 }
 
@@ -45,7 +50,6 @@ export function collectQuizExport(
   quizId: string,
   options: {
     includeGames: boolean
-    includeAttachments: boolean
     /**
      * PRD 2 §14.1's *"Export this game"* — **quiz + this game only**, from the game hub's overflow
      * menu. Absent means every game the quiz has, which is what the quiz-level dialog asks for.
@@ -119,27 +123,33 @@ export function collectQuizExport(
     : []
 
   /**
+   * **Always populated, regardless of `includeAttachments`.** This list becomes the manifest's
+   * `attachments[]` (protocol §8.1), and the manifest is what the missing-media report is built
+   * from on import. Unticking "include attachments" (§14.1) means *"don't embed the bytes"* — the
+   * zip must still say what media the quiz has, or an import of a bytes-less export reports zero
+   * missing files not because nothing is missing but because the manifest never said anything was
+   * expected, which is precisely the failure §14.1 exists to prevent. Whether the bytes themselves
+   * are read and embedded is decided by the caller (`apps/web/lib/server/transfer.ts`), never here.
+   *
    * Both halves contribute, because a game copy may reference a file whose template row has since
    * been deleted (data model §8) — the whole reason deleting a template attachment is safe. Leaving
    * those out would export a game that cannot play its own media.
    */
   const files = new Map<string, { checksum: string; ext: string; sizeBytes: number }>()
-  if (options.includeAttachments) {
-    for (const row of quizFile.attachments) {
+  for (const row of quizFile.attachments) {
+    files.set(row.checksum, {
+      checksum: row.checksum,
+      ext: row.ext,
+      sizeBytes: row.sizeBytes,
+    })
+  }
+  for (const entry of games) {
+    for (const row of entry.copy.attachments) {
       files.set(row.checksum, {
         checksum: row.checksum,
         ext: row.ext,
         sizeBytes: row.sizeBytes,
       })
-    }
-    for (const entry of games) {
-      for (const row of entry.copy.attachments) {
-        files.set(row.checksum, {
-          checksum: row.checksum,
-          ext: row.ext,
-          sizeBytes: row.sizeBytes,
-        })
-      }
     }
   }
 

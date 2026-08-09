@@ -53,9 +53,17 @@ export function exportSize(
   const collected = collectQuizExport(runtime.database, quizId, options)
   if (!collected) return fail('GAME_NOT_FOUND', `no quiz ${quizId}`)
 
+  /*
+   * `collected.attachments` is now the quiz's whole file list regardless of the toggle (the
+   * manifest needs it either way, for the missing-media report) — so *this* is the one place that
+   * has to check `includeAttachments` explicitly. Without it, unticking the checkbox would still
+   * show the full transfer size, which is exactly the number §14.1 exists to get right for a
+   * master on a slow USB stick.
+   */
+  const files = options.includeAttachments ? collected.attachments : []
   return ok({
-    bytes: collected.attachments.reduce((total, file) => total + file.sizeBytes, 0),
-    attachments: collected.attachments.length,
+    bytes: files.reduce((total, file) => total + file.sizeBytes, 0),
+    attachments: files.length,
     games: collected.games.length,
   })
 }
@@ -73,7 +81,13 @@ export async function exportQuiz(
       quiz: collected.quiz,
       games: collected.games,
       includesGames: options.includeGames,
-      attachments: await readAttachments(runtime, collected),
+      // Whether the bytes themselves are read off disk and embedded — empty when unticked.
+      attachments: options.includeAttachments
+        ? await readAttachments(runtime, collected)
+        : [],
+      // The manifest's file *list* is always the full one, so an import with no bytes still
+      // reports every file as missing rather than reporting none (§14.1, protocol §8.1).
+      attachmentManifest: collected.attachments,
       exportedAt: new Date(),
     }),
   )
