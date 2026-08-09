@@ -342,6 +342,9 @@ type ErrorCode =
   | 'NOT_IN_SETUP'            // regenerate-code / re-sync outside SETUP
   | 'RESYNC_BLOCKED'          // answers or buzzes exist (data model §7.1)
   | 'SOURCE_QUIZ_DELETED'     // nothing to re-sync from
+  | 'COPY_INVALID'            // the freshly-copied rows failed preflight() (data model §7's
+                              //   last bullet). A copy bug, never a normal refusal — should
+                              //   not be reachable, and rolls the whole transaction back
   | 'QUESTION_STILL_OPEN'     // break refused over a live question (PRD 4 §11)
   | 'SCORE_OUT_OF_RANGE'      // PER_TEAM_SCORE outside 0…points (D24)
   // ─── DSMTW_FINALE (D50) ───

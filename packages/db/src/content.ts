@@ -8,7 +8,7 @@ import type {
 } from '@kwiz/domain'
 import { eq } from 'drizzle-orm'
 
-import type { KwizDatabase } from './client'
+import type { KwizDatabase, KwizTx } from './client'
 import {
   game,
   gameAcceptedAnswer,
@@ -35,15 +35,19 @@ import {
  * Results are **not** re-validated with zod (conventions §10.2): the `config` columns are typed by
  * the schema and were validated on write. The one thing read back as `unknown` is
  * `game_event.payload`, which `readLog` does parse.
+ *
+ * Takes a `KwizTx` as well as a `KwizDatabase` — the copy-time invariant check (data model §7's
+ * last bullet, `instantiate.ts`) needs to read back the rows it just wrote **inside the same
+ * transaction**, before anything commits, and a transaction handle has no `.db` to unwrap.
  */
 export function loadGameContent(
-  database: KwizDatabase,
+  database: KwizDatabase | KwizTx,
   gameId: string,
 ): GameContent | undefined {
-  const row = database.db.select().from(game).where(eq(game.id, gameId)).get()
+  const db = 'db' in database ? database.db : database
+  const row = db.select().from(game).where(eq(game.id, gameId)).get()
   if (!row) return undefined
 
-  const { db } = database
   const rounds = db
     .select()
     .from(gameRound)

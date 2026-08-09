@@ -37,6 +37,13 @@ export const ERROR_CODES = [
   'SOURCE_QUIZ_DELETED',
   'QUESTION_STILL_OPEN',
   'SCORE_OUT_OF_RANGE',
+  /**
+   * data model §7's last bullet: a copy is validated after writing, not trusted. Thrown by
+   * `createGameFromQuiz`/`resyncGame` when the freshly-copied rows fail the same invariant checks
+   * `preflight()` runs at authoring time — a copy bug, not a normal refusal, so it should never fire
+   * in practice. Rolls the whole transaction back; nothing partial is ever left committed.
+   */
+  'COPY_INVALID',
   // ─── DSMTW_FINALE (D50) ───
   'NOT_A_FINALE_ROUND',
   'TOO_FEW_FINALISTS',
