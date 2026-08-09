@@ -54,13 +54,13 @@ import {
  * because a hand-written list is what silently loses a column, and a copy driven by the factory's own
  * keys passes it by construction.
  */
-function sharedKeys<T extends Record<string, unknown>>(
+export function sharedKeys<T extends Record<string, unknown>>(
   factory: () => T,
 ): (keyof T & string)[] {
   return Object.keys(factory())
 }
 
-function pickShared<K extends string, Row extends Record<K, unknown>>(
+export function pickShared<K extends string, Row extends Record<K, unknown>>(
   row: Row,
   keys: readonly K[],
 ): Pick<Row, K> {
@@ -72,13 +72,19 @@ function pickShared<K extends string, Row extends Record<K, unknown>>(
   return picked as Pick<Row, K>
 }
 
-const ROUND_KEYS = sharedKeys(roundColumns)
-const CATEGORY_KEYS = sharedKeys(categoryColumns)
-const QUESTION_KEYS = sharedKeys(questionColumns)
-const ACCEPTED_ANSWER_KEYS = sharedKeys(acceptedAnswerColumns)
-const OPTION_KEYS = sharedKeys(optionColumns)
-const KEYWORD_KEYS = sharedKeys(keywordColumns)
-const ATTACHMENT_KEYS = sharedKeys(attachmentColumns)
+/**
+ * Exported (but not re-exported from `./index`, so this stays package-internal) because
+ * `authoring.ts`'s `duplicateQuiz` — template→template rather than this module's template→game-copy
+ * — needs the identical guarantee: every shared column moved by its own key list, never by a
+ * hand-written field list a future column can be silently missing from.
+ */
+export const ROUND_KEYS = sharedKeys(roundColumns)
+export const CATEGORY_KEYS = sharedKeys(categoryColumns)
+export const QUESTION_KEYS = sharedKeys(questionColumns)
+export const ACCEPTED_ANSWER_KEYS = sharedKeys(acceptedAnswerColumns)
+export const OPTION_KEYS = sharedKeys(optionColumns)
+export const KEYWORD_KEYS = sharedKeys(keywordColumns)
+export const ATTACHMENT_KEYS = sharedKeys(attachmentColumns)
 
 export interface NewTeam {
   name: string

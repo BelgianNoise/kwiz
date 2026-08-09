@@ -121,6 +121,14 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'SUBMIT_ANSWER': {
+      /*
+       * Absent until now — deliberately different from every other action's *first* line, and a
+       * real gap rather than a considered omission: D8 is about a phone that woke up late, not
+       * about a phone submitting after the whole game ended. Without this, a device could go on
+       * submitting indefinitely once the master had finished or abandoned the game.
+       */
+      const live = requireLive(state)
+      if (live) return live
       const found = locate(state, command.gameQuestionId)
       if (!found) return deny('QUESTION_NOT_OPEN', 'unknown question')
       const { question, play } = found
@@ -156,14 +164,8 @@ export function decide(state: GameState, command: Command, now: number): Decisio
             )
       }
 
-      if (play.state === 'PENDING' || play.state === 'SKIPPED') {
-        return deny('QUESTION_NOT_OPEN', `question ${question.id} is ${play.state}`)
-      }
-      // D8: the deadline is advisory and the server never enforces it. Only the master locking the
-      // question stops submissions — a phone asleep at zero submits when it wakes, and it counts.
-      if (play.state !== 'OPEN') {
-        return deny('QUESTION_LOCKED', `question ${question.id} is ${play.state}`)
-      }
+      const notOpen = requireOpen(play, question.id)
+      if (notOpen) return notOpen
       const optionError = checkOption(question, command.selectedOptionId)
       if (optionError) return optionError
 
@@ -185,6 +187,10 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'BUZZ': {
+      // Same reasoning as `SUBMIT_ANSWER` immediately above: a buzz after the game ended is not a
+      // late-arriving one (D35 is silent on that), it is a device talking to a game that is over.
+      const live = requireLive(state)
+      if (live) return live
       const found = locate(state, command.gameQuestionId)
       if (!found) return deny('QUESTION_NOT_OPEN', 'unknown question')
       const { question, play } = found
@@ -249,6 +255,13 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (state.status !== 'SETUP') return deny('NOT_IN_SETUP', `game is ${state.status}`)
       return allow([{ type: 'GAME_STARTED', payload: {} }])
 
+    /*
+     * **Deliberately no open-question guard**, unlike `OPEN_ROUND`'s "lock or skip it first". PRD
+     * 3 §1.1 lists ending and abandoning as the two genuinely irreversible acts and the only ones
+     * worth a confirmation — that framing only holds if they work as a true emergency stop, at any
+     * moment, including mid-question. A master mid-fire-drill does not get to be told "there's an
+     * open question" first.
+     */
     case 'FINISH_GAME':
       if (state.status === 'FINISHED') return NOTHING_TO_DO
       if (state.status !== 'LIVE') return deny('GAME_NOT_LIVE', `game is ${state.status}`)
@@ -280,6 +293,18 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       const live = requireLive(state)
       if (live) return live
       if (state.currentRoundId !== command.gameRoundId) return NOTHING_TO_DO
+      /*
+       * The symmetric half of `OPEN_ROUND`'s own guard. Without it, closing a round with a
+       * question still `OPEN` cleared `currentQuestionId` (see `reduce.ts`'s `ROUND_CLOSED`
+       * handler) but left that question's own `play.state` at `OPEN` — invisible to
+       * `OPEN_QUESTION`'s "one open question at a time" check, which reads only through
+       * `currentQuestionId`. A team could then still submit or buzz against the abandoned
+       * question while a new one opened in the next round, both live at once.
+       */
+      const open = currentPlay(state)
+      if (open?.state === 'OPEN') {
+        return deny('QUESTION_STILL_OPEN', 'lock or skip the open question first')
+      }
       return allow([
         { type: 'ROUND_CLOSED', payload: { gameRoundId: command.gameRoundId } },
       ])
@@ -362,6 +387,7 @@ export function decide(state: GameState, command: Command, now: number): Decisio
 
       return allow([
         ...drafted,
+        ...endOpenFinaleTurn(state),
         { type: 'QUESTION_LOCKED', payload: { gameQuestionId: question.id } },
       ])
     }
@@ -407,6 +433,7 @@ export function decide(state: GameState, command: Command, now: number): Decisio
         return deny('QUESTION_NOT_OPEN', `question is ${found.play.state}`)
       }
       return allow([
+        ...endOpenFinaleTurn(state),
         { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: found.question.id } },
       ])
     }
@@ -507,8 +534,8 @@ export function decide(state: GameState, command: Command, now: number): Decisio
           `question ${found.question.id} is not a DO question`,
         )
       }
-      const unknown = command.teamIds.find((teamId) => !state.teams.has(teamId))
-      if (unknown !== undefined) return deny('TEAM_NOT_FOUND', `no team ${unknown}`)
+      const unknownTeam = requireKnownTeams(state, command.teamIds)
+      if (unknownTeam) return unknownTeam
 
       // `teamIds: []` is the explicit "nobody got it" (D23) and still resolves every team, so no
       // row is left pending. The payout comes from the question's authored config, never from the
@@ -567,9 +594,16 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (!state.teams.has(command.teamId)) {
         return deny('TEAM_NOT_FOUND', `no team ${command.teamId}`)
       }
-      if (found.play.state === 'PENDING' || found.play.state === 'SKIPPED') {
-        return deny('QUESTION_NOT_OPEN', `question is ${found.play.state}`)
-      }
+      /*
+       * D47's own rationale is a live-play mitigation — a team's phone cannot reach the server
+       * *while the question is open* — so the bound is the same as an ordinary submission's, not
+       * looser. Without it this was legal against `LOCKED`/`REVEALED`/even `SCORED`, silently
+       * changing a team's score with no new `QUESTION_SCORED` event to signal it happened.
+       * Post-game correction has its own, more visible mechanism (protocol §7.2's `validate` and
+       * `adjust-score`) for after the room has moved on.
+       */
+      const notOpen = requireOpen(found.play, found.question.id)
+      if (notOpen) return notOpen
       const optionError = checkOption(found.question, command.selectedOptionId)
       if (optionError) return optionError
 
@@ -676,8 +710,8 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (command.teamIds.length < 2) {
         return deny('TOO_FEW_FINALISTS', 'a finale needs at least two finalists')
       }
-      const unknown = command.teamIds.find((teamId) => !state.teams.has(teamId))
-      if (unknown !== undefined) return deny('TEAM_NOT_FOUND', `no team ${unknown}`)
+      const unknownTeam = requireKnownTeams(state, command.teamIds)
+      if (unknownTeam) return unknownTeam
       return allow([
         { type: 'FINALISTS_SET', payload: { teamIds: [...command.teamIds] } },
       ])
@@ -961,11 +995,69 @@ function requireLive(state: GameState): Decision | null {
   return state.status === 'LIVE' ? null : deny('GAME_NOT_LIVE', `game is ${state.status}`)
 }
 
+/**
+ * The bound both `SUBMIT_ANSWER` and `SUBMIT_FOR_TEAM` share: a submission — typed by a team or
+ * entered by the master on their behalf — is only ever legal against an `OPEN` question.
+ *
+ * D8: the deadline is advisory and the server never enforces it, so a phone asleep at zero still
+ * submits when it wakes and it counts — that is what keeps this a bound on *state*, `OPEN`, rather
+ * than on *time*. Only the master locking the question stops submissions.
+ *
+ * Written once so the two call sites cannot silently drift apart, the way `SUBMIT_FOR_TEAM` once
+ * did by omitting the second half of this check entirely.
+ */
+/** Shared by `SET_DO_WINNERS` and `SET_FINALISTS` — both take a team-id list from the request. */
+function requireKnownTeams(
+  state: GameState,
+  teamIds: readonly string[],
+): Decision | null {
+  const unknown = teamIds.find((teamId) => !state.teams.has(teamId))
+  return unknown === undefined ? null : deny('TEAM_NOT_FOUND', `no team ${unknown}`)
+}
+
+function requireOpen(play: QuestionPlayState, questionId: string): Decision | null {
+  if (play.state === 'PENDING' || play.state === 'SKIPPED') {
+    return deny('QUESTION_NOT_OPEN', `question ${questionId} is ${play.state}`)
+  }
+  if (play.state !== 'OPEN') {
+    return deny('QUESTION_LOCKED', `question ${questionId} is ${play.state}`)
+  }
+  return null
+}
+
 function requireFinaleRound(state: GameState): Decision | null {
   const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
   return round?.type === 'DSMTW_FINALE'
     ? null
     : deny('NOT_A_FINALE_ROUND', 'the open round is not a finale')
+}
+
+/**
+ * Locking or skipping a question is a handover the master may never have made through
+ * `PASS_TURN` — the common case is a team finding the deciding keyword with seconds still on the
+ * clock, and the master moving straight to the next question. PRD 3 §10.2 is explicit that
+ * *marking* never pauses the clock, only a handover does — but ending the question **is** a
+ * handover the code did not use to recognise as one.
+ *
+ * Left open, `START_TURN`'s own no-op guard (`open?.teamId === command.teamId`) treats the next
+ * start by the same team as a repeat of an already-running turn, so the stale `turnStartedAt`
+ * from the previous question keeps draining that team's clock with no new `TURN_STARTED` event —
+ * breaking D52's "a restart mid-turn recovers every clock exactly" the moment there is no restart
+ * to trigger the recovery.
+ *
+ * A no-op outside the finale (or with no turn running), so every caller can call it unconditionally
+ * rather than guard first.
+ */
+function endOpenFinaleTurn(state: GameState): GameEvent[] {
+  const open = currentFinaleTurn(state)
+  return open
+    ? [
+        {
+          type: 'TURN_ENDED',
+          payload: { teamId: open.teamId, reason: 'QUESTION_CLOSED' },
+        },
+      ]
+    : []
 }
 
 function locate(

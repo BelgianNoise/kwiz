@@ -18,6 +18,7 @@ const B = 'b'
 const FREE = 'q-free'
 const BUZZ = 'q-buzz'
 const DO = 'q-do'
+const PER_TEAM = 'q-do-per-team'
 const TILE = 'tile'
 const FIN = 'fin'
 
@@ -62,6 +63,13 @@ const content: GameContent = {
           position: 2,
           answerMethod: 'DO',
           config: { scoringMode: 'WINNER_TAKES_ALL', tiePayout: 'FULL' },
+        }),
+        q({
+          id: PER_TEAM,
+          position: 3,
+          answerMethod: 'DO',
+          points: 10,
+          config: { scoringMode: 'PER_TEAM_SCORE', tiePayout: 'FULL' },
         }),
       ],
     },
@@ -174,6 +182,58 @@ describe('each state is reachable', () => {
         ]),
       ),
     ).toBe('SCORE_DO')
+  })
+
+  /**
+   * Protocol §5.5's `DoScoringDetail` — without this a master-control client cannot tell
+   * `WINNER_TAKES_ALL` from `PER_TEAM_SCORE`, or the payout, from the pushed view at all (PRD 3
+   * §8 needs two visually distinct desks driven by exactly this distinction).
+   */
+  it('SCORE_DO carries everything §8 needs to render either desk', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: DO } },
+    ])
+    const result = attention(state, NOW)
+    if (result.kind !== 'SCORE_DO')
+      throw new Error(`expected SCORE_DO, got ${result.kind}`)
+
+    expect(result.gameQuestionId).toBe(DO)
+    expect(result.points).toBe(10)
+    expect(result.scoringMode).toBe('WINNER_TAKES_ALL')
+    expect(result.tiePayout).toBe('FULL')
+    // MASTER_CONTROL / CONFIG only (PRD 1 §7 invariant 7) — carried through unconditionally here
+    // because `attention()` is never reachable from a PLAYER or MAIN_SCREEN view.
+    expect(result.masterNotes).toBeNull()
+    // Unscored — every team is `null`, not `0` (D24: empty and zero look different).
+    expect(result.teams).toEqual([
+      { teamId: A, name: 'A', colour: '#EF4444', score: null },
+      { teamId: B, name: 'B', colour: '#22D3EE', score: null },
+    ])
+  })
+
+  /** D24's progressive `PER_TEAM_SCORE` save — "1 of 4 scored" is a real, server-tracked state. */
+  it('SCORE_DO reflects a partial PER_TEAM_SCORE save without assuming completeness', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: PER_TEAM } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: PER_TEAM } },
+      {
+        type: 'DO_SCORES_SET',
+        payload: { gameQuestionId: PER_TEAM, scores: [{ teamId: A, score: 6 }] },
+      },
+    ])
+    const result = attention(state, NOW)
+    if (result.kind !== 'SCORE_DO')
+      throw new Error(`expected SCORE_DO, got ${result.kind}`)
+
+    expect(result.scoringMode).toBe('PER_TEAM_SCORE')
+    expect(result.teams).toEqual([
+      { teamId: A, name: 'A', colour: '#EF4444', score: 6 },
+      // B has not been scored yet — still `null`, not `0`.
+      { teamId: B, name: 'B', colour: '#22D3EE', score: null },
+    ])
   })
 
   it('is BREAK_TIE_FOR_PICK when the board is stalled on equal scores', () => {
