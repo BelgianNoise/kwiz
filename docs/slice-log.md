@@ -77,10 +77,54 @@ master being told the wrong thing to do.
 **Four of those five were found by driving the surface, not by reading.** The tests were green
 throughout; so was the spec.
 
+### The clause-by-clause audit, and the sixteen things it found
+
+Slice 4's log ends with *"go clause by clause through the PRD, not feature by feature"*. Doing that
+after the surface was built and green found **sixteen more gaps**, every one of them a sentence in
+PRD 3 that the first pass had read, written the copy for, and then not rendered.
+
+The mechanical version is worth stealing: **grep the message catalogue for keys nothing uses.** A
+key written from a PRD clause and never rendered is that clause, missing. Sixteen keys, sixteen
+gaps, no judgement required:
+
+- **§3.2** — a buzz landing behind the open adjustment popover said nothing. The popover correctly
+  stayed open; the master had no way to know why the screen behind it had changed.
+- **§4 / PRD 2 §11.2** — **`[+ Add team]` did not exist on this surface at all**, at any status.
+- **§5.1** — `Time up` without §5.1's `· 4 of 4 submitted`, which is the number that decides whether
+  to wait.
+- **§5.3** — no *"showing 'Radiohead' to the room"* line, and no "nothing to spotlight" on a buzzer.
+- **§6.1** — **the sweep showed answers with no accepted answers to judge them against.** protocol
+  §5.4 declares a `QuestionRef` for exactly this and the implementation had flattened it to an id.
+- **§6.1** — and no way *out* of the sweep, though §6.2 explicitly permits deferring.
+- **§7.1** — the deny loop was a quiet line. §7.1 asks for **loud**, in colour and words.
+- **§8.2** — scores clamped on save rather than on entry, so `99` looked accepted until it wasn't.
+- **§9** — *"hover **or focus**"*: a `title` answers hover only, which excludes the keyboard exactly.
+- **§10.2** — `out` without §10.2's `21:03`, and `eliminatedAt` was not on the payload to say it.
+- **§10.5** — no unguessed count, no `[Next question]`, and **the all-five-found close was missing**:
+  a question where everything was found offered only `[Pass]`.
+- **§11.2** — the break was disabled over an open question **without the reason**, which is the
+  difference between a rule and an app that looks broken.
+- **§12** — a media file that will not decode showed nothing on the master's own controls.
+- **§2.1** — the timeline's state markers were icons with no accessible name.
+
+Three needed payload work, and are in protocol §5.4/§5.5: `VALIDATE_QUESTION`'s question reference,
+`clocks[].eliminatedAt`, and `missed` (`missedSoFar`, five numbers, so `[+ Add team]` can be answered
+from the desk as §11.2 requires rather than sending the master back to PRD 2's hub).
+
+**None of these would have failed a test, and the surface demoed fine without them.** They are the
+difference between a screen that works and a screen that does what it was specified to do.
+
 ### Spec deviations
 
 None knowingly. Everything above is an *addition* to protocol §5.4/§5.5, written into the spec in
 this change (agent-workflow §3.3) rather than left as a divergence.
+
+One reading recorded rather than silently taken: **§7.1 says that when every team is locked out this
+resolves to `ADVANCE / suggestion: 'REVEAL'`.** It cannot — an `OPEN` question has no legal
+transition to `REVEALED` (PRD 1 §7.1), so the honest sequence is *"nobody got it"* → `[Close
+answers]` → `[Reveal answer]`, which is what the desk does. D35 rule 4's actual requirement — the
+master is never left with no live buzzers and no prompt — holds either way. The example in §7.1
+predates `LOCK` existing in the suggestion union.
 
 One judgement call worth flagging: **PRD 3 §10.1's example penalty arithmetic does not reproduce.**
 *"Penalty per keyword: 20s → up to 320s off a 490s pool"* — with 4 finalists, 5 keywords and a 20s
@@ -136,8 +180,13 @@ PRD needs a correction I could not derive.
 - **A `409` in the console during a smoke run is usually correct** — it is a typed refusal
   (`QUESTION_STILL_OPEN` on a break over an open question, most often), not a bug.
 - **`minuteSeconds` lives in `break-desk.tsx`** and is used by the media controls too. `m:ss` for
-  breaks and media, whole seconds for timers and finale clocks — conventions §8.2, and the two are
-  not interchangeable.
+  breaks and media, whole seconds for timers and finale clocks, `HH:mm` for an elimination instant —
+  conventions §8.2, and the three are not interchangeable.
+- **`AddTeamButton` wraps PRD 2's dialog rather than growing a second one.** A table walking in is
+  the same event whichever screen the master is on, and the dialog's numbers (`missedSoFar`) are the
+  entire reason it is justified. If you add a third entry point, add it there.
+- **Grep the message catalogue for unused keys before calling a surface done.** It found sixteen
+  missing PRD clauses here in about a minute, and it will keep working for slices 6 and 7.
 
 ## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
 
