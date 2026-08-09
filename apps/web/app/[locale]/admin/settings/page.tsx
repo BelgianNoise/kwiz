@@ -7,6 +7,10 @@ import { isAddressStale } from '@/lib/server/network'
 import { getRuntime } from '@/lib/server/runtime'
 import { readSettings } from '@/lib/server/settings'
 
+// P2 #23 — no version was plumbed anywhere in the app; `package.json`'s own field is the one
+// source that can't drift from what's actually installed.
+import { version as appVersion } from '../../../../package.json'
+
 /** PRD 2 §16 — *"small and boring on purpose."* */
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +29,7 @@ export default async function SettingsPage() {
       muted={settings.muteSounds}
       storage={await storageStats(runtime.paths, referencedChecksums(runtime.database))}
       about={{
+        appVersion,
         schemaVersion: SCHEMA_VERSION,
         migration: runtime.migration.kind,
       }}

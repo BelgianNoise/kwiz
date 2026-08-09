@@ -60,6 +60,7 @@ export function QuestionSetEditor({
   }
 
   const reorder = useReorder({
+    length: round.questions.length,
     canDrag: () => round.questions.length > 1,
     canDrop: () => true,
     onMove: move,

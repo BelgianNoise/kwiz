@@ -1,6 +1,7 @@
 'use client'
 
 import { wordLengths, type QuestionContent } from '@kwiz/domain'
+import { AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
@@ -79,7 +80,12 @@ export function KeywordSection({
               */}
               <span className="text-muted-foreground w-32 shrink-0 text-sm">
                 {shape.length === 0 ? (
-                  <span className="text-destructive">{t('keywordRequired')}</span>
+                  // Icon + colour, matching every other readiness marker in the app (P2 #21) —
+                  // colour alone is never the sole signal.
+                  <span className="text-destructive flex items-center gap-1">
+                    <AlertTriangle className="size-3.5" />
+                    {t('keywordRequired')}
+                  </span>
                 ) : (
                   <>
                     {t('wordShape', { count: shape.length })}

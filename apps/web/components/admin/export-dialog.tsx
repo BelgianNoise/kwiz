@@ -52,26 +52,55 @@ export function ExportDialog({
 
   const [includeGames, setIncludeGames] = useState(onlyGameId !== undefined)
   const [includeAttachments, setIncludeAttachments] = useState(true)
-  const [size, setSize] = useState<{ bytes: number; attachments: number } | null>(null)
+  type Size = { bytes: number; attachments: number } | null
+  const [sizeQuizOnly, setSizeQuizOnly] = useState<Size>(null)
+  const [sizeWithGames, setSizeWithGames] = useState<Size>(null)
   const [busy, setBusy] = useState(false)
 
+  /*
+   * §14.1's mockup shows `~4 MB` beside **both** scope rows at once, not only the one currently
+   * selected — the whole point of showing size is comparing before choosing, and a master can't
+   * compare a number they can only see one side of. Both are computed with the current
+   * `includeAttachments`, which is the one option that isn't itself a choice between these two.
+   *
+   * With `onlyGameId` set there is no scope choice at all (§14.1's "Export this game" already
+   * made it) — one fetch, for the one shape that will actually be exported.
+   */
   useEffect(() => {
     if (!open) return undefined
 
     let current = true
-    const scope = {
-      includeGames,
-      includeAttachments,
-      ...(onlyGameId ? { onlyGameId } : {}),
+
+    if (onlyGameId !== undefined) {
+      void api
+        .exportSize(quizId, { includeGames: true, includeAttachments, onlyGameId })
+        .then((result) => {
+          if (current && result.ok && result.data) setSizeWithGames(result.data)
+        })
+      return () => {
+        current = false
+      }
     }
-    void api.exportSize(quizId, scope).then((result) => {
-      // The dialog may have closed, or the options changed again, while this was in flight.
-      if (current && result.ok && result.data) setSize(result.data)
-    })
+
+    void api
+      .exportSize(quizId, { includeGames: false, includeAttachments })
+      .then((result) => {
+        if (current && result.ok && result.data) setSizeQuizOnly(result.data)
+      })
+    if (games > 0) {
+      void api
+        .exportSize(quizId, { includeGames: true, includeAttachments })
+        .then((result) => {
+          if (current && result.ok && result.data) setSizeWithGames(result.data)
+        })
+    }
     return () => {
       current = false
     }
-  }, [open, quizId, includeGames, includeAttachments, onlyGameId])
+  }, [open, quizId, includeAttachments, onlyGameId, games])
+
+  // The scope actually selected — what the attachments checkbox's own count/size describes.
+  const size = includeGames ? sizeWithGames : sizeQuizOnly
 
   const download = async (): Promise<void> => {
     setBusy(true)
@@ -101,7 +130,18 @@ export function ExportDialog({
           <div className={onlyGameId === undefined ? 'flex items-start gap-3' : 'hidden'}>
             <RadioGroupItem value="QUIZ_ONLY" id="export-quiz-only" className="mt-1" />
             <Label htmlFor="export-quiz-only" className="flex flex-col items-start gap-1">
-              <span>{t('quizOnly')}</span>
+              <span className="flex items-baseline gap-2">
+                <span>{t('quizOnly')}</span>
+                {/* §14.1's mockup: a size beside *each* row, not only the selected one — the
+                    comparison is the point. */}
+                {sizeQuizOnly ? (
+                  // Not through the messages module (matching `formatBytes`'s own rule): an SI
+                  // byte count is identical in both locales.
+                  <span className="text-muted-foreground text-xs">
+                    {formatBytes(sizeQuizOnly.bytes)}
+                  </span>
+                ) : null}
+              </span>
               <span className="text-muted-foreground text-sm font-normal">
                 {t('quizOnlyHint')}
               </span>
@@ -119,7 +159,14 @@ export function ExportDialog({
                 htmlFor="export-with-games"
                 className="flex flex-col items-start gap-1"
               >
-                <span>{t('withGames', { count: games })}</span>
+                <span className="flex items-baseline gap-2">
+                  <span>{t('withGames', { count: games })}</span>
+                  {sizeWithGames ? (
+                    <span className="text-muted-foreground text-xs">
+                      {formatBytes(sizeWithGames.bytes)}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-muted-foreground text-sm font-normal">
                   {t('withGamesHint')}
                 </span>

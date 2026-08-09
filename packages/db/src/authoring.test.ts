@@ -2,25 +2,37 @@ import type { ActionResult } from '@kwiz/domain'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { insertTemplateAttachment } from './attachments'
 import {
   createCategory,
   createQuestion,
   createQuiz,
   createRound,
+  deleteAttachment,
   deleteRound,
   duplicateQuiz,
   listQuizzes,
   moveCategory,
   moveRound,
   setAcceptedAnswers,
+  setAttachmentVisibility,
   setKeywords,
   setOptions,
   setValueLadder,
   updateQuestion,
 } from './authoring'
 import type { KwizDatabase } from './client'
+import {
+  ATTACHMENT_KEYS,
+  CATEGORY_KEYS,
+  KEYWORD_KEYS,
+  OPTION_KEYS,
+  pickShared,
+  QUESTION_KEYS,
+  ROUND_KEYS,
+} from './instantiate'
 import { loadQuizTree } from './quiz-tree'
-import { question, quiz } from './schema'
+import { attachment, question, quiz } from './schema'
 import { freshTestDatabase } from './test-support'
 
 /**
@@ -303,6 +315,128 @@ describe('the quiz itself', () => {
     expect(copy?.rounds[0]?.questions[0]?.id).not.toBe(questionId)
   })
 
+  /**
+   * The completeness guarantee data model §7.2 asks for, restated as a behavioural test rather
+   * than trusted to the implementation alone: **every** shared column — one representative row per
+   * group, each field set to something distinctive — survives `duplicateQuiz` unchanged.
+   *
+   * `duplicateQuiz` moves these columns via `pickShared`/the same key lists `instantiate.ts`'s
+   * template→game-copy path uses (data model §7's other copy), rather than a hand-written field
+   * list of its own — which is what let a column added to a shared factory be silently missing
+   * from a duplicated quiz's rows before. This test protects the *behaviour*, so it still catches
+   * a regression if that ever reverts to a hand-written list.
+   */
+  it('carries every shared column of every copied row, not a hand-picked subset', () => {
+    // A JEOPARDY round exercises the category group, and its default BUZZER question carries an
+    // attachment — left as BUZZER rather than switched, since a tile's method is D34's fixed fact.
+    const boardRoundId = addRound('JEOPARDY', 'Board Round')
+    const categoryId = unwrap(
+      createCategory(database, boardRoundId, 'Distinctive Category'),
+    ).categoryId
+    const tileId = unwrap(
+      createQuestion(database, boardRoundId, { categoryId, points: 150 }),
+    ).questionId
+    updateQuestion(database, tileId, {
+      prompt: 'A distinctive prompt',
+      timerMs: 45_000,
+      masterNotes: 'A distinctive note',
+    })
+    const attachmentId = insertTemplateAttachment(database, {
+      questionId: tileId,
+      kind: 'IMAGE',
+      mimeType: 'image/png',
+      originalName: 'distinctive.png',
+      ext: 'png',
+      sizeBytes: 123_456,
+      checksum: 'a'.repeat(64),
+    })
+    if (!attachmentId) throw new Error('expected an attachment id')
+    setAttachmentVisibility(database, attachmentId, true)
+
+    // A QUESTION_SET round exercises the options group, which JEOPARDY's fixed BUZZER cannot.
+    const mcRoundId = addRound('QUESTION_SET', 'MC Round')
+    const mcQuestionId = unwrap(createQuestion(database, mcRoundId)).questionId
+    updateQuestion(database, mcQuestionId, { answerMethod: 'MULTIPLE_CHOICE' })
+    setOptions(database, mcQuestionId, [
+      { text: 'Option Alpha', isCorrect: true },
+      { text: 'Option Beta', isCorrect: false },
+    ])
+
+    const finaleRoundId = addRound('DSMTW_FINALE', 'Finale')
+    const finaleQuestionId = unwrap(createQuestion(database, finaleRoundId)).questionId
+    setKeywords(database, finaleQuestionId, [
+      'a distinctive keyword',
+      'two',
+      'three',
+      'four',
+      'five',
+    ])
+
+    const copyId = unwrap(duplicateQuiz(database, quizId)).quizId
+
+    // Read every group's rows on both sides by their tree shape, matched by title/type rather than
+    // id — new ids are the whole point of a duplicate, so they cannot be the match key here.
+    const rowsFor = (targetQuizId: string) => {
+      const tree = loadQuizTree(database, targetQuizId)
+      const board = tree?.rounds.find((r) => r.title === 'Board Round')
+      const mcRound = tree?.rounds.find((r) => r.title === 'MC Round')
+      const finale = tree?.rounds.find((r) => r.type === 'DSMTW_FINALE')
+      return {
+        round: board,
+        category: board?.categories[0],
+        question: board?.questions[0],
+        attachment: board?.questions[0]?.media[0],
+        option: mcRound?.questions[0]?.options[0],
+        keyword: finale?.questions[0]?.keywords[0],
+      }
+    }
+
+    const source = rowsFor(quizId)
+    const copy = rowsFor(copyId)
+
+    expect(source.round).toBeDefined()
+    expect(pickShared(copy.round!, ROUND_KEYS)).toEqual(
+      pickShared(source.round!, ROUND_KEYS),
+    )
+    expect(pickShared(copy.category!, CATEGORY_KEYS)).toEqual(
+      pickShared(source.category!, CATEGORY_KEYS),
+    )
+    expect(pickShared(copy.question!, QUESTION_KEYS)).toEqual(
+      pickShared(source.question!, QUESTION_KEYS),
+    )
+    expect(pickShared(copy.option!, OPTION_KEYS)).toEqual(
+      pickShared(source.option!, OPTION_KEYS),
+    )
+    expect(pickShared(copy.keyword!, KEYWORD_KEYS)).toEqual(
+      pickShared(source.keyword!, KEYWORD_KEYS),
+    )
+    // `ATTACHMENT_KEYS` includes `checksum`/`mimeType`/`ext`, which `MediaContent` (the tree shape)
+    // deliberately does not carry (packages/domain) — those three are excluded here for the same
+    // reason `copyAttachments` reads the raw row rather than the tree, and are covered instead by
+    // the checksum-sharing assertion below.
+    const mediaKeys = [
+      'position',
+      'kind',
+      'durationMs',
+      'showOnPlayerDevices',
+      'originalName',
+      'sizeBytes',
+    ] as const satisfies readonly (typeof ATTACHMENT_KEYS)[number][]
+    expect(pickShared(copy.attachment!, mediaKeys)).toEqual(
+      pickShared(source.attachment!, mediaKeys),
+    )
+    // The one column intentionally excluded from `MediaContent` that still has to match: the file
+    // is shared by content hash, which is the entire reason duplicating a quiz with 2 GB of video
+    // costs nothing (data model §8).
+    const rawChecksum = (id: string) =>
+      database.db
+        .select({ checksum: attachment.checksum })
+        .from(attachment)
+        .where(eq(attachment.id, id))
+        .get()?.checksum
+    expect(rawChecksum(copy.attachment!.id)).toBe(rawChecksum(source.attachment!.id))
+  })
+
   it('lists what the dashboard shows, newest first', () => {
     const roundId = addRound('QUESTION_SET', 'Warm-up')
     createQuestion(database, roundId)
@@ -350,5 +484,112 @@ describe('jeopardy categories', () => {
     // Off the end is a no-op rather than an error — the UI offers the control at the ends anyway.
     expect(moveCategory(database, ids[0] ?? '', 'LEFT')).toMatchObject({ ok: true })
     expect(order()).toEqual(names)
+  })
+})
+
+/**
+ * Code review — `setAttachmentVisibility` and `deleteAttachment` were exercised only
+ * incidentally, as one step inside a much bigger `duplicateQuiz` test, never on their own terms.
+ */
+describe('attachments', () => {
+  const addAttachment = (
+    over: Partial<Parameters<typeof insertTemplateAttachment>[1]> = {},
+  ): string => {
+    const roundId = addRound('QUESTION_SET', 'Round')
+    const questionId = unwrap(createQuestion(database, roundId)).questionId
+    const id = insertTemplateAttachment(database, {
+      questionId,
+      kind: 'IMAGE',
+      mimeType: 'image/png',
+      originalName: 'photo.png',
+      ext: 'png',
+      sizeBytes: 1_024,
+      checksum: 'a'.repeat(64),
+      ...over,
+    })
+    if (!id) throw new Error('expected an attachment id')
+    return id
+  }
+
+  describe('setAttachmentVisibility', () => {
+    it('toggles an image on and off', () => {
+      const id = addAttachment()
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).get()
+          ?.showOnPlayerDevices,
+      ).toBe(true)
+
+      expect(setAttachmentVisibility(database, id, false)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).get()
+          ?.showOnPlayerDevices,
+      ).toBe(false)
+    })
+
+    it('refuses to show audio on player devices (D27, I3)', () => {
+      const id = addAttachment({
+        kind: 'AUDIO',
+        mimeType: 'audio/mpeg',
+        originalName: 'clip.mp3',
+        ext: 'mp3',
+      })
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+      // Turning it back off is never the refused direction.
+      expect(setAttachmentVisibility(database, id, false)).toMatchObject({ ok: true })
+    })
+
+    it('refuses to show video on player devices (D27, I3)', () => {
+      const id = addAttachment({
+        kind: 'VIDEO',
+        mimeType: 'video/mp4',
+        originalName: 'clip.mp4',
+        ext: 'mp4',
+      })
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+    })
+
+    it('refuses an unknown attachment', () => {
+      expect(setAttachmentVisibility(database, 'nope', true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+    })
+  })
+
+  describe('deleteAttachment', () => {
+    it('removes the row', () => {
+      const id = addAttachment()
+      expect(deleteAttachment(database, id)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).all(),
+      ).toHaveLength(0)
+    })
+
+    it('is a no-op rather than an error for an attachment that is already gone', () => {
+      expect(deleteAttachment(database, 'nope')).toMatchObject({ ok: true })
+    })
+
+    it('touches the quiz, so autosave and revision tracking see the change', () => {
+      const id = addAttachment()
+      const before = database.db
+        .select()
+        .from(quiz)
+        .where(eq(quiz.id, quizId))
+        .get()?.revision
+      deleteAttachment(database, id)
+      const after = database.db
+        .select()
+        .from(quiz)
+        .where(eq(quiz.id, quizId))
+        .get()?.revision
+      expect(after).toBeGreaterThan(before ?? 0)
+    })
   })
 })

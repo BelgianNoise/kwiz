@@ -216,7 +216,7 @@ Storing a derivable fact creates a second source of truth for it.
 | `ROUND_CLOSED` | `{ gameRoundId }` | |
 | `QUESTION_OPENED` | `{ gameQuestionId, deadlineAt? }` | For Jeopardy this **is** tile selection. `deadlineAt` is absolute and advisory (D7, D8) |
 | `QUESTION_LOCKED` | `{ gameQuestionId }` | Master action only — never the timer (D8). Commits outstanding drafts (§4.3) |
-| `QUESTION_REVEALED` | `{ gameQuestionId }` | The **only** point at which correct answers enter `MAIN_SCREEN` / `PLAYER` views |
+| `QUESTION_REVEALED` | `{ gameQuestionId }` | The **only** point at which correct answers enter `MAIN_SCREEN` / `PLAYER` views. Against a `DSMTW_FINALE` question, `decide.ts`'s `REVEAL_QUESTION` handler also appends `KEYWORDS_REVEALED` in the same decision, and vice versa (§4.6) — the two facts must never diverge on a finale question, whichever command a client sends |
 | `QUESTION_SCORED` | `{ gameQuestionId }` | Master is done with it; scores are final unless revalidated |
 | `QUESTION_SKIPPED` | `{ gameQuestionId }` | Terminal (D46). Legal from `PENDING` or `OPEN`. **The reducer forces `pointsAwarded = 0` on every answer to this question**, keeping each verdict for the record — a question skipped from `OPEN` may already have auto-graded answers carrying points, and "awards nothing to anyone" has to be enforced rather than assumed (data model I8) |
 
@@ -306,7 +306,7 @@ event, no tick event, and no server timer.
 | `TURN_ENDED` | `{ teamId, reason }` | `PASSED` / `ELIMINATED` / `QUESTION_CLOSED`. The interval between start and end is the only thing that charges a team for time |
 | `KEYWORD_MARKED` | `{ gameKeywordId, teamId }` | Correct guess. Charges every *other* remaining finalist `penaltySeconds` |
 | `KEYWORD_UNMARKED` | `{ gameKeywordId }` | Mis-mark correction. Revokes the mark **and the penalties it charged** — the D41 pattern, and here it must reverse time, not just a score |
-| `KEYWORDS_REVEALED` | `{ gameQuestionId }` | Master shows the unguessed ones; creates marks with `teamId: null` |
+| `KEYWORDS_REVEALED` | `{ gameQuestionId }` | Master shows the unguessed ones; creates marks with `teamId: null`. This is `[Reveal remaining]` (PRD 3 §10.5), and it also appends `QUESTION_REVEALED` in the same decision — see §4.2's note |
 | `TEAM_ELIMINATED` | `{ teamId, at }` | Clock reached zero. `at` is the computed instant, not when the request arrived |
 | `FINALE_ENDED` | `{ ranking: teamId[][] }` | One finalist left, all eliminated, or questions exhausted. `ranking` is **an array of rank groups**, best first — not a flat list, because simultaneous elimination shares a rank (D51, PRD 1 §8.8). A single survivor is `[[winner], [runnerUp], …]`; the degenerate all-out case is one group with every finalist in it and no winner |
 
@@ -631,8 +631,12 @@ The rule for what deserves the master's attention is game logic and belongs in
 `packages/domain` next to everything else — and it keeps PRD 3 from re-implementing it.
 
 Priority when several conditions hold, highest first (PRD 3 §3.1):
-`ADJUDICATE_BUZZ` › `SCORE_DO` › `BREAK_TIE_FOR_PICK` › `VALIDATE_QUESTION` › `ADVANCE` ›
-`NONE`. Exactly one is active; anything lower-priority appears only as a count.
+`ADJUDICATE_BUZZ` › `FINALE_TURN` › `SCORE_DO` › `BREAK_TIE_FOR_PICK` › `PICK_FINALISTS` ›
+`VALIDATE_QUESTION` › `ADVANCE` › `NONE`. Exactly one is active; anything lower-priority
+appears only as a count. (This prose previously omitted `FINALE_TURN` and
+`PICK_FINALISTS`, contradicting the type union three lines above; `attention()`'s actual
+implementation — and `attention.test.ts`, which requires `FINALE_TURN` to outrank
+`PICK_FINALISTS` — were always correct.)
 
 ### 5.5 `MASTER_CONTROL` detail types
 

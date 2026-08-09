@@ -45,10 +45,16 @@ export function ImportDialog({
   const format = useFormatter()
   const router = useRouter()
 
-  const [mode, setMode] = useState<'COPY' | 'REPLACE'>('COPY')
+  // §14.2's mockup has three radio rows, `Cancel` among them — not a separate footer button.
+  // `COPY` (the non-destructive default) is preserved exactly; only where `Cancel` lives moved.
+  const [mode, setMode] = useState<'COPY' | 'REPLACE' | 'CANCEL'>('COPY')
   const [busy, setBusy] = useState(false)
 
   const run = async (): Promise<void> => {
+    if (mode === 'CANCEL') {
+      onClose()
+      return
+    }
     setBusy(true)
     const result = await api.performImport(file, mode)
     setBusy(false)
@@ -135,13 +141,13 @@ export function ImportDialog({
 
             <RadioGroup
               value={mode}
-              onValueChange={(next) => setMode(next === 'REPLACE' ? 'REPLACE' : 'COPY')}
+              onValueChange={(next) =>
+                setMode(
+                  next === 'REPLACE' ? 'REPLACE' : next === 'CANCEL' ? 'CANCEL' : 'COPY',
+                )
+              }
               className="gap-3"
             >
-              <div className="flex items-start gap-3">
-                <RadioGroupItem value="COPY" id="import-copy" className="mt-1" />
-                <Label htmlFor="import-copy">{t('asCopy')}</Label>
-              </div>
               <div className="flex items-start gap-3">
                 <RadioGroupItem value="REPLACE" id="import-replace" className="mt-1" />
                 <Label
@@ -154,23 +160,53 @@ export function ImportDialog({
                   </span>
                 </Label>
               </div>
+              <div className="flex items-start gap-3">
+                <RadioGroupItem value="COPY" id="import-copy" className="mt-1" />
+                <Label htmlFor="import-copy">{t('asCopy')}</Label>
+              </div>
+              <div className="flex items-start gap-3">
+                <RadioGroupItem value="CANCEL" id="import-cancel" className="mt-1" />
+                <Label htmlFor="import-cancel">{t('cancel')}</Label>
+              </div>
             </RadioGroup>
           </>
         ) : null}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            {t('cancel')}
-          </Button>
-          <Button
-            variant={mode === 'REPLACE' ? 'destructive' : 'default'}
-            disabled={busy}
-            onClick={() => {
-              void run()
-            }}
-          >
-            {mode === 'REPLACE' ? t('replace') : t('import')}
-          </Button>
+          {/*
+            §14.2's mockup: three radio rows including `Cancel`, and one action button below them
+            — not `Cancel` living separately in the footer. Outside the collision case there is no
+            radio group at all, so the plain close button stays.
+          */}
+          {preview.collision ? (
+            <Button
+              variant={mode === 'REPLACE' ? 'destructive' : 'default'}
+              disabled={busy}
+              onClick={() => {
+                void run()
+              }}
+            >
+              {mode === 'REPLACE'
+                ? t('replace')
+                : mode === 'CANCEL'
+                  ? t('cancel')
+                  : t('import')}
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose}>
+                {t('cancel')}
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void run()
+                }}
+              >
+                {t('import')}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

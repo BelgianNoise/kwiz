@@ -23,6 +23,8 @@ const STATUS: Record<ErrorCode, number> = {
   NOT_IN_SETUP: 409,
   RESYNC_BLOCKED: 409,
   SOURCE_QUIZ_DELETED: 409,
+  // A copy bug, not a client mistake — the request was fine, the server's own write was not.
+  COPY_INVALID: 500,
   QUESTION_STILL_OPEN: 409,
   SCORE_OUT_OF_RANGE: 400,
   NOT_A_FINALE_ROUND: 409,

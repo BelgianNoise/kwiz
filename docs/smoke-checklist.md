@@ -63,6 +63,23 @@ tab 5  /play/<code>        team B, mobile viewport   ← the tab that finds real
       `better-sqlite3` prebuild is per-platform, so a Linux-only pass proves nothing about the
       laptop the quiz runs on.
 
+### After slice 1 — schema & migrations
+
+- [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.
+- [ ] The generated SQL still carries `CREATE UNIQUE INDEX game_active_code_idx … WHERE status IN
+      ('SETUP','LIVE')`. Losing the `WHERE` would silently exhaust the code space.
+- [ ] All of D14's boot paths — silent on fresh, backup-then-prompt on existing, declined leaves
+      the data intact, `KWIZ_AUTO_MIGRATE` skips the question but still backs up, no-TTY refuses
+      — are covered by `boot.test.ts` against a **real directory and a real backup file**, so
+      `pnpm test` is this row. Break one on purpose once if you want to trust it.
+- [ ] The prompt itself is covered by `boot.test.ts` from slice 3 — a real `readline` over injected
+      streams, asserting it lists each migration by name, names the backup, honours `n` and treats a
+      bare Enter as yes. **What is left for a human is only whether it *looks* right:** boot
+      `pnpm start` against a database with a pending migration once, in a real terminal.
+- [ ] The column-parity guard fails if you delete a column from one side of a shared factory —
+      worth breaking on purpose once, since it is the only thing standing between a routine
+      schema change and silent data loss in games.
+
 ### After slice 2 — the domain rules
 
 - [ ] *(no UI — covered by the test suite, per build-order.)* The rows worth keeping as human
@@ -162,20 +179,3 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       `HERO` layout, and the third shrinks — but **never below 4% of the frame height**, because
       below that the back tables cannot read it and it is a content problem for pre-flight, not a
       rendering one. A board tile must show its **ladder** value, not the question row's own (O3).
-
-### After slice 1 — schema & migrations
-
-- [ ] `pnpm db:generate` reports **24 tables** and produces no unexpected diff on a clean tree.
-- [ ] The generated SQL still carries `CREATE UNIQUE INDEX game_active_code_idx … WHERE status IN
-      ('SETUP','LIVE')`. Losing the `WHERE` would silently exhaust the code space.
-- [ ] All of D14's boot paths — silent on fresh, backup-then-prompt on existing, declined leaves
-      the data intact, `KWIZ_AUTO_MIGRATE` skips the question but still backs up, no-TTY refuses
-      — are covered by `boot.test.ts` against a **real directory and a real backup file**, so
-      `pnpm test` is this row. Break one on purpose once if you want to trust it.
-- [ ] The prompt itself is covered by `boot.test.ts` from slice 3 — a real `readline` over injected
-      streams, asserting it lists each migration by name, names the backup, honours `n` and treats a
-      bare Enter as yes. **What is left for a human is only whether it *looks* right:** boot
-      `pnpm start` against a database with a pending migration once, in a real terminal.
-- [ ] The column-parity guard fails if you delete a column from one side of a shared factory —
-      worth breaking on purpose once, since it is the only thing standing between a routine
-      schema change and silent data loss in games.

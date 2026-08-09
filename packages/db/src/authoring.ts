@@ -14,6 +14,15 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 
 import type { KwizDatabase, KwizTx } from './client'
+import {
+  ATTACHMENT_KEYS,
+  CATEGORY_KEYS,
+  KEYWORD_KEYS,
+  OPTION_KEYS,
+  pickShared,
+  QUESTION_KEYS,
+  ROUND_KEYS,
+} from './instantiate'
 import { loadQuizTree } from './quiz-tree'
 import {
   acceptedAnswer,
@@ -213,12 +222,7 @@ export function duplicateQuiz(
         .values({
           id: roundId,
           quizId: newQuizId,
-          position: sourceRound.position,
-          type: sourceRound.type,
-          title: sourceRound.title,
-          defaultPoints: sourceRound.defaultPoints,
-          defaultTimerMs: sourceRound.defaultTimerMs,
-          config: sourceRound.config,
+          ...pickShared(sourceRound, ROUND_KEYS),
         })
         .run()
 
@@ -227,7 +231,7 @@ export function duplicateQuiz(
         const id = uuidv7()
         categoryIds.set(category.id, id)
         tx.insert(jeopardyCategory)
-          .values({ id, roundId, position: category.position, name: category.name })
+          .values({ id, roundId, ...pickShared(category, CATEGORY_KEYS) })
           .run()
       }
 
@@ -241,16 +245,12 @@ export function duplicateQuiz(
               sourceQuestion.categoryId === null
                 ? null
                 : (categoryIds.get(sourceQuestion.categoryId) ?? null),
-            position: sourceQuestion.position,
-            prompt: sourceQuestion.prompt,
-            answerMethod: sourceQuestion.answerMethod,
-            points: sourceQuestion.points,
-            timerMs: sourceQuestion.timerMs,
-            masterNotes: sourceQuestion.masterNotes,
-            config: sourceQuestion.config,
+            ...pickShared(sourceQuestion, QUESTION_KEYS),
           })
           .run()
 
+        // Plain strings, not row objects — `position` is the array index, and `text` is the only
+        // shared column, so there is no factory key list for `pickShared` to spread here.
         for (const [index, text] of sourceQuestion.acceptedAnswers.entries()) {
           tx.insert(acceptedAnswer)
             .values({ id: uuidv7(), questionId, position: index, text })
@@ -258,24 +258,12 @@ export function duplicateQuiz(
         }
         for (const option of sourceQuestion.options) {
           tx.insert(questionOption)
-            .values({
-              id: uuidv7(),
-              questionId,
-              position: option.position,
-              text: option.text,
-              isCorrect: option.isCorrect,
-            })
+            .values({ id: uuidv7(), questionId, ...pickShared(option, OPTION_KEYS) })
             .run()
         }
         for (const kw of sourceQuestion.keywords) {
           tx.insert(questionKeyword)
-            .values({
-              id: uuidv7(),
-              questionId,
-              position: kw.position,
-              text: kw.text,
-              wordLengths: kw.wordLengths,
-            })
+            .values({ id: uuidv7(), questionId, ...pickShared(kw, KEYWORD_KEYS) })
             .run()
         }
         // Attachment rows are copied; the files are not. Content addressing means the copy shares
@@ -288,6 +276,12 @@ export function duplicateQuiz(
   return ok({ quizId: newQuizId })
 }
 
+/**
+ * Reads the **raw rows**, not `sourceQuestion.media` from the tree `duplicateQuiz` copies from —
+ * `MediaContent` (packages/domain) is deliberately missing `checksum`/`mimeType`/`ext`, since those
+ * never belong in an audience-facing shape. `pickShared` only works against something that actually
+ * carries every column in `ATTACHMENT_KEYS`, which the row does and the tree shape does not.
+ */
 function copyAttachments(tx: KwizTx, fromQuestionId: string, toQuestionId: string): void {
   const rows = tx
     .select()
@@ -301,15 +295,7 @@ function copyAttachments(tx: KwizTx, fromQuestionId: string, toQuestionId: strin
       .values({
         id: uuidv7(),
         questionId: toQuestionId,
-        position: row.position,
-        kind: row.kind,
-        mimeType: row.mimeType,
-        originalName: row.originalName,
-        ext: row.ext,
-        sizeBytes: row.sizeBytes,
-        checksum: row.checksum,
-        showOnPlayerDevices: row.showOnPlayerDevices,
-        durationMs: row.durationMs,
+        ...pickShared(row, ATTACHMENT_KEYS),
         createdAt: row.createdAt,
       })
       .run()

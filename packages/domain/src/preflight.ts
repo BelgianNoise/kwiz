@@ -32,6 +32,12 @@ export const PREFLIGHT_CODES = [
   // ─── errors: DSMTW_FINALE (D50) ───
   /** I17 — a four-keyword question silently changes the round's arithmetic. */
   'FINALE_KEYWORD_COUNT',
+  /**
+   * P2 #15 — split from `FINALE_KEYWORD_COUNT`: five *rows* that are not five real keywords is a
+   * different mistake from having the wrong row count, and a master shown "found 4, need 5" for
+   * both could not tell which one to fix.
+   */
+  'FINALE_KEYWORD_BLANK',
   /** I20 — two finales is undefined; points can only be spent once. */
   'MULTIPLE_FINALES',
   /** I20 — anything after a finale has nothing to score. */
@@ -211,8 +217,11 @@ function checkQuestion(
         detail: { count: question.keywords.length },
       })
     }
+    // A different mistake from the row count above — five rows exist, but one has no text typed
+    // in. Its own code (P2 #15) so the copy can say which is wrong instead of "found 4, need 5"
+    // for both.
     if (question.keywords.some((keyword) => keyword.text.trim() === '')) {
-      error('FINALE_KEYWORD_COUNT', {
+      error('FINALE_KEYWORD_BLANK', {
         ...where,
         detail: { count: question.keywords.filter((k) => k.text.trim() !== '').length },
       })

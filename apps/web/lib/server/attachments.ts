@@ -21,6 +21,16 @@ import { fail, ok, type ActionResult, type AttachmentKind } from '@kwiz/domain'
  * never a missing one.
  */
 
+/**
+ * §16's `Reclaim space` reads `referencedChecksums()` **before** it lists disk files, then never
+ * re-checks a given file after that snapshot. A fresh (non-duplicate) upload writes its file first
+ * and is only referenced once the caller's insert lands — so a snapshot taken inside that gap sees
+ * an unreferenced file that is, in fact, seconds away from being claimed. `RECLAIM_GRACE_MS` is that
+ * gap's margin: a file newer than this is left alone regardless of what the snapshot says, which is
+ * the actual protection (not, as an earlier comment here claimed, that the race cannot occur).
+ */
+export const RECLAIM_GRACE_MS = 60_000
+
 /** conventions §7 — the cheap first gate. Playability is verified in the browser (PRD 2 §7.1, O6). */
 export const MIME_ALLOWLIST: Record<string, { kind: AttachmentKind; ext: string }> = {
   'image/jpeg': { kind: 'IMAGE', ext: 'jpg' },
@@ -380,11 +390,16 @@ export interface StorageStats {
 export async function storageStats(
   paths: DataPaths,
   referenced: ReadonlySet<string>,
+  // Same injected clock as `reclaimSpace`, and for the same reason its grace period exists here
+  // too: §16 shows this count *before* offering the button, so a fresh upload within the grace
+  // window must not count as reclaimable when `reclaimSpace` is about to leave it alone.
+  now: () => number = Date.now,
 ): Promise<StorageStats> {
   const database = await stat(/*turbopackIgnore: true*/ paths.dbFile).catch(
     () => undefined,
   )
   const files = await readdir(/*turbopackIgnore: true*/ paths.attachments).catch(() => [])
+  const start = now()
 
   let attachmentBytes = 0
   let orphanCount = 0
@@ -398,7 +413,7 @@ export async function storageStats(
     if (!info?.isFile()) continue
 
     attachmentBytes += info.size
-    if (!referenced.has(checksumOf(name))) {
+    if (!referenced.has(checksumOf(name)) && start - info.mtimeMs >= RECLAIM_GRACE_MS) {
       orphanCount += 1
       orphanBytes += info.size
     }
@@ -423,14 +438,25 @@ export async function storageStats(
  * That also means this must never delete a file whose checksum is referenced by *either* table: a
  * template attachment deleted while a game still plays it keeps its file for exactly that reason.
  *
+ * **A file younger than `RECLAIM_GRACE_MS` is skipped even when `referenced` says it is orphaned.**
+ * `referenced` is a snapshot taken before this function ever lists the directory, and a fresh upload
+ * writes its file before the row that references it is inserted (`receiveAttachment`, above) — so a
+ * snapshot taken in that gap makes a file seconds away from being claimed look exactly like a real
+ * orphan. The grace period is the actual protection; a genuine orphan is simply caught on the next
+ * pass, which the recoverable direction above already assumes.
+ *
  * It is user-facing (§16) because a replaced image leaves the old file behind, and on a laptop that
  * is the master's own disk filling up with nothing they can see.
  */
 export async function reclaimSpace(
   paths: DataPaths,
   referenced: ReadonlySet<string>,
+  // Injected so a test can fast-forward past the grace period without a real 60 s wait — the same
+  // reason `randomBytes` is a parameter on the import path rather than a direct `crypto` call.
+  now: () => number = Date.now,
 ): Promise<{ removed: number; bytes: number }> {
   const files = await readdir(/*turbopackIgnore: true*/ paths.attachments).catch(() => [])
+  const start = now()
   let removed = 0
   let bytes = 0
 
@@ -441,6 +467,7 @@ export async function reclaimSpace(
     const path = join(/*turbopackIgnore: true*/ paths.attachments, name)
     const info = await stat(/*turbopackIgnore: true*/ path).catch(() => undefined)
     if (!info?.isFile()) continue
+    if (start - info.mtimeMs < RECLAIM_GRACE_MS) continue
 
     // A failed unlink is not worth aborting the sweep: the file stays orphaned and the next pass
     // tries again, which is the same recoverable direction the design already chose.

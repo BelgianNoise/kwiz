@@ -342,6 +342,9 @@ type ErrorCode =
   | 'NOT_IN_SETUP'            // regenerate-code / re-sync outside SETUP
   | 'RESYNC_BLOCKED'          // answers or buzzes exist (data model §7.1)
   | 'SOURCE_QUIZ_DELETED'     // nothing to re-sync from
+  | 'COPY_INVALID'            // the freshly-copied rows failed preflight() (data model §7's
+                              //   last bullet). A copy bug, never a normal refusal — should
+                              //   not be reachable, and rolls the whole transaction back
   | 'QUESTION_STILL_OPEN'     // break refused over a live question (PRD 4 §11)
   | 'SCORE_OUT_OF_RANGE'      // PER_TEAM_SCORE outside 0…points (D24)
   // ─── DSMTW_FINALE (D50) ───
@@ -360,8 +363,16 @@ type ErrorCode =
   | 'KEYWORD_ALREADY_MARKED'  // idempotent for the same team; error for a different one
   // ─── import ───
   | 'SCHEMA_VERSION_UNSUPPORTED'
-  | 'CHECKSUM_MISMATCH'       // payload lists the failing files
-  | 'IMPORT_COLLISION'        // needs a Replace / Copy choice (D9)
+  | 'CHECKSUM_MISMATCH'       // Declared, never returned (P2 #10) — a corrupt/missing attachment
+                              //   is reported per file in ParsedExport.missingAttachments instead
+                              //   (protocol §8.1), because PRD 2 §14.2's design previews the whole
+                              //   import before anything is written rather than failing partway
+                              //   through and forcing a retry. Kept in the catalogue: the shape it
+                              //   names is real, just carried on a different channel than an error.
+  | 'IMPORT_COLLISION'        // Declared, never returned, for the same reason — the collision
+                              //   PRD 2 §14.2 needs a Replace/Copy choice for (D9) is surfaced in
+                              //   ImportPreview.collision, decided by the master before import
+                              //   runs, rather than discovered as a failure during it.
   | 'MANIFEST_INVALID'
   // ─── attachments ───
   | 'ATTACHMENT_REJECTED'     // outside §7's allowlist, or over KWIZ_MAX_UPLOAD_MB.

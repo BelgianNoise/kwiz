@@ -1,9 +1,17 @@
-import { fail, ok, type ActionResult, type Locale } from '@kwiz/domain'
+import {
+  fail,
+  ok,
+  preflight,
+  type ActionResult,
+  type Locale,
+  type QuizContent,
+} from '@kwiz/domain'
 import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 
 import { appendAndProject } from './append'
 import type { KwizDatabase, KwizTx } from './client'
+import { loadGameContent } from './content'
 import {
   acceptedAnswer,
   attachment,
@@ -54,13 +62,13 @@ import {
  * because a hand-written list is what silently loses a column, and a copy driven by the factory's own
  * keys passes it by construction.
  */
-function sharedKeys<T extends Record<string, unknown>>(
+export function sharedKeys<T extends Record<string, unknown>>(
   factory: () => T,
 ): (keyof T & string)[] {
   return Object.keys(factory())
 }
 
-function pickShared<K extends string, Row extends Record<K, unknown>>(
+export function pickShared<K extends string, Row extends Record<K, unknown>>(
   row: Row,
   keys: readonly K[],
 ): Pick<Row, K> {
@@ -72,13 +80,19 @@ function pickShared<K extends string, Row extends Record<K, unknown>>(
   return picked as Pick<Row, K>
 }
 
-const ROUND_KEYS = sharedKeys(roundColumns)
-const CATEGORY_KEYS = sharedKeys(categoryColumns)
-const QUESTION_KEYS = sharedKeys(questionColumns)
-const ACCEPTED_ANSWER_KEYS = sharedKeys(acceptedAnswerColumns)
-const OPTION_KEYS = sharedKeys(optionColumns)
-const KEYWORD_KEYS = sharedKeys(keywordColumns)
-const ATTACHMENT_KEYS = sharedKeys(attachmentColumns)
+/**
+ * Exported (but not re-exported from `./index`, so this stays package-internal) because
+ * `authoring.ts`'s `duplicateQuiz` — template→template rather than this module's template→game-copy
+ * — needs the identical guarantee: every shared column moved by its own key list, never by a
+ * hand-written field list a future column can be silently missing from.
+ */
+export const ROUND_KEYS = sharedKeys(roundColumns)
+export const CATEGORY_KEYS = sharedKeys(categoryColumns)
+export const QUESTION_KEYS = sharedKeys(questionColumns)
+export const ACCEPTED_ANSWER_KEYS = sharedKeys(acceptedAnswerColumns)
+export const OPTION_KEYS = sharedKeys(optionColumns)
+export const KEYWORD_KEYS = sharedKeys(keywordColumns)
+export const ATTACHMENT_KEYS = sharedKeys(attachmentColumns)
 
 export interface NewTeam {
   name: string
@@ -97,6 +111,52 @@ export interface CreateGameOptions {
 export interface CreatedGame {
   gameId: string
   teamIds: string[]
+}
+
+/**
+ * Thrown, never returned — the transaction it aborts is the point. Caught once, at the bottom of
+ * `createGameFromQuiz`/`resyncGame`, and turned into `fail('COPY_INVALID', ...)`.
+ */
+class CopyInvalidError extends Error {
+  constructor(readonly errors: readonly { code: string; questionId?: string }[]) {
+    super(`copy failed ${errors.length} invariant check(s)`)
+  }
+}
+
+/**
+ * data model §7's last bullet: *"copies are validated after writing, not trusted."* Run **inside**
+ * the same transaction `copyQuizTree` just wrote in, so a failure rolls the whole thing back rather
+ * than leaving a broken game half-visible for the moment between commit and the caller noticing.
+ *
+ * Reuses `preflight()` rather than a parallel set of checks — the whole reason a copy bug should
+ * "fail at creation, in front of the master" is that it is the *same* rule authoring already
+ * enforced, now checked against what actually got written instead of what was meant to be. Only the
+ * structural rules apply: `brokenAttachmentIds` is not passed, because a file going missing from disk
+ * is a filesystem fact this package never touches (CLAUDE.md §6.4's split), not a copy defect, and
+ * PRD 2 §10's UI-level pre-flight already covers it before a master presses play.
+ */
+function assertValidCopy(tx: KwizTx, gameId: string): void {
+  const content = loadGameContent(tx, gameId)
+  if (!content) throw new CopyInvalidError([{ code: 'COPY_MISSING' }])
+
+  const asQuiz: QuizContent = {
+    id: content.gameId,
+    name: content.quizName,
+    description: null,
+    revision: 0,
+    updatedAt: 0,
+    rounds: content.rounds,
+  }
+
+  const report = preflight(asQuiz)
+  if (report.errors.length > 0) {
+    throw new CopyInvalidError(
+      report.errors.map((finding) => ({
+        code: finding.code,
+        questionId: finding.questionId,
+      })),
+    )
+  }
 }
 
 export function createGameFromQuiz(
@@ -119,42 +179,50 @@ export function createGameFromQuiz(
     position,
   }))
 
-  appendAndProject(
-    database,
-    gameId,
-    [
-      {
-        type: 'GAME_CREATED',
-        payload: {
-          quizName: template.name,
-          quizRevision: template.revision,
-          code: options.code,
+  try {
+    appendAndProject(
+      database,
+      gameId,
+      [
+        {
+          type: 'GAME_CREATED',
+          payload: {
+            quizName: template.name,
+            quizRevision: template.revision,
+            code: options.code,
+          },
         },
-      },
-      ...teams.map((team) => ({ type: 'TEAM_ADDED' as const, payload: team })),
-    ],
-    now,
-    (tx) => {
-      // The game row first: `game_event.gameId` references it, and `foreign_keys = ON` means the
-      // order genuinely matters.
-      tx.insert(game)
-        .values({
-          id: gameId,
-          sourceQuizId: template.id,
-          quizName: template.name,
-          quizRevision: template.revision,
-          code: options.code,
-          status: 'SETUP',
-          ...(options.defaultPlayerLocale === undefined
-            ? {}
-            : { defaultPlayerLocale: options.defaultPlayerLocale }),
-          createdAt: now(),
-        })
-        .run()
+        ...teams.map((team) => ({ type: 'TEAM_ADDED' as const, payload: team })),
+      ],
+      now,
+      (tx) => {
+        // The game row first: `game_event.gameId` references it, and `foreign_keys = ON` means the
+        // order genuinely matters.
+        tx.insert(game)
+          .values({
+            id: gameId,
+            sourceQuizId: template.id,
+            quizName: template.name,
+            quizRevision: template.revision,
+            code: options.code,
+            status: 'SETUP',
+            ...(options.defaultPlayerLocale === undefined
+              ? {}
+              : { defaultPlayerLocale: options.defaultPlayerLocale }),
+            createdAt: now(),
+          })
+          .run()
 
-      copyQuizTree(tx, gameId, options.quizId)
-    },
-  )
+        copyQuizTree(tx, gameId, options.quizId)
+        assertValidCopy(tx, gameId)
+      },
+    )
+  } catch (error) {
+    if (error instanceof CopyInvalidError) {
+      return fail('COPY_INVALID', error.message, { errors: error.errors })
+    }
+    throw error
+  }
 
   return ok({ gameId, teamIds: teams.map((team) => team.teamId) })
 }
@@ -211,21 +279,29 @@ export function resyncGame(
     .get()
   if (!template) return fail('SOURCE_QUIZ_DELETED', `no quiz ${quizId}`)
 
-  appendAndProject(
-    database,
-    gameId,
-    [{ type: 'GAME_RESYNCED', payload: { quizRevision: template.revision } }],
-    now,
-    (tx) => {
-      // Deleting the rounds cascades through categories, questions and everything under them, so
-      // this is the whole copy subtree in one statement — and `foreign_keys = ON` is what makes it
-      // true rather than hopeful.
-      tx.delete(gameRound).where(eq(gameRound.gameId, gameId)).run()
-      copyQuizTree(tx, gameId, quizId)
-      // `GAME_RESYNCED`'s projection carries the revision; the denormalised name is this function's.
-      tx.update(game).set({ quizName: template.name }).where(eq(game.id, gameId)).run()
-    },
-  )
+  try {
+    appendAndProject(
+      database,
+      gameId,
+      [{ type: 'GAME_RESYNCED', payload: { quizRevision: template.revision } }],
+      now,
+      (tx) => {
+        // Deleting the rounds cascades through categories, questions and everything under them, so
+        // this is the whole copy subtree in one statement — and `foreign_keys = ON` is what makes it
+        // true rather than hopeful.
+        tx.delete(gameRound).where(eq(gameRound.gameId, gameId)).run()
+        copyQuizTree(tx, gameId, quizId)
+        assertValidCopy(tx, gameId)
+        // `GAME_RESYNCED`'s projection carries the revision; the denormalised name is this function's.
+        tx.update(game).set({ quizName: template.name }).where(eq(game.id, gameId)).run()
+      },
+    )
+  } catch (error) {
+    if (error instanceof CopyInvalidError) {
+      return fail('COPY_INVALID', error.message, { errors: error.errors })
+    }
+    throw error
+  }
 
   return ok({ quizRevision: template.revision })
 }

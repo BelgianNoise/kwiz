@@ -15,7 +15,6 @@
  * that is unreliable. Keys are namespaced so a second app in the same process cannot collide.
  */
 declare global {
-  /* eslint-disable-next-line no-var */
   // oxlint-disable-next-line no-var
   var kwizSingletons: Map<string, unknown> | undefined
 }

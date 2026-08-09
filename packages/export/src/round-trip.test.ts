@@ -11,6 +11,7 @@ import {
   gameAnswer,
   gameTeam,
   importQuiz,
+  insertTemplateAttachment,
   loadGameContent,
   loadQuizTree,
   quiz,
@@ -82,7 +83,6 @@ describe('round-trip', () => {
     const quizId = seedQuiz(source)
     const exported = collectQuizExport(source, quizId, {
       includeGames: false,
-      includeAttachments: true,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -121,7 +121,6 @@ describe('round-trip', () => {
     const quizId = seedQuiz(source)
     const exported = collectQuizExport(source, quizId, {
       includeGames: false,
-      includeAttachments: true,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -133,7 +132,6 @@ describe('round-trip', () => {
     const quizId = unwrap(createQuiz(source, { name: 'Round 1/2: Pub "Quiz"' })).quizId
     const exported = collectQuizExport(source, quizId, {
       includeGames: false,
-      includeAttachments: false,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -195,7 +193,6 @@ describe('a game travels with its history', () => {
 
     const exported = collectQuizExport(source, quizId, {
       includeGames: true,
-      includeAttachments: true,
     })
     if (!exported) throw new Error('expected an export')
     expect(exported.games).toHaveLength(1)
@@ -262,7 +259,6 @@ describe('a game travels with its history', () => {
 
     const exported = collectQuizExport(source, quizId, {
       includeGames: true,
-      includeAttachments: false,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -300,7 +296,6 @@ describe('refusing a bad file', () => {
     const quizId = seedQuiz(source)
     const exported = collectQuizExport(source, quizId, {
       includeGames: false,
-      includeAttachments: false,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -334,7 +329,6 @@ describe('refusing a bad file', () => {
     const quizId = seedQuiz(source)
     const exported = collectQuizExport(source, quizId, {
       includeGames: false,
-      includeAttachments: false,
     })
     if (!exported) throw new Error('expected an export')
 
@@ -353,6 +347,55 @@ describe('refusing a bad file', () => {
 
     expect(read.data.missingAttachments).toEqual([
       { checksum: 'deadbeef', ext: 'png', reason: 'CORRUPT' },
+    ])
+    expect(read.data.attachments.size).toBe(0)
+  })
+
+  /**
+   * Functional review P1.4: unticking "include attachments" (§14.1) must still tell the other side
+   * *which* files it didn't get, not silently claim there were none. `collectQuizExport`'s attachment
+   * list is always the full one; this is what a caller who then embeds no bytes actually produces.
+   */
+  it('reports every referenced file as missing when attachments were not embedded, not zero', () => {
+    const quizId = seedQuiz(source)
+    const roundId = unwrap(
+      createRound(source, quizId, { type: 'QUESTION_SET', title: 'Media round' }),
+    ).roundId
+    const questionId = unwrap(createQuestion(source, roundId)).questionId
+    const attachmentId = insertTemplateAttachment(source, {
+      questionId,
+      kind: 'IMAGE',
+      mimeType: 'image/png',
+      originalName: 'cow.png',
+      ext: 'png',
+      sizeBytes: 4,
+      checksum: 'feedface',
+    })
+    expect(attachmentId).toBeDefined()
+
+    const exported = collectQuizExport(source, quizId, { includeGames: false })
+    if (!exported) throw new Error('expected an export')
+    // The bug: this must still list the file even though no bytes will be embedded below.
+    expect(exported.attachments).toEqual([
+      { checksum: 'feedface', ext: 'png', sizeBytes: 4 },
+    ])
+
+    const zip = writeExport({
+      quiz: exported.quiz,
+      games: [],
+      includesGames: false,
+      // Mirrors `transfer.ts`'s `includeAttachments: false` path: no bytes, but the manifest still
+      // carries the full file list so the missing-media report on import is complete.
+      attachments: [],
+      attachmentManifest: exported.attachments,
+      exportedAt: new Date(),
+    })
+
+    const read = readExport(zip.bytes, sha256)
+    if (!read.ok || !read.data) throw new Error('expected the import to survive')
+
+    expect(read.data.missingAttachments).toEqual([
+      { checksum: 'feedface', ext: 'png', reason: 'ABSENT' },
     ])
     expect(read.data.attachments.size).toBe(0)
   })

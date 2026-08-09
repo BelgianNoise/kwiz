@@ -38,6 +38,7 @@ const errors: Record<ErrorCode, string> = {
   RESYNC_BLOCKED:
     'This game has already been played, so it cannot be refreshed from the quiz.',
   SOURCE_QUIZ_DELETED: 'The quiz this game came from no longer exists.',
+  COPY_INVALID: "The copy this made isn't valid. Please try again or report this.",
   QUESTION_STILL_OPEN: 'Lock or skip the open question first.',
   SCORE_OUT_OF_RANGE: 'That score is outside the range this question allows.',
   NOT_A_FINALE_ROUND: 'That only applies to the finale.',
@@ -340,6 +341,7 @@ const en = {
         DO_NO_SCORING_MODE: 'no scoring mode chosen',
         ATTACHMENT_MISSING: 'a file is missing from disk or has changed',
         FINALE_KEYWORD_COUNT: 'needs exactly five keywords, has {count}',
+        FINALE_KEYWORD_BLANK: '{count} of 5 keywords have text - one is blank',
         MULTIPLE_FINALES: 'a quiz can only have one finale',
         FINALE_NOT_LAST: 'the finale has to be the last round',
         FINALE_RATE_MISSING: 'no points-to-seconds rate set',
@@ -383,7 +385,14 @@ const en = {
       questionsOk: 'About {suggested} are usually needed for these {teams} teams.',
       questionsShort:
         'The finale has {have, plural, one {# question} other {# questions}}. About {suggested} are usually needed for these {teams} teams.',
-      lowerPenalty: 'Lower the penalty',
+      /**
+       * §11.1's quick fix for a question shortfall — "raising the drain per question is often
+       * the easier fix... than writing three more keyword questions." A higher penalty drains
+       * banks faster, so *fewer* questions are needed to reach one survivor — the opposite of
+       * what this key's old name (`lowerPenalty`) said, which is why it was never wired up
+       * correctly. Renamed rather than shipped under a label that describes the wrong direction.
+       */
+      raisePenalty: 'Raise the penalty to {seconds}s',
     },
 
     /** PRD 2 §12 — the hub for one game, before, during and after. */
@@ -439,6 +448,7 @@ const en = {
       nothingToReclaim: 'Nothing to reclaim.',
       reclaimed: 'Removed {count, plural, one {# file} other {# files}}, freeing {size}.',
       about: 'About',
+      appVersion: 'Version',
       schemaVersion: 'Export format',
       migrationStatus: 'Database',
       migration: {

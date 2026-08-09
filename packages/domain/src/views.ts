@@ -1,4 +1,5 @@
 import { normaliseAnswer } from './answers'
+import { doConfigSchema } from './content-config'
 import {
   activeFinalists,
   currentFinaleTurn,
@@ -22,10 +23,17 @@ import {
   roundOf,
   type GameState,
   type MediaContent,
+  type OptionContent,
   type QuestionContent,
   type QuestionPlayState,
 } from './state'
-import type { AnswerVerdict, BuzzOutcome, Locale } from './vocabulary'
+import type {
+  AnswerVerdict,
+  BuzzOutcome,
+  DoScoringMode,
+  Locale,
+  TiePayout,
+} from './vocabulary'
 
 /**
  * protocol §5–§6 — one filter per audience.
@@ -99,6 +107,14 @@ const mediaRef = (media: MediaContent): MediaRef => ({
   url: `/api/attachment/${media.id}`,
   durationMs: media.durationMs,
 })
+
+/**
+ * `{ id, text }` — no correctness marker before `REVEALED` (invariant 2). Shared between the
+ * main-screen and player views so a future edit adding `isCorrect` back in cannot land at only
+ * one of the two call sites and silently reopen the leak invariant 2 exists to prevent.
+ */
+const publicOptions = (options: OptionContent[]): { id: string; text: string }[] =>
+  options.map((option) => ({ id: option.id, text: option.text }))
 
 const teamPublic = (team: {
   id: string
@@ -369,12 +385,8 @@ function mainScreenQuestion(
   }
 
   if (question.answerMethod === 'MULTIPLE_CHOICE') {
-    // `{ id, text }` — no correctness marker before REVEALED (invariant 2). Ids are UUIDs so
-    // nothing in the payload even ranks the options (protocol §6.3).
-    view.options = question.options.map((option) => ({
-      id: option.id,
-      text: option.text,
-    }))
+    // Ids are UUIDs so nothing in the payload even ranks the options (protocol §6.3).
+    view.options = publicOptions(question.options)
   }
 
   if (question.answerMethod === 'BUZZER') {
@@ -589,10 +601,7 @@ function playerQuestion(
   }
 
   if (question.answerMethod === 'MULTIPLE_CHOICE') {
-    view.options = question.options.map((option) => ({
-      id: option.id,
-      text: option.text,
-    }))
+    view.options = publicOptions(question.options)
   }
 
   if (question.answerMethod === 'BUZZER') {
@@ -719,6 +728,10 @@ export type Attention =
   | {
       kind: 'FINALE_TURN'
       gameQuestionId: string
+      prompt: string
+      masterNotes: string | null
+      questionNumber: number
+      questionTotal: number
       currentTeamId: string
       nextTeamId: string | null
       turnStartedAt: number
@@ -743,7 +756,23 @@ export type Attention =
       /** Nobody left to pass to → offer `[Reveal remaining]`. */
       allRemainingPassed: boolean
     }
-  | { kind: 'SCORE_DO'; gameQuestionId: string }
+  | {
+      kind: 'SCORE_DO'
+      gameQuestionId: string
+      prompt: string
+      /** Also the per-team maximum for `PER_TEAM_SCORE` (D24). */
+      points: number
+      scoringMode: DoScoringMode
+      /** `WINNER_TAKES_ALL` only (D23) — irrelevant, but always present, for `PER_TEAM_SCORE`. */
+      tiePayout: TiePayout
+      masterNotes: string | null
+      /**
+       * `score: null` is **not yet scored**, distinct from a saved `0` (D24's "empty and zero look
+       * different") — `SET_DO_SCORES` may be called with fewer than every team (§8.2's "1 of 4
+       * scored"), so this must read what has actually been saved per team, not assume completeness.
+       */
+      teams: { teamId: string; name: string; colour: string; score: number | null }[]
+    }
   | { kind: 'BREAK_TIE_FOR_PICK'; tiedTeamIds: string[] }
   | {
       kind: 'PICK_FINALISTS'
@@ -818,7 +847,13 @@ export function toMasterControlView(
   if (round?.type === 'JEOPARDY') {
     const picker = suggestedPicker(state, round.id)
     view.board = {
-      categories: round.categories.map((c) => ({ id: c.id, name: c.name })),
+      // Sorted explicitly, matching `boardView()` above — `packages/domain` is documented not to
+      // depend on the caller having already ordered rows, and `round.categories`' order is an
+      // incidental property of `packages/db`'s queries, not a guarantee this package can rely on.
+      categories: round.categories
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((c) => ({ id: c.id, name: c.name })),
       // `prompt` IS sent here — master-only, and the reason `BoardView` is a separate type.
       tiles: round.questions.map((q) => ({
         id: q.id,
@@ -964,9 +999,15 @@ export function attention(state: GameState, now: number): Attention {
     if (turn) {
       const passed = new Set(passedThisQuestion(state, question.id))
       const order = finaleTurnOrder(state, question.id, now)
+      // Same computation as `finaleView`'s (§5.5's `FinaleTurnDetail` — "Q3 of 6" — P2 #13).
+      const finaleQuestions = round.questions
       return {
         kind: 'FINALE_TURN',
         gameQuestionId: question.id,
+        prompt: question.prompt,
+        masterNotes: question.masterNotes,
+        questionNumber: finaleQuestions.findIndex((q) => q.id === question.id) + 1,
+        questionTotal: finaleQuestions.length,
         currentTeamId: turn.teamId,
         nextTeamId: order.find((teamId) => teamId !== turn.teamId) ?? null,
         turnStartedAt: turn.startedAt,
@@ -1003,7 +1044,26 @@ export function attention(state: GameState, now: number): Attention {
 
   // 3. SCORE_DO — a challenge just finished; teams are watching for a verdict.
   if (question?.answerMethod === 'DO' && play?.state === 'LOCKED') {
-    return { kind: 'SCORE_DO', gameQuestionId: question.id }
+    const config = doConfigOf(question)
+    return {
+      kind: 'SCORE_DO',
+      gameQuestionId: question.id,
+      prompt: question.prompt,
+      points: question.points,
+      scoringMode: config.scoringMode,
+      tiePayout: config.tiePayout,
+      masterNotes: question.masterNotes,
+      teams: [...state.teams.values()]
+        .sort((a, b) => a.position - b.position)
+        .map((team) => ({
+          teamId: team.id,
+          name: team.name,
+          colour: team.colour,
+          // `null` while unsaved, distinct from a saved `0` (D24) — read from the answer row
+          // `SET_DO_SCORES`/`SET_DO_WINNERS` writes, never assumed complete.
+          score: play.answers.get(team.id)?.pointsAwarded ?? null,
+        })),
+    }
   }
 
   // 4. BREAK_TIE_FOR_PICK — the Jeopardy board is stalled until this resolves.
@@ -1085,4 +1145,21 @@ function advanceSuggestion(
 
   const isLastRound = state.content.rounds.at(-1)?.id === round.id
   return isLastRound ? 'FINISH' : 'NEXT_ROUND'
+}
+
+/**
+ * The `DO` settings a question was authored with (D24), with the schema's own defaults filling
+ * in for a config that fails to parse — a `DO` question's `config` is written once at authoring
+ * time and validated there, so a parse failure here means the row predates a stricter schema,
+ * not a live input to react to. `decide.ts` has an equivalent `tiePayoutOf` for the one field it
+ * needs; this reads the whole shape because `SCORE_DO`'s payload needs `scoringMode` too.
+ */
+function doConfigOf(question: QuestionContent): {
+  scoringMode: DoScoringMode
+  tiePayout: TiePayout
+} {
+  const parsed = doConfigSchema.safeParse(question.config)
+  return parsed.success
+    ? parsed.data
+    : { scoringMode: 'WINNER_TAKES_ALL', tiePayout: 'FULL' }
 }

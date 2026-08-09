@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Command } from './commands'
 import { decide, eliminationInstant, type Decision } from './decide'
-import { finaleRanking, finaleRemainingSeconds } from './derive'
+import { currentFinaleTurn, finaleRanking, finaleRemainingSeconds } from './derive'
 import type { GameEvent } from './events/payload'
 import { reduce, type LoggedEvent } from './reduce'
 import type { GameContent, GameState } from './state'
@@ -280,6 +280,29 @@ describe('join', () => {
       ).error,
     ).toBe('UNKNOWN_DEVICE')
   })
+
+  // P2 #11 — SWITCH_TEAM had no status guard at all, unlike JOIN just above.
+  it('refuses to switch teams on a finished game, mirroring JOIN', () => {
+    const game = driver([
+      ...LIVE,
+      {
+        type: 'DEVICE_JOINED',
+        payload: { deviceId: 'd1', teamId: A, deviceToken: 't1' },
+      },
+      { type: 'GAME_FINISHED', payload: {} },
+    ])
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SWITCH_TEAM',
+          deviceId: 'd1',
+          toTeamId: B,
+          maxDevicesPerTeam: 3,
+        }),
+      ).error,
+    ).toBe('GAME_NOT_JOINABLE')
+  })
 })
 
 // ─── submission finality (D43, protocol §7.3) ───
@@ -456,6 +479,43 @@ describe('submit', () => {
     expect(decision.events[0]?.payload).toMatchObject({ enteredByMaster: true })
     expect(game.state.teams.get(A)?.score).toBe(10)
   })
+
+  /**
+   * A device submitting after the whole game ended is not D8's "phone that woke up late" — that
+   * is a bound on *state*, not on *time*, and it was entirely absent before. Without it a device
+   * could go on submitting indefinitely once the master had finished or abandoned the game.
+   */
+  it('refuses a submission once the game is no longer live', () => {
+    const game = open()
+    accepted(game.act({ type: 'FINISH_GAME' }))
+    expect(
+      refusal(
+        game.act({ type: 'SUBMIT_ANSWER', gameQuestionId: FREE_Q, teamId: A, text: 'x' }),
+      ).error,
+    ).toBe('GAME_NOT_LIVE')
+  })
+
+  /**
+   * D47's own rationale is a live-play mitigation for a team's phone that cannot reach the server
+   * *while the question is open* — the bound has to be the same as an ordinary submission's, not
+   * looser. Before this, `SUBMIT_FOR_TEAM` was legal against `LOCKED`/`REVEALED`/`SCORED`, silently
+   * changing a team's score with no new `QUESTION_SCORED` event to say it happened.
+   */
+  it('refuses a proxy submission once the question is no longer open', () => {
+    const game = open()
+    game.act({ type: 'LOCK_QUESTION', gameQuestionId: FREE_Q, drafts: [] })
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SUBMIT_FOR_TEAM',
+          gameQuestionId: FREE_Q,
+          teamId: A,
+          text: 'paris',
+        }),
+      ).error,
+    ).toBe('QUESTION_LOCKED')
+  })
 })
 
 // ─── draft commitment at lock (protocol §4.3, D26) ───
@@ -560,6 +620,47 @@ describe('question flow', () => {
       refusal(game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q })).error,
     ).toBe('GAME_NOT_LIVE')
   })
+
+  /**
+   * The symmetric half of "refuses a second open question until the first is settled" above.
+   * Without this, `ROUND_CLOSED` cleared `currentQuestionId` (see `reduce.ts`) but left the
+   * question's own `play.state` at `OPEN` — invisible to `OPEN_QUESTION`'s guard, which reads
+   * only through `currentQuestionId`. A team could still submit or buzz against the abandoned
+   * question while a new one opened in the next round, both live at once.
+   */
+  it('refuses to close a round with a question still open', () => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+    expect(refusal(game.act({ type: 'CLOSE_ROUND', gameRoundId: 'r1' })).error).toBe(
+      'QUESTION_STILL_OPEN',
+    )
+
+    // Locked is fine, mirroring `OPEN_ROUND`'s own guard — nothing is waiting on input.
+    game.act({ type: 'LOCK_QUESTION', gameQuestionId: FREE_Q, drafts: [] })
+    expect(accepted(game.act({ type: 'CLOSE_ROUND', gameRoundId: 'r1' })).events).toEqual(
+      [{ type: 'ROUND_CLOSED', payload: { gameRoundId: 'r1' } }],
+    )
+  })
+})
+
+/**
+ * PRD 3 §1.1 lists ending and abandoning as the two genuinely irreversible acts, framed as a true
+ * emergency stop — which only holds if neither is blockable by "there's an open question".
+ */
+describe('ending the game is an emergency stop, not another lifecycle guard', () => {
+  it('finishes and abandons mid-question, unlike every other round/question transition', () => {
+    const finishing = driver(LIVE)
+    finishing.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+    expect(accepted(finishing.act({ type: 'FINISH_GAME' })).events).toEqual([
+      { type: 'GAME_FINISHED', payload: {} },
+    ])
+
+    const abandoning = driver(LIVE)
+    abandoning.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+    expect(accepted(abandoning.act({ type: 'ABANDON_GAME' })).events).toEqual([
+      { type: 'GAME_ABANDONED', payload: {} },
+    ])
+  })
 })
 
 // ─── the buzzer loop (D35) ───
@@ -649,6 +750,67 @@ describe('buzz', () => {
         .error,
     ).toBe('QUESTION_NOT_OPEN')
   })
+
+  /** Same reasoning as `SUBMIT_ANSWER`: a buzz after the game ended is not a late arrival. */
+  it('refuses a buzz once the game is no longer live', () => {
+    const game = buzzing()
+    accepted(game.act({ type: 'ABANDON_GAME' }))
+    expect(refusal(game.act(buzz(A, 'bz-1', 5_000))).error).toBe('GAME_NOT_LIVE')
+  })
+})
+
+// ─── reviewing an answer (D42, D40) ───
+
+describe('reviewing an answer', () => {
+  const answered = (): ReturnType<typeof driver> => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+    game.act({ type: 'SUBMIT_ANSWER', gameQuestionId: FREE_Q, teamId: A, text: 'paris' })
+    return game
+  }
+
+  /*
+   * P2 #9 — the one deliberately unguarded action here: PRD 2 §13.1's post-game review grid
+   * must keep working after the game finishes.
+   */
+  it('validates an answer even after the game finishes (PRD 2 §13.1)', () => {
+    const game = answered()
+    accepted(game.act({ type: 'FINISH_GAME' }))
+
+    expect(
+      accepted(
+        game.act({
+          type: 'VALIDATE_ANSWER',
+          gameQuestionId: FREE_Q,
+          teamId: A,
+          accepted: true,
+        }),
+      ).events,
+    ).toEqual([
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: FREE_Q, teamId: A, accepted: true },
+      },
+    ])
+  })
+
+  // P2 #9 — unlike VALIDATE_ANSWER just above, spotlighting has no post-game life of its own
+  // (PRD 3 §5.3) and must refuse once the game is no longer live.
+  it('refuses to spotlight an answer once the game is no longer live', () => {
+    const game = answered()
+    accepted(game.act({ type: 'FINISH_GAME' }))
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SPOTLIGHT_ANSWER',
+          gameQuestionId: FREE_Q,
+          teamId: A,
+          spotlit: true,
+        }),
+      ).error,
+    ).toBe('GAME_NOT_LIVE')
+  })
 })
 
 // ─── DO scoring (D23, D24) ───
@@ -724,6 +886,17 @@ describe('pacing', () => {
     expect(accepted(game.act({ type: 'END_BREAK' })).events).toHaveLength(1)
     // A countdown reaching zero changes nothing server-side (D8), so a second end is a no-op.
     expect(accepted(game.act({ type: 'END_BREAK' })).events).toEqual([])
+  })
+
+  // P2 #9 — symmetric with START_BREAK's own guard: a stray END_BREAK against a game that
+  // ended mid-break must refuse, not append a BREAK_ENDED after the fact.
+  it('refuses to end a break once the game is no longer live', () => {
+    const game = driver([
+      ...LIVE,
+      { type: 'BREAK_STARTED', payload: { durationMs: 60_000 } },
+      { type: 'GAME_FINISHED', payload: {} },
+    ])
+    expect(refusal(game.act({ type: 'END_BREAK' })).error).toBe('GAME_NOT_LIVE')
   })
 
   it('appends PICKER_ASSIGNED even when it only confirms the rule (D30)', () => {
@@ -856,6 +1029,115 @@ describe('finale', () => {
     ])
     // A was charged the 15 seconds they used.
     expect(finaleRemainingSeconds(game.state, A, 25_000)).toBe(85)
+  })
+
+  /**
+   * The bug this guards: `currentFinaleTurn` finds "the last turn with no `endedAt`" with no
+   * question scoping, so a team mid-turn when the master locks the question — the common case,
+   * since being mid-turn usually means they just found the deciding keyword — left a dangling
+   * open turn. `START_TURN`'s own no-op guard then treated the next start by that same team as a
+   * repeat of an already-running turn, and the stale `turnStartedAt` kept draining their clock
+   * with no new `TURN_STARTED` event — breaking D52's "a restart mid-turn recovers every clock
+   * exactly" the moment there was no restart to trigger the recovery.
+   */
+  it('ends the active turn when the question locks, so it cannot drain into the next one (D52)', () => {
+    const game = finale()
+    game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+    game.act({ type: 'START_TURN', teamId: A }, 10_000)
+
+    const decision = accepted(
+      game.act({ type: 'LOCK_QUESTION', gameQuestionId: FIN_Q, drafts: [] }, 25_000),
+    )
+    expect(decision.events).toEqual([
+      { type: 'TURN_ENDED', payload: { teamId: A, reason: 'QUESTION_CLOSED' } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FIN_Q } },
+    ])
+    // A was charged the 15 seconds their turn actually ran, not left ticking.
+    expect(finaleRemainingSeconds(game.state, A, 25_000)).toBe(85)
+    expect(currentFinaleTurn(game.state)).toBeUndefined()
+
+    // The turn is genuinely closed, so restarting the same team is a real start — not the no-op a
+    // dangling turn would have produced, which is the whole point of the fix.
+    const restart = accepted(game.act({ type: 'START_TURN', teamId: A }, 30_000))
+    expect(restart.events).toEqual([{ type: 'TURN_STARTED', payload: { teamId: A } }])
+  })
+
+  /**
+   * P2 #12 — `REVEAL_QUESTION` and `REVEAL_KEYWORDS` are coupled in both directions so the two
+   * REVEALED-ish facts on a finale question can never diverge, whichever command a client sends.
+   */
+  describe('a finale question is REVEALED together with its keywords', () => {
+    const lockedFinale = () => {
+      const game = finale()
+      game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+      game.act({ type: 'LOCK_QUESTION', gameQuestionId: FIN_Q, drafts: [] }, 20_000)
+      return game
+    }
+
+    it('REVEAL_QUESTION also reveals the keywords', () => {
+      const game = lockedFinale()
+      expect(
+        accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FIN_Q })).events,
+      ).toEqual([
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FIN_Q } },
+        { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } },
+      ])
+    })
+
+    it("REVEAL_KEYWORDS — PRD 3 §10.5's actual [Reveal remaining] button — also reveals the question", () => {
+      const game = lockedFinale()
+      expect(
+        accepted(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).events,
+      ).toEqual([
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FIN_Q } },
+        { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } },
+      ])
+    })
+
+    it("REVEAL_KEYWORDS refuses an open question, mirroring REVEAL_QUESTION's own bound", () => {
+      const game = finale()
+      game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+      expect(
+        refusal(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).error,
+      ).toBe('QUESTION_NOT_OPEN')
+    })
+
+    it('REVEAL_KEYWORDS a second time, once already REVEALED, only re-reveals keywords', () => {
+      const game = lockedFinale()
+      accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FIN_Q }))
+      expect(
+        accepted(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).events,
+      ).toEqual([{ type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } }])
+    })
+
+    it('REVEAL_QUESTION on an ordinary (non-finale) question never adds KEYWORDS_REVEALED', () => {
+      const game = driver(LIVE)
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+      game.act({ type: 'LOCK_QUESTION', gameQuestionId: FREE_Q, drafts: [] }, 2_000)
+      expect(
+        accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FREE_Q })).events,
+      ).toEqual([{ type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE_Q } }])
+    })
+  })
+
+  /** D46's other question-ending transition gets the same handover treatment as a lock. */
+  it('also ends the active turn when the question is skipped', () => {
+    const game = finale()
+    game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+    game.act({ type: 'START_TURN', teamId: B }, 10_000) // B has a 40 s bank
+
+    const decision = accepted(
+      game.act({ type: 'SKIP_QUESTION', gameQuestionId: FIN_Q }, 18_000),
+    )
+    expect(decision.events).toEqual([
+      { type: 'TURN_ENDED', payload: { teamId: B, reason: 'QUESTION_CLOSED' } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: FIN_Q } },
+    ])
+    expect(currentFinaleTurn(game.state)).toBeUndefined()
   })
 
   it('marks a keyword for the team on turn, idempotently, and refuses a second team', () => {

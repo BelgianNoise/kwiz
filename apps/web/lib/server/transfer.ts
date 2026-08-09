@@ -10,7 +10,7 @@ import {
   type ImportMode,
   type QuizExport,
 } from '@kwiz/db'
-import { fail, ok, type ActionResult } from '@kwiz/domain'
+import { EventPayloadError, fail, ok, type ActionResult } from '@kwiz/domain'
 import {
   readExport,
   writeExport,
@@ -53,9 +53,17 @@ export function exportSize(
   const collected = collectQuizExport(runtime.database, quizId, options)
   if (!collected) return fail('GAME_NOT_FOUND', `no quiz ${quizId}`)
 
+  /*
+   * `collected.attachments` is now the quiz's whole file list regardless of the toggle (the
+   * manifest needs it either way, for the missing-media report) — so *this* is the one place that
+   * has to check `includeAttachments` explicitly. Without it, unticking the checkbox would still
+   * show the full transfer size, which is exactly the number §14.1 exists to get right for a
+   * master on a slow USB stick.
+   */
+  const files = options.includeAttachments ? collected.attachments : []
   return ok({
-    bytes: collected.attachments.reduce((total, file) => total + file.sizeBytes, 0),
-    attachments: collected.attachments.length,
+    bytes: files.reduce((total, file) => total + file.sizeBytes, 0),
+    attachments: files.length,
     games: collected.games.length,
   })
 }
@@ -73,7 +81,13 @@ export async function exportQuiz(
       quiz: collected.quiz,
       games: collected.games,
       includesGames: options.includeGames,
-      attachments: await readAttachments(runtime, collected),
+      // Whether the bytes themselves are read off disk and embedded — empty when unticked.
+      attachments: options.includeAttachments
+        ? await readAttachments(runtime, collected)
+        : [],
+      // The manifest's file *list* is always the full one, so an import with no bytes still
+      // reports every file as missing rather than reporting none (§14.1, protocol §8.1).
+      attachmentManifest: collected.attachments,
       exportedAt: new Date(),
     }),
   )
@@ -194,12 +208,28 @@ export async function performImport(
     return read.ok ? fail('MANIFEST_INVALID', 'unreadable') : read
 
   const parsed = read.data
-  const result = importQuiz(runtime.database, {
-    quiz: parsed.quiz,
-    games: parsed.games,
-    mode,
-    randomBytes,
-  })
+  let result: ReturnType<typeof importQuiz>
+  try {
+    result = importQuiz(runtime.database, {
+      quiz: parsed.quiz,
+      games: parsed.games,
+      mode,
+      randomBytes,
+    })
+  } catch (error) {
+    /*
+     * P2 #20 — a `games.json` that passed schema validation but carries a payload replay itself
+     * rejects (conventions §10.1's "must fail loudly rather than quietly corrupt a projection")
+     * surfaced as an uncaught exception here instead of the typed refusal every other bad-file
+     * case in this function already returns. The write is still safe either way — the whole
+     * import runs in one transaction (data model §7.1) and rolls back — only the error's *shape*
+     * was inconsistent.
+     */
+    if (error instanceof EventPayloadError) {
+      return fail('MANIFEST_INVALID', `games.json failed replay — ${error.message}`)
+    }
+    throw error
+  }
 
   // oxlint-disable no-await-in-loop
   for (const [checksum, content] of parsed.attachments) {

@@ -92,8 +92,25 @@ export function GameSetup({
   const finaleQuestions = finale?.questions.length ?? 0
   const reach = penalty * 5 * Math.max(0, teams.length - 1)
 
+  /**
+   * §11.1's `[Lower the penalty]` — named for what a master reads under time pressure, not for
+   * the sign of the number: a *higher* penalty drains banks faster, so *fewer* questions are
+   * needed to reach one survivor. Searches upward in whole seconds for the smallest value that
+   * closes the shortfall — the smallest change that still gets there, rather than overshooting
+   * into `penaltyWarning`'s "a single question can end the round".
+   */
+  const fixedPenalty = ((): number | undefined => {
+    if (finaleQuestions >= suggested) return undefined
+    const banks = Array.from({ length: teams.length }, () => topSeconds)
+    for (let candidate = penalty + 1; candidate <= 300; candidate += 1) {
+      if (suggestFinaleQuestions(banks, candidate) <= finaleQuestions) return candidate
+    }
+    return undefined
+  })()
+
   /** Local only — the teams do not exist until `[Create game]`, so this is an array move. */
   const reorder = useReorder({
+    length: teams.length,
     canDrag: () => teams.length > 1,
     canDrop: () => true,
     onMove: (key, direction, steps) => {
@@ -305,6 +322,19 @@ export function GameSetup({
                 })
               : t('questionsOk', { suggested, teams: teams.length })}
           </p>
+
+          {/* §11.1's quick fix — "often the easier fix... than writing three more keyword
+              questions," offered right beside the warning it resolves. */}
+          {fixedPenalty !== undefined ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPenalty(fixedPenalty)}
+            >
+              {t('raisePenalty', { seconds: fixedPenalty })}
+            </Button>
+          ) : null}
         </section>
       ) : null}
 

@@ -2,7 +2,7 @@ import { findAttachmentFile } from '@kwiz/db'
 import { fail } from '@kwiz/domain'
 
 import { attachmentResponse } from '@/lib/server/attachments'
-import { getRuntime } from '@/lib/server/runtime'
+import { getRuntime, isDatabaseUsable } from '@/lib/server/runtime'
 
 /**
  * `GET /api/attachment/:gameAttachmentId` (protocol §7.4) — the file, **with HTTP range support**
@@ -17,6 +17,15 @@ export async function GET(
   { params }: { params: Promise<{ gameAttachmentId: string }> },
 ): Promise<Response> {
   const runtime = await getRuntime()
+  // D14 — every other route refuses against a database with pending migrations; this one read
+  // straight through to a raw query and was the one exception (P2 #8).
+  if (!isDatabaseUsable(runtime)) {
+    return Response.json(
+      fail('DATABASE_MIGRATION_REQUIRED', 'the database has pending migrations'),
+      { status: 503 },
+    )
+  }
+
   const { gameAttachmentId } = await params
 
   const file = findAttachmentFile(runtime.database, gameAttachmentId)

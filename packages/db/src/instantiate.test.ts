@@ -8,7 +8,9 @@ import { createGameFromQuiz, resyncGame } from './instantiate'
 import {
   acceptedAnswer,
   attachment,
+  game,
   gameDevice,
+  gameEvent,
   gameQuestion,
   gameTeam,
   jeopardyCategory,
@@ -189,6 +191,49 @@ describe('creating a game from a template', () => {
     const result = createGameFromQuiz(database, { quizId: 'nope', code: 'KWIZ02' })
     expect(result).toMatchObject({ ok: false, error: 'SOURCE_QUIZ_DELETED' })
   })
+
+  /**
+   * P1.6 — data model §7's last bullet: a copy is validated after writing, not trusted. A free-text
+   * question with no accepted answer is invalid on the template side too (I5), so this is a quiz
+   * `preflight()` would already flag in the editor — creating a game from it must refuse identically,
+   * not silently hand a room an unanswerable question.
+   */
+  it('refuses to create a game from a quiz that already fails preflight, and commits nothing', () => {
+    const { db } = database
+    db.insert(quiz).values({ id: 'bad-quiz', name: 'Broken', revision: 1 }).run()
+    db.insert(round)
+      .values({
+        id: 'bad-round',
+        quizId: 'bad-quiz',
+        position: 0,
+        type: 'QUESTION_SET',
+        title: 'Round',
+        defaultPoints: 10,
+        config: {},
+      })
+      .run()
+    db.insert(question)
+      .values({
+        id: 'bad-question',
+        roundId: 'bad-round',
+        position: 0,
+        prompt: 'Unanswerable',
+        answerMethod: 'FREE_TEXT',
+        points: 10,
+        config: {},
+        // No accepted answers — I5, and this is the point.
+      })
+      .run()
+
+    const result = createGameFromQuiz(database, { quizId: 'bad-quiz', code: 'KWIZ99' })
+    expect(result).toMatchObject({ ok: false, error: 'COPY_INVALID' })
+
+    // The whole transaction rolled back — no half-created game left behind for a master to find.
+    expect(
+      database.db.select().from(game).where(eq(game.sourceQuizId, 'bad-quiz')).all(),
+    ).toHaveLength(0)
+    expect(database.db.select().from(gameEvent).all()).toHaveLength(0)
+  })
 })
 
 describe('re-syncing a SETUP game', () => {
@@ -239,6 +284,12 @@ describe('re-syncing a SETUP game', () => {
         config: {},
       })
       .run()
+    // A free-text question needs at least one accepted answer (I5) — without it the copy this
+    // produces is genuinely invalid, and `resyncGame` is now expected to refuse exactly that.
+    database.db
+      .insert(acceptedAnswer)
+      .values({ id: 'aa-3', questionId: 'question-3', position: 0, text: 'Anything' })
+      .run()
 
     const before = database.db
       .select({ id: gameQuestion.id })
@@ -272,6 +323,44 @@ describe('re-syncing a SETUP game', () => {
     ).toHaveLength(1)
 
     expect(readLog(database, gameId).at(-1)?.event.type).toBe('GAME_RESYNCED')
+  })
+
+  /**
+   * P1.6 — mirrors the create-side test above, but for the delete-then-recopy re-sync does: the two
+   * halves of that transaction must roll back together, so a bad edit leaves the game exactly as
+   * playable as it was before the master touched the quiz.
+   */
+  it('refuses to re-sync into a copy that fails preflight, and keeps the old copy intact', () => {
+    const gameId = create()
+    const before = database.db
+      .select({ id: gameQuestion.id })
+      .from(gameQuestion)
+      .where(eq(gameQuestion.gameId, gameId))
+      .all()
+
+    database.db
+      .insert(question)
+      .values({
+        id: 'question-bad',
+        roundId,
+        position: 1,
+        prompt: 'Unanswerable',
+        answerMethod: 'FREE_TEXT',
+        points: 10,
+        config: {},
+        // No accepted answers — I5, and this is the point.
+      })
+      .run()
+
+    const result = resyncGame(database, gameId)
+    expect(result).toMatchObject({ ok: false, error: 'COPY_INVALID' })
+
+    const after = database.db
+      .select({ id: gameQuestion.id })
+      .from(gameQuestion)
+      .where(eq(gameQuestion.gameId, gameId))
+      .all()
+    expect(after.map((row) => row.id).sort()).toEqual(before.map((row) => row.id).sort())
   })
 
   it('refuses once anything has been played, on the real condition rather than the status', () => {

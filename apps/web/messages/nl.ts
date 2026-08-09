@@ -32,6 +32,7 @@ const nl: Messages = {
     NOT_IN_SETUP: 'Dat kan alleen voordat de quiz begint.',
     RESYNC_BLOCKED: 'Deze quiz is al gespeeld en kan niet meer worden bijgewerkt.',
     SOURCE_QUIZ_DELETED: 'De quiz waar dit spel uit komt bestaat niet meer.',
+    COPY_INVALID: 'Deze kopie is niet geldig. Probeer het opnieuw of meld dit.',
     QUESTION_STILL_OPEN: 'Sluit of sla eerst de open vraag over.',
     SCORE_OUT_OF_RANGE: 'Die score valt buiten wat deze vraag toestaat.',
     NOT_A_FINALE_ROUND: 'Dat geldt alleen voor de finale.',
@@ -304,6 +305,7 @@ const nl: Messages = {
         DO_NO_SCORING_MODE: 'geen scorewijze gekozen',
         ATTACHMENT_MISSING: 'een bestand ontbreekt of is gewijzigd',
         FINALE_KEYWORD_COUNT: 'heeft precies vijf kernwoorden nodig, heeft {count}',
+        FINALE_KEYWORD_BLANK: '{count} van de 5 kernwoorden hebben tekst - een is leeg',
         MULTIPLE_FINALES: 'een quiz kan maar een finale hebben',
         FINALE_NOT_LAST: 'de finale moet de laatste ronde zijn',
         FINALE_RATE_MISSING: 'geen punten-naar-seconden ingesteld',
@@ -344,7 +346,7 @@ const nl: Messages = {
       questionsOk: 'Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
       questionsShort:
         'De finale heeft {have, plural, one {# vraag} other {# vragen}}. Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
-      lowerPenalty: 'Straf verlagen',
+      raisePenalty: 'Straf verhogen naar {seconds}s',
     },
 
     game: {
@@ -403,6 +405,7 @@ const nl: Messages = {
       reclaimed:
         '{count, plural, one {# bestand} other {# bestanden}} verwijderd, {size} vrijgemaakt.',
       about: 'Over',
+      appVersion: 'Versie',
       schemaVersion: 'Exportformaat',
       migrationStatus: 'Database',
       migration: {

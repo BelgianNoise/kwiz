@@ -192,7 +192,7 @@ describe('errors — the data model invariants', () => {
 })
 
 describe('errors — the finale', () => {
-  it('needs exactly five keywords, none of them blank (I17)', () => {
+  it('needs exactly five keywords (I17)', () => {
     const four = finaleRound({
       questions: [
         q({
@@ -204,7 +204,15 @@ describe('errors — the finale', () => {
       ],
     })
     expect(codes(preflight(quiz([round(), four])))).toContain('FINALE_KEYWORD_COUNT')
+  })
 
+  /**
+   * P2 #15 — a distinct code from the row-count check above: five slots exist, but one carries no
+   * text, which silently changes the round's arithmetic the same way a missing row would. A
+   * master shown `FINALE_KEYWORD_COUNT`'s "found 4, need 5" here would be looking for a missing
+   * row that doesn't exist.
+   */
+  it('needs every one of the five keywords to actually have text', () => {
     const blank = finaleRound({
       questions: [
         q({
@@ -215,8 +223,9 @@ describe('errors — the finale', () => {
         }),
       ],
     })
-    // Five slots with one empty is still four keywords, and the arithmetic would silently change.
-    expect(codes(preflight(quiz([round(), blank])))).toContain('FINALE_KEYWORD_COUNT')
+    const report = preflight(quiz([round(), blank]))
+    expect(codes(report)).toContain('FINALE_KEYWORD_BLANK')
+    expect(codes(report)).not.toContain('FINALE_KEYWORD_COUNT')
   })
 
   it('must be last, and there can be only one (I20)', () => {

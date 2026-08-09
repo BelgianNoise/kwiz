@@ -8,11 +8,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   attachmentResponse,
   parseRange,
+  RECLAIM_GRACE_MS,
   reclaimSpace,
   sniffMimeType,
   storageStats,
   storeAttachment,
 } from './attachments'
+
+/** A clock past the grace period, for tests whose files are seconds old, not the real thing. */
+const later = () => Date.now() + RECLAIM_GRACE_MS + 1_000
 
 /**
  * data model §8 — content addressing — and D5's range support.
@@ -217,7 +221,7 @@ describe('reclaiming space', () => {
     if (!kept.ok || !orphan.ok || !kept.data || !orphan.data)
       throw new Error('upload failed')
 
-    const result = await reclaimSpace(paths, new Set([kept.data.checksum]))
+    const result = await reclaimSpace(paths, new Set([kept.data.checksum]), later)
 
     expect(result.removed).toBe(1)
     expect(result.bytes).toBeGreaterThan(0)
@@ -228,7 +232,7 @@ describe('reclaiming space', () => {
     const stored = await upload(PNG)
     if (!stored.ok || !stored.data) throw new Error('upload failed')
 
-    expect(await reclaimSpace(paths, new Set([stored.data.checksum]))).toEqual({
+    expect(await reclaimSpace(paths, new Set([stored.data.checksum]), later)).toEqual({
       removed: 0,
       bytes: 0,
     })
@@ -245,12 +249,28 @@ describe('reclaiming space', () => {
     if (!kept.ok || !kept.data) throw new Error('upload failed')
 
     const referenced = new Set([kept.data.checksum])
-    const before = await storageStats(paths, referenced)
-    const result = await reclaimSpace(paths, referenced)
+    const before = await storageStats(paths, referenced, later)
+    const result = await reclaimSpace(paths, referenced, later)
 
     expect(before.attachmentCount).toBe(2)
     expect(result.removed).toBe(before.orphanCount)
     expect(result.bytes).toBe(before.orphanBytes)
+  })
+
+  /**
+   * P1.5 — the bug this file's earlier comment mis-explained: a genuinely new upload's file exists on
+   * disk before the row referencing it is inserted, so a `referenced` snapshot taken in that gap makes
+   * the file look orphaned. A file younger than `RECLAIM_GRACE_MS` must survive regardless.
+   */
+  it('leaves a freshly-written file alone even when nothing yet references it', async () => {
+    const fresh = await upload(PNG)
+    if (!fresh.ok || !fresh.data) throw new Error('upload failed')
+
+    // The real clock: the file was written a moment ago, well inside the grace period.
+    const result = await reclaimSpace(paths, new Set())
+
+    expect(result.removed).toBe(0)
+    expect(await readdir(paths.attachments)).toHaveLength(1)
   })
 })
 
