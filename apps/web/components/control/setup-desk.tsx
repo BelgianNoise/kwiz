@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 
+import { AddTeamButton } from '@/components/control/add-team-button'
 import { usePrimaryAction, type ZoneProps } from '@/components/control/control-desk'
 import { TeamDot } from '@/components/control/team-dot'
 import { Button } from '@/components/ui/button'
@@ -19,7 +20,7 @@ import { Button } from '@/components/ui/button'
  * The QR code and join URL are deliberately **not** here. They live on PRD 2 §12's game page, which
  * is where the master has been while people arrive; this screen is for starting, not for joining.
  */
-export function SetupDesk({ view, api, run }: ZoneProps) {
+export function SetupDesk({ view, api, run, gameId }: ZoneProps) {
   const t = useTranslations('control.setup')
   const start = (): void => run(() => api.start())
   usePrimaryAction(start)
@@ -45,9 +46,14 @@ export function SetupDesk({ view, api, run }: ZoneProps) {
         ))}
       </ul>
 
-      <p className="text-muted-foreground">
-        {t('joined', { joined, total: view.teams.length })}
-      </p>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-muted-foreground">
+          {t('joined', { joined, total: view.teams.length })}
+        </p>
+
+        {/* §4's `[+ Add team]`, where the master is while people arrive. */}
+        <AddTeamButton gameId={gameId} view={view} />
+      </div>
 
       <Button size="lg" onClick={start}>
         {t('start')}

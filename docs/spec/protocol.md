@@ -631,6 +631,11 @@ type MasterControlView = {
   // The second tab — pre-finale points — is `teams`, unchanged: a finale scores in seconds.
   finaleRanking: string[][] | null
 
+  // What a team joining now would have missed (PRD 2 §11.2, O5). `[+ Add team]` is required at
+  // every status from master control as well as config, and the dialog's whole justification is
+  // that these five numbers are computed rather than worked out in a noisy room. Null in SETUP.
+  missed: MissedSoFar | null
+
   // COUNTS ONLY — never the list (§1.1).
   pendingValidationCount: number
 }
@@ -803,15 +808,21 @@ type FinaleTurnDetail = {
     revealed: boolean
   }[]
 
-  currentTeamId: string
+  // Null BETWEEN turns — a finale question that has just opened, and the gap after a pass before
+  // the next team is started. §10.5 stops the clocks while nobody is on turn, so this is the same
+  // desk with the clock not yet running rather than a screen of its own; `nextTeamId` is then who
+  // `[Start <team>]` starts, by the fewest-seconds rule (PRD 1 §8.8). Before slice 5 this state
+  // was unrepresentable, so a freshly opened finale question fell through to the *question* desk.
+  currentTeamId: string | null
   nextTeamId: string | null
-  turnStartedAt: number
+  turnStartedAt: number | null
   penaltySeconds: number
 
   clocks: {
     teamId: string; name: string; colour: string
     secondsAtTurnStart: number
     onTurn: boolean; eliminated: boolean
+    eliminatedAt: number | null    // §10.2's "out 21:03" — HH:mm, a wall-clock instant (§8.2)
     passedThisQuestion: boolean
   }[]
 

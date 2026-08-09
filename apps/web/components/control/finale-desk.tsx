@@ -193,6 +193,18 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
     return mark(index, event.shiftKey)
   })
 
+  // §10.5's two closing conditions, and the count the master reads out with them.
+  const unguessed = turn.keywords.filter(
+    (keyword) => keyword.markedByTeamId === null && !keyword.revealed,
+  ).length
+  const allFound = unguessed === 0
+
+  /** The next unplayed finale question, which is what `[Next question]` opens. */
+  const nextFinaleQuestion = view.timeline.find((entry) => entry.state === 'PENDING')
+  const nextQuestion = (): void => {
+    if (nextFinaleQuestion) run(() => api.openQuestion(nextFinaleQuestion.gameQuestionId))
+  }
+
   /** Whose clock the big number is: the team on turn, or the one about to be started. */
   const waiting =
     turn.clocks.find((clock) => clock.onTurn) ??
@@ -275,10 +287,21 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
       </ol>
 
       <div className="flex items-center gap-4">
-        {/* §10.5 — master-triggered, so they keep the beat to say "nobody? it was Billie Jean." */}
-        {turn.allRemainingPassed ? (
+        {/*
+         * §10.5 — the question closes when **all five are found** or every remaining finalist has
+         * passed. Master-triggered either way, so they keep the beat to say *"nobody? it was Billie
+         * Jean."* Once nothing is left unguessed there is nothing to reveal, and the only thing left
+         * is the next question.
+         */}
+        {allFound ? (
+          <Button size="lg" onClick={nextQuestion} disabled={!nextFinaleQuestion}>
+            {t('nextQuestion')}
+          </Button>
+        ) : turn.allRemainingPassed ? (
           <>
-            <span className="text-muted-foreground text-sm">{t('allPassed')}</span>
+            <span className="text-muted-foreground text-sm">
+              {t('allPassed')} · {t('unguessed', { count: unguessed })}
+            </span>
             <Button
               size="lg"
               onClick={() => run(() => api.revealKeywords(turn.gameQuestionId))}
@@ -337,7 +360,11 @@ function ClockStrip({
           {clock.name}
           <span className="tabular-nums">
             {clock.eliminated
-              ? t('eliminated')
+              ? // §10.2's `out 21:03` — a wall-clock `HH:mm` (§8.2), because "when did they go
+                // out?" is a question the room asks and the master has to answer.
+                clock.eliminatedAt === null
+                ? t('eliminated')
+                : t('out', { time: wallClock(clock.eliminatedAt) })
               : Math.max(0, Math.ceil(remainingFor(clock)))}
           </span>
         </span>
@@ -394,6 +421,7 @@ export function FinaleRanking({
   view,
   api,
   run,
+  gameId,
   finished,
 }: ZoneProps & { finished?: boolean }) {
   const t = useTranslations('control.finale')
@@ -454,7 +482,9 @@ export function FinaleRanking({
         <PointsTable teams={byPoints} />
       )}
 
-      {finished ? null : <AdvanceButton view={view} api={api} run={run} />}
+      {finished ? null : (
+        <AdvanceButton view={view} api={api} run={run} gameId={gameId} />
+      )}
     </section>
   )
 }
@@ -472,6 +502,12 @@ function PointsTable({ teams }: { teams: MasterControlView['teams'] }) {
       ))}
     </ol>
   )
+}
+
+/** conventions §8.2 — `HH:mm` for a wall-clock instant, which is what an elimination time is. */
+function wallClock(at: number): string {
+  const when = new Date(at)
+  return `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
 }
 
 const colourOf = (view: MasterControlView, teamId: string | null): string =>

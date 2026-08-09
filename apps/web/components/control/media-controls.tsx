@@ -59,6 +59,7 @@ function MediaRow({ media }: { media: MediaRef }) {
   const element = useRef<HTMLMediaElement | null>(null)
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
+  const [failed, setFailed] = useState(false)
 
   const toggle = (): void => {
     const node = element.current
@@ -97,6 +98,7 @@ function MediaRow({ media }: { media: MediaRef }) {
           }}
           src={media.url}
           className="max-h-40 rounded-md"
+          onError={() => setFailed(true)}
           onPause={() => setPlaying(false)}
           onPlay={() => setPlaying(true)}
           onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
@@ -107,6 +109,7 @@ function MediaRow({ media }: { media: MediaRef }) {
             element.current = node
           }}
           src={media.url}
+          onError={() => setFailed(true)}
           onPause={() => setPlaying(false)}
           onPlay={() => setPlaying(true)}
           onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
@@ -126,6 +129,16 @@ function MediaRow({ media }: { media: MediaRef }) {
           if (node) node.currentTime = Number(event.target.value)
         }}
       />
+
+      {/*
+       * §12 — **the master sees the failure on their own controls before the room notices the
+       * silence**, which is what makes `[Skip this question]` a usable escape rather than a panic.
+       * The file is on this machine, so a failure here is a codec the browser will not decode —
+       * exactly the case PRD 2 §7.1's upload-time playability check cannot always predict.
+       */}
+      {failed ? (
+        <span className="text-destructive shrink-0 text-sm">{t('mediaFailed')}</span>
+      ) : null}
 
       {/* `m:ss` — conventional for audio and video, and what every player the master has used shows
           (conventions §8.2). */}

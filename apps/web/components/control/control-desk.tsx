@@ -104,15 +104,22 @@ export function ControlDesk({ gameId, quizName }: { gameId: string; quizName: st
 
         {/* The one region that changes. Everything else is fixed for the whole game (§2). */}
         <main className="col-start-1 row-start-2 min-h-0 overflow-y-auto p-6">
-          <AttentionZone view={view} api={api} run={run} />
+          <AttentionZone view={view} api={api} run={run} gameId={gameId} />
         </main>
 
         <div className="col-start-1 row-start-3 border-t">
-          <Timeline view={view} api={api} run={run} />
+          <Timeline view={view} api={api} run={run} gameId={gameId} />
         </div>
 
         <div className="col-start-2 row-span-3 row-start-1 border-l">
-          <RightRail view={view} api={api} run={run} notice={notice} refusal={refusal} />
+          <RightRail
+            view={view}
+            api={api}
+            run={run}
+            gameId={gameId}
+            notice={notice}
+            refusal={refusal}
+          />
         </div>
       </div>
     </ControlKeys>
@@ -126,6 +133,12 @@ export interface ZoneProps {
   view: MasterControlView
   api: ControlApi
   run: Run
+  /**
+   * D21 — carried explicitly, never resolved implicitly. The typed client is already bound to it;
+   * this is for the two places that need the id itself rather than a call (the main-screen link,
+   * and PRD 2's add-team dialog, which is shared with the config surface and takes one).
+   */
+  gameId: string
 }
 
 /**
@@ -135,40 +148,77 @@ export interface ZoneProps {
  * chosen exactly one `kind`. The two checks above the switch are states the union cannot express —
  * a game that has not started, and one that is over.
  */
-function AttentionZone({ view, api, run }: ZoneProps) {
-  if (view.status === 'SETUP') return <SetupDesk view={view} api={api} run={run} />
+function AttentionZone({ view, api, run, gameId }: ZoneProps) {
+  if (view.status === 'SETUP')
+    return <SetupDesk view={view} api={api} run={run} gameId={gameId} />
   if (view.status === 'FINISHED' || view.status === 'ABANDONED') {
-    return <FinaleRanking view={view} api={api} run={run} finished />
+    return <FinaleRanking view={view} api={api} run={run} gameId={gameId} finished />
   }
   // §11.2 — a break holds the desk, and `attention` is `NONE` throughout it.
-  if (view.break) return <BreakDesk view={view} api={api} run={run} />
+  if (view.break) return <BreakDesk view={view} api={api} run={run} gameId={gameId} />
 
   switch (view.attention.kind) {
     case 'ADJUDICATE_BUZZ':
-      return <BuzzDesk view={view} api={api} run={run} buzz={view.attention} />
+      return (
+        <BuzzDesk view={view} api={api} run={run} gameId={gameId} buzz={view.attention} />
+      )
     case 'FINALE_TURN':
-      return <FinaleDesk view={view} api={api} run={run} turn={view.attention} />
+      return (
+        <FinaleDesk
+          view={view}
+          api={api}
+          run={run}
+          gameId={gameId}
+          turn={view.attention}
+        />
+      )
     case 'SCORE_DO':
-      return <DoDesk view={view} api={api} run={run} scoring={view.attention} />
+      return (
+        <DoDesk
+          view={view}
+          api={api}
+          run={run}
+          gameId={gameId}
+          scoring={view.attention}
+        />
+      )
     case 'BREAK_TIE_FOR_PICK':
       return (
         <BoardDesk
           view={view}
           api={api}
           run={run}
+          gameId={gameId}
           tiedTeamIds={view.attention.tiedTeamIds}
         />
       )
     case 'PICK_FINALISTS':
-      return <FinalistPicker view={view} api={api} run={run} picking={view.attention} />
+      return (
+        <FinalistPicker
+          view={view}
+          api={api}
+          run={run}
+          gameId={gameId}
+          picking={view.attention}
+        />
+      )
     case 'VALIDATE_QUESTION':
-      return <QuestionDesk view={view} api={api} run={run} validating={view.attention} />
+      return (
+        <QuestionDesk
+          view={view}
+          api={api}
+          run={run}
+          gameId={gameId}
+          validating={view.attention}
+        />
+      )
     case 'ADVANCE':
-      return <AdvanceZone view={view} api={api} run={run} />
+      return <AdvanceZone view={view} api={api} run={run} gameId={gameId} />
     default:
       // §10.6 — the finale is over but the round has not been closed yet.
-      if (view.finaleRanking) return <FinaleRanking view={view} api={api} run={run} />
-      return <Leaderboard view={view} api={api} run={run} />
+      if (view.finaleRanking)
+        return <FinaleRanking view={view} api={api} run={run} gameId={gameId} />
+      return <Leaderboard view={view} api={api} run={run} gameId={gameId} />
   }
 }
 
@@ -179,7 +229,7 @@ function AttentionZone({ view, api, run }: ZoneProps) {
  * desk, a Jeopardy round with no open tile is the board, and anything else is the leaderboard with
  * the suggested action under it.
  */
-function AdvanceZone({ view, api, run }: ZoneProps) {
+function AdvanceZone({ view, api, run, gameId }: ZoneProps) {
   /*
    * The finale is checked **first**. A finale question is not a question in this sense — no answer
    * method, no accepted answers, nothing to submit — so falling through to the question desk drew a
@@ -188,9 +238,9 @@ function AdvanceZone({ view, api, run }: ZoneProps) {
    */
   if (view.round?.type === 'DSMTW_FINALE') {
     return view.finaleRanking ? (
-      <FinaleRanking view={view} api={api} run={run} />
+      <FinaleRanking view={view} api={api} run={run} gameId={gameId} />
     ) : (
-      <Leaderboard view={view} api={api} run={run} />
+      <Leaderboard view={view} api={api} run={run} gameId={gameId} />
     )
   }
   if (
@@ -198,12 +248,12 @@ function AdvanceZone({ view, api, run }: ZoneProps) {
     view.question.state !== 'PENDING' &&
     view.question.state !== 'SKIPPED'
   ) {
-    return <QuestionDesk view={view} api={api} run={run} />
+    return <QuestionDesk view={view} api={api} run={run} gameId={gameId} />
   }
   if (view.round?.type === 'JEOPARDY') {
-    return <BoardDesk view={view} api={api} run={run} tiedTeamIds={[]} />
+    return <BoardDesk view={view} api={api} run={run} gameId={gameId} tiedTeamIds={[]} />
   }
-  return <Leaderboard view={view} api={api} run={run} />
+  return <Leaderboard view={view} api={api} run={run} gameId={gameId} />
 }
 
 /**

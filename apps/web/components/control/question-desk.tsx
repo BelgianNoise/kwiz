@@ -22,6 +22,10 @@ import { cn } from '@/lib/utils'
 
 type Validating = Extract<Attention, { kind: 'VALIDATE_QUESTION' }>
 
+/** The two states in which the room has already been shown the answer (D40's beat one). */
+const revealsAnswer = (state: MasterQuestionDetail['state']): boolean =>
+  state === 'REVEALED' || state === 'SCORED'
+
 /**
  * PRD 3 §5 and §6 — **one component for the live question and the round-end sweep**, because §6.1
  * says so: the grouping that makes an inconsistent pair visible is the same grouping in both, and
@@ -40,6 +44,7 @@ export function QuestionDesk({
   view,
   api,
   run,
+  gameId,
   validating,
 }: ZoneProps & { validating?: Validating }) {
   const tv = useTranslations('control.validate')
@@ -55,6 +60,11 @@ export function QuestionDesk({
 
   const items = validating ? validating.items : (detail?.teamAnswers ?? [])
   const questionId = validating?.gameQuestionId ?? detail?.gameQuestionId
+  // Carried on the payload, because a sweep can be about a question from an earlier round.
+  const sweepPrompt =
+    sweeping && validating
+      ? { prompt: validating.prompt, accepted: validating.acceptedAnswers }
+      : null
 
   if (!questionId) return null
 
@@ -66,14 +76,29 @@ export function QuestionDesk({
           <p className="text-muted-foreground text-sm">
             {tv('remaining', { count: validating.remainingQuestions })}
           </p>
+          {/*
+           * §6.1 — **the accepted answers, on the sweep too.** They are the reference the master
+           * judges against, and a sweep that shows the answers without what they should match is
+           * a screen asking for a verdict with the evidence left on the previous page.
+           */}
+          {sweepPrompt ? <p className="text-lg">{sweepPrompt.prompt}</p> : null}
+          {sweepPrompt && sweepPrompt.accepted.length > 0 ? (
+            <p className="text-sm">
+              {tv('accepted', { answers: sweepPrompt.accepted.join(' · ') })}
+            </p>
+          ) : null}
         </header>
       ) : detail ? (
-        <QuestionHeader detail={detail} />
+        <QuestionHeader
+          detail={detail}
+          answered={items.length}
+          teams={view.teams.length}
+        />
       ) : null}
 
       {/* §7.1's deny loop lives here rather than on the buzz screen: once a buzz is denied there
           is no buzz to adjudicate, and `attention` has already moved on. */}
-      <BuzzerState view={view} api={api} run={run} />
+      <BuzzerState view={view} api={api} run={run} gameId={gameId} />
 
       <AnswerList
         items={items}
@@ -98,7 +123,15 @@ export function QuestionDesk({
 }
 
 /** The prompt, the reference answer, the master's own note, and the media controls. */
-function QuestionHeader({ detail }: { detail: MasterQuestionDetail }) {
+function QuestionHeader({
+  detail,
+  answered,
+  teams,
+}: {
+  detail: MasterQuestionDetail
+  answered: number
+  teams: number
+}) {
   const t = useTranslations('control.question')
   const remaining = useCountdown(detail.timer?.deadlineAt ?? null)
 
@@ -109,8 +142,15 @@ function QuestionHeader({ detail }: { detail: MasterQuestionDetail }) {
         <span>{t('points', { points: detail.points })}</span>
         {remaining !== null ? (
           <span className="ml-auto text-base tabular-nums">
-            {/* Whole seconds — always under a minute in practice (conventions §8.2). */}
-            {remaining <= 0 ? t('timeUp') : Math.ceil(remaining)}
+            {/*
+             * Whole seconds — always under a minute in practice (conventions §8.2). At zero it
+             * becomes §5.1's `Time up · 4 of 4 submitted`, because the question the master now has
+             * is no longer "how long" but "who is still out"; **nothing happens automatically**,
+             * and `[Close answers]` is identical either side of it (D8).
+             */}
+            {remaining <= 0
+              ? `${t('timeUp')} · ${t('submitted', { answered, total: teams })}`
+              : Math.ceil(remaining)}
           </span>
         ) : null}
       </div>
@@ -143,7 +183,7 @@ function QuestionHeader({ detail }: { detail: MasterQuestionDetail }) {
       {/* Visually distinct, so the master's own reminder never reads as part of the question. */}
       {detail.masterNotes ? (
         <p className="bg-muted flex items-start gap-2 rounded-md p-2 text-sm">
-          <NotebookPen aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <NotebookPen aria-label={t('notes')} className="mt-0.5 size-4 shrink-0" />
           {detail.masterNotes}
         </p>
       ) : null}
@@ -401,18 +441,35 @@ function QuestionActions({
   detail,
   sweeping,
   items,
-}: ZoneProps & {
+  // No `gameId`: every call this makes goes through the bound client, so it has no use for one.
+}: Omit<ZoneProps, 'gameId'> & {
   detail: MasterQuestionDetail | undefined
   sweeping: boolean
   items: ValidationItem[]
 }) {
   const t = useTranslations('control.question')
+  const tv = useTranslations('control.validate')
   const unjudged = items.filter((item) => item.verdict === 'PENDING').length
 
   const nextPending = view.timeline.find((entry) => entry.state === 'PENDING')
 
   const action = ((): { label: string; call: () => void } | null => {
-    if (sweeping || !detail || view.status !== 'LIVE') return null
+    if (view.status !== 'LIVE') return null
+
+    /*
+     * §6.1's `[ Next question ]` on the sweep. **Deferring is explicitly allowed** (§6.2) — closing
+     * a round, or the game, with validations outstanding is legal — so the sweep must not be a trap.
+     * Since `attention` prefers the current question, opening the next one is exactly what leaves
+     * it, and it is the same call the advance button makes anywhere else.
+     */
+    if (sweeping || !detail) {
+      return nextPending
+        ? {
+            label: tv('done'),
+            call: () => run(() => api.openQuestion(nextPending.gameQuestionId)),
+          }
+        : null
+    }
     switch (detail.state) {
       case 'OPEN':
         return {
@@ -453,8 +510,24 @@ function QuestionActions({
         </span>
       ) : null}
 
+      {/*
+       * §5.3 — the reveal is two beats (D40). Beat one is the correct answer, and this is the desk
+       * saying which words are on the projector right now, so the master reads out the same ones.
+       */}
+      {detail && revealsAnswer(detail.state) && detail.acceptedAnswers[0] ? (
+        <span className="text-sm">
+          {t('revealed', { answer: detail.acceptedAnswers[0] })}
+        </span>
+      ) : null}
+
       {detail?.state === 'REVEALED' && detail.answerMethod === 'MULTIPLE_CHOICE' ? (
         <span className="text-muted-foreground text-sm">{t('spotlightHint')}</span>
+      ) : null}
+
+      {/* One team answered, out loud — there is nothing to spotlight, and saying so beats a row
+          of buttons that quietly do not appear (§5.3). */}
+      {detail && revealsAnswer(detail.state) && detail.answerMethod === 'BUZZER' ? (
+        <span className="text-muted-foreground text-sm">{t('buzzerNothing')}</span>
       ) : null}
 
       {action ? (

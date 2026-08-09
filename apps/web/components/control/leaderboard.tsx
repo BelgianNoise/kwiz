@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
  * This is what the desk looks like between rounds and during a break, and it is the answer to the
  * question the master is asked more than any other.
  */
-export function Leaderboard({ view, api, run }: ZoneProps) {
+export function Leaderboard({ view, api, run, gameId }: ZoneProps) {
   const ranked = [...view.teams].sort((a, b) => b.score - a.score)
 
   return (
@@ -30,7 +30,7 @@ export function Leaderboard({ view, api, run }: ZoneProps) {
         ))}
       </ol>
 
-      <AdvanceButton view={view} api={api} run={run} />
+      <AdvanceButton view={view} api={api} run={run} gameId={gameId} />
     </section>
   )
 }

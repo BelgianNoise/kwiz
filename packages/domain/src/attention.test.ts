@@ -293,6 +293,32 @@ describe('each state is reachable', () => {
    * `questionNumber` and `questionTotal` so the master desk can render "Q1 of 1" without a
    * second lookup; the pushed view had omitted all four.
    */
+  /**
+   * §10.5 stops the clocks while nobody is on turn, so the desk between turns is the same screen
+   * with the clock not running. Before slice 5 this was unrepresentable — `FINALE_TURN` needed an
+   * active turn — so a freshly opened finale question fell through to the *question* desk, which
+   * drew a proxy-answer control for a round nobody types in, and nothing could start the first turn.
+   */
+  it('is FINALE_TURN between turns too, naming who goes next', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'ROUND_OPENED', payload: { gameRoundId: 'r3' } },
+      { type: 'FINALE_CONFIGURED', payload: { secondsPerPoint: 1, penaltySeconds: 20 } },
+      { type: 'FINALISTS_SET', payload: { teamIds: [A, B] } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FIN } },
+    ])
+
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('FINALE_TURN')
+    if (result.kind !== 'FINALE_TURN') return
+    expect(result.currentTeamId).toBeNull()
+    expect(result.turnStartedAt).toBeNull()
+    // Whoever the fewest-seconds rule puts first — which is what `[Start <team>]` starts.
+    expect(result.nextTeamId).not.toBeNull()
+    // §10.2's `out 21:03` needs the instant, not just the fact.
+    expect(result.clocks.every((clock) => clock.eliminatedAt === null)).toBe(true)
+  })
+
   it("FINALE_TURN carries the prompt and the question's position in the round", () => {
     const state = run([
       ...SETUP,

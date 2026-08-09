@@ -2,6 +2,7 @@
 
 import { ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useState } from 'react'
 
 import type { ZoneProps } from '@/components/control/control-desk'
 import { digitIndex, useControlKeys } from '@/components/control/keys'
@@ -31,6 +32,7 @@ export function BoardDesk({
   tiedTeamIds,
 }: ZoneProps & { tiedTeamIds: string[] }) {
   const t = useTranslations('control.jeopardy')
+  const [peek, setPeek] = useState('')
   const board = view.board
   const tied = view.teams.filter((team) => tiedTeamIds.includes(team.id))
 
@@ -131,6 +133,10 @@ export function BoardDesk({
                     type="button"
                     disabled={tile.used || view.status !== 'LIVE'}
                     title={tile.prompt}
+                    onFocus={() => setPeek(tile.prompt)}
+                    onBlur={() => setPeek('')}
+                    onMouseEnter={() => setPeek(tile.prompt)}
+                    onMouseLeave={() => setPeek('')}
                     onClick={() => run(() => api.openQuestion(tile.id))}
                     className={cn(
                       'w-full rounded-md border px-2 py-3 text-center tabular-nums',
@@ -147,7 +153,13 @@ export function BoardDesk({
         ))}
       </div>
 
-      <p className="text-muted-foreground text-sm">{t('hint')}</p>
+      {/*
+       * §9 — *"hover **or focus** a tile to read its question"*. A `title` attribute answers hover
+       * only, and the master reaching the board by keyboard is exactly the one who cannot use a
+       * tooltip. So the prompt is echoed here, in one fixed place, for whichever tile is under the
+       * pointer or under focus — which also means it never covers the board.
+       */}
+      <p className="text-muted-foreground min-h-5 text-sm">{peek || t('hint')}</p>
     </section>
   )
 }

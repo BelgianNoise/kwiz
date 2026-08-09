@@ -5,6 +5,7 @@ import { Monitor, MonitorOff } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
+import { AddTeamButton } from '@/components/control/add-team-button'
 import type { Run, ZoneProps } from '@/components/control/control-desk'
 import { TeamDot } from '@/components/control/team-dot'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ export function RightRail({
   view,
   api,
   run,
+  gameId,
   notice,
   refusal,
 }: ZoneProps & { notice: Notice | null; refusal: ErrorCode | null }) {
@@ -39,11 +41,14 @@ export function RightRail({
 
   return (
     <aside className="flex h-full min-h-0 flex-col gap-3 p-3 text-sm">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-medium">{t('title')}</h2>
         <span className="text-muted-foreground text-xs">
           {t('devicesLine', { joined, total: view.teams.length })}
         </span>
+        {/* PRD 2 §11.2 — `[+ Add team]` at **every** status, which is why it lives in the rail
+            rather than only on §4's pre-game screen. A table walks in during round 1. */}
+        <AddTeamButton gameId={gameId} view={view} size="sm" />
       </div>
 
       <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
@@ -55,7 +60,13 @@ export function RightRail({
               <span className="text-muted-foreground text-xs">{t('noDevice')}</span>
             ) : null}
             <span className="tabular-nums">{team.score}</span>
-            <AdjustPopover team={team} api={api} run={run} />
+            <AdjustPopover
+              team={team}
+              api={api}
+              run={run}
+              // §3.2 — the popover is not dismissed by an interruption, but it does say so.
+              interrupted={view.attention.kind === 'ADJUDICATE_BUZZ'}
+            />
           </li>
         ))}
       </ul>
@@ -81,7 +92,7 @@ export function RightRail({
         {view.scoreboardShown ? t('hideScores') : t('showScores')}
       </Button>
 
-      <RecentAdjustments view={view} api={api} run={run} />
+      <RecentAdjustments view={view} api={api} run={run} gameId={gameId} />
 
       {/* Transient, and deliberately at the bottom: neither is ever the thing needing attention. */}
       {refusal ? <p className="text-destructive text-xs">{tError(refusal)}</p> : null}
@@ -121,10 +132,13 @@ function AdjustPopover({
   team,
   api,
   run,
+  interrupted,
 }: {
   team: { id: string; name: string; colour: string }
   api: ControlApi
   run: Run
+  /** Something arrived behind the popover. It stays open; it just says so (§3.2). */
+  interrupted: boolean
 }) {
   const t = useTranslations('control.scores')
   const [open, setOpen] = useState(false)
@@ -152,6 +166,15 @@ function AdjustPopover({
           <TeamDot colour={team.colour} />
           {t('adjustTitle', { team: team.name })}
         </p>
+
+        {/*
+         * §3.2 — a buzz landing while this is open does **not** dismiss it: losing half-typed
+         * input to an interruption is worse than a moment's delay. The attention zone updates
+         * behind it and this one line is how the master finds out.
+         */}
+        {interrupted ? (
+          <p className="text-destructive text-xs">{t('buzzInterrupt')}</p>
+        ) : null}
 
         <div className="grid grid-cols-3 gap-1">
           {[-10, -5, -1, 1, 5, 10].map((step) => (

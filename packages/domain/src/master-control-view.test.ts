@@ -276,6 +276,56 @@ describe('the fields PRD 3 needs beyond the current question', () => {
   })
 
   /**
+   * protocol §5.4 declares a `QuestionRef` on `VALIDATE_QUESTION` and the first implementation
+   * flattened it to the id. §6.1's screen is *"judge these answers against these accepted ones"* —
+   * without the reference it asks for a verdict with the evidence on another page, and the sweep can
+   * be about a question from an earlier round, so nothing else on the view can supply it.
+   */
+  it('carries the question being validated, not just its id (§6.1)', () => {
+    const state = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      {
+        type: 'ANSWER_SUBMITTED',
+        payload: {
+          gameQuestionId: 'q1',
+          teamId: 'a',
+          text: 'maybe',
+          fromDraft: false,
+          enteredByMaster: false,
+        },
+      },
+    ])
+
+    const attention = toMasterControlView(state, 9_000).attention
+    expect(attention.kind).toBe('VALIDATE_QUESTION')
+    if (attention.kind !== 'VALIDATE_QUESTION') return
+    expect(attention.prompt).toBe('prompt q1')
+    expect(attention.acceptedAnswers).toEqual(['yes'])
+    expect(attention.masterNotes).toBeNull()
+  })
+
+  /**
+   * PRD 2 §11.2 — `[+ Add team]` is required from master control at every status, and the dialog's
+   * whole justification is that these numbers are computed rather than worked out in a noisy room.
+   */
+  it('carries what a late team would have missed, and nothing before the game starts', () => {
+    const setup = fold(sheet, [TEAM_A, TEAM_B])
+    expect(toMasterControlView(setup, 9_000).missed).toBeNull()
+
+    const played = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'q1' } },
+    ])
+    const missed = toMasterControlView(played, 9_000).missed
+    expect(missed?.questions).toBe(1)
+    expect(missed?.points).toBe(10)
+    // Suggested, never imposed: half of what they missed, rounded down (§11.2).
+    expect(missed?.suggestedStartingScore).toBe(5)
+  })
+
+  /**
    * §12's indicator is a fact about sockets, so it is passed in. Zero — the default — is what a
    * caller that knows nothing produces, which is why the indicator only ever appears above one.
    */

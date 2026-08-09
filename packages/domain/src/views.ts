@@ -17,6 +17,7 @@ import {
   type Standing,
   type Timer,
 } from './derive'
+import { missedSoFar, type MissedSoFar } from './late-team'
 import { questionFindings, type PreflightCode } from './preflight'
 import { revealsCorrectAnswer } from './question-state'
 import {
@@ -814,6 +815,8 @@ export type Attention =
         secondsAtTurnStart: number
         onTurn: boolean
         eliminated: boolean
+        /** §10.2's *"out 21:03"* — a wall-clock instant, so the master can say when (§8.2). */
+        eliminatedAt: number | null
         passedThisQuestion: boolean
       }[]
       /** Nobody left to pass to → offer `[Reveal remaining]`. */
@@ -858,6 +861,15 @@ export type Attention =
   | {
       kind: 'VALIDATE_QUESTION'
       gameQuestionId: string
+      /**
+       * protocol §5.4 declares a `QuestionRef` here and the first implementation flattened it to the
+       * id alone — which left §6.1's screen **asking for a verdict with the evidence on another
+       * page**. The sweep can be about a question from an earlier round, so nothing else on the view
+       * can supply these: `question` is the current one, and the timeline is the current round.
+       */
+      prompt: string
+      acceptedAnswers: string[]
+      masterNotes: string | null
       items: ValidationItem[]
       remainingQuestions: number
     }
@@ -920,6 +932,15 @@ export interface MasterControlView {
   controlScreens: number
   /** PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends. */
   finaleRanking: string[][] | null
+  /**
+   * What a team joining now would have missed (PRD 2 §11.2, O5).
+   *
+   * `[+ Add team]` is required at **every** status from master control as well as the config
+   * surface, and the dialog's whole justification is that these numbers are computed rather than
+   * worked out in a noisy room. Five numbers, so it costs nothing to carry. `null` in `SETUP`,
+   * where nothing has been missed yet and the dialog drops the section entirely.
+   */
+  missed: MissedSoFar | null
   /** **Counts only** — never the list, so the bounded-view rule holds (§1.1). */
   pendingValidationCount: number
 }
@@ -978,6 +999,7 @@ export function toMasterControlView(
     scoreboardShown: state.scoreboardShown,
     controlScreens,
     finaleRanking: state.finale.ranking,
+    missed: state.status === 'SETUP' ? null : missedSoFar(state),
     pendingValidationCount: pendingValidationCount(state),
   }
 
@@ -1236,6 +1258,7 @@ export function attention(state: GameState, now: number): Attention {
             secondsAtTurnStart: finaleRemainingSeconds(state, teamId, at),
             onTurn: turn?.teamId === teamId,
             eliminated: (team?.eliminatedAt ?? null) !== null,
+            eliminatedAt: team?.eliminatedAt ?? null,
             passedThisQuestion: passed.has(teamId),
           }
         }),
@@ -1314,11 +1337,14 @@ export function attention(state: GameState, now: number): Attention {
   if (validating) {
     return {
       kind: 'VALIDATE_QUESTION',
-      gameQuestionId: validating.id,
+      gameQuestionId: validating.question.id,
+      prompt: validating.question.prompt,
+      acceptedAnswers: validating.question.acceptedAnswers,
+      masterNotes: validating.question.masterNotes,
       // Grouped by question, all teams together: judging one answer in isolation is what makes
       // an inconsistent pair invisible (PRD 3 §6.1).
       items: validationItems(state, validating.play),
-      remainingQuestions: remainingUnvalidatedQuestions(state, validating.id),
+      remainingQuestions: remainingUnvalidatedQuestions(state, validating.question.id),
     }
   }
 
@@ -1351,7 +1377,7 @@ function questionNeedingValidation(
   state: GameState,
   currentId: string | null,
   current: QuestionPlayState | undefined,
-): { id: string; play: QuestionPlayState } | undefined {
+): { question: QuestionContent; play: QuestionPlayState } | undefined {
   if (
     currentId &&
     current &&
@@ -1359,7 +1385,8 @@ function questionNeedingValidation(
     current.state !== 'SKIPPED' &&
     hasPendingAnswer(current)
   ) {
-    return { id: currentId, play: current }
+    const question = findQuestion(state.content, currentId)
+    if (question) return { question, play: current }
   }
 
   if (current && (current.state === 'OPEN' || current.state === 'LOCKED'))
@@ -1369,7 +1396,7 @@ function questionNeedingValidation(
   for (const question of allQuestions(state.content)) {
     const play = state.questions.get(question.id)
     if (!play || play.state === 'PENDING' || play.state === 'SKIPPED') continue
-    if (hasPendingAnswer(play)) return { id: question.id, play }
+    if (hasPendingAnswer(play)) return { question, play }
   }
   return undefined
 }

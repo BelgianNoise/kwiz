@@ -121,9 +121,24 @@ export function BuzzerState({ view, api, run }: ZoneProps) {
 
   const lockedOut = detail.lockedOutTeamIds ?? []
   const canStillBuzz = view.teams.length - lockedOut.length
+  // The team whose denial reopened the buzzers — the last one adjudicated wrong.
+  const denied = [...detail.buzzes].reverse().find((buzz) => buzz.outcome === 'DENIED')
+  const deniedTeam = view.teams.find((team) => team.id === denied?.teamId)
 
   return (
     <section className="space-y-2">
+      {/*
+       * §7.1 — **the transition is loud**, in colour and in words, because the master must know the
+       * room is live again without reading carefully. It is the one moment on this surface where
+       * shouting is the correct design.
+       */}
+      {deniedTeam && canStillBuzz > 0 ? (
+        <p className="text-destructive flex items-center gap-2 text-lg font-medium">
+          <X aria-hidden className="size-5" />
+          {deniedTeam.name} — {t('wrong').toLowerCase()}. {t('liveAgain')}
+        </p>
+      ) : null}
+
       <p className="flex items-center gap-3 text-sm">
         <span>{canStillBuzz > 0 ? t('waiting') : t('nobodyGotIt')}</span>
         <span className="text-muted-foreground">

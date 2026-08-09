@@ -15,7 +15,13 @@ import { cn } from '@/lib/utils'
 type Scoring = Extract<Attention, { kind: 'SCORE_DO' }>
 
 /** PRD 3 §8 — a physical challenge just finished and the teams are watching for a verdict. */
-export function DoDesk({ view, api, run, scoring }: ZoneProps & { scoring: Scoring }) {
+export function DoDesk({
+  view,
+  api,
+  run,
+  gameId,
+  scoring,
+}: ZoneProps & { scoring: Scoring }) {
   const t = useTranslations('control.question')
 
   return (
@@ -34,9 +40,15 @@ export function DoDesk({ view, api, run, scoring }: ZoneProps & { scoring: Scori
       </header>
 
       {scoring.scoringMode === 'WINNER_TAKES_ALL' ? (
-        <WinnerTakesAll view={view} api={api} run={run} scoring={scoring} />
+        <WinnerTakesAll
+          view={view}
+          api={api}
+          run={run}
+          gameId={gameId}
+          scoring={scoring}
+        />
       ) : (
-        <PerTeamScore view={view} api={api} run={run} scoring={scoring} />
+        <PerTeamScore view={view} api={api} run={run} gameId={gameId} scoring={scoring} />
       )}
     </section>
   )
@@ -186,12 +198,22 @@ function PerTeamScore({ api, run, scoring }: ZoneProps & { scoring: Scoring }) {
               className="w-20 text-right tabular-nums"
               inputMode="numeric"
               value={scores[team.teamId] ?? ''}
-              onChange={(event) =>
+              /*
+               * §8.2 — **clamped on entry, not rejected on save.** A master typing 99 into a
+               * 20-point question sees it become 20 while they are still looking at the row, rather
+               * than discovering it after pressing save. An empty box stays empty: that is D24's
+               * distinction between "not got to yet" and "scored zero".
+               */
+              onChange={(event) => {
+                const typed = event.target.value
                 setScores((current) => ({
                   ...current,
-                  [team.teamId]: event.target.value,
+                  [team.teamId]:
+                    typed.trim() === ''
+                      ? ''
+                      : String(clamp(Number(typed), scoring.points)),
                 }))
-              }
+              }}
             />
           </li>
         ))}

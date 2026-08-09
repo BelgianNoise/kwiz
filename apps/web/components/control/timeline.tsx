@@ -69,7 +69,14 @@ export function Timeline({ view, api, run }: ZoneProps) {
                 type="button"
                 aria-current={isCurrent ? 'step' : undefined}
                 onClick={() => setCursor(entry.gameQuestionId)}
+                /*
+                 * The markers below are icons, so the state has to be said in words somewhere or
+                 * the whole strip reads as "Q1 Q2 Q3" to anything that is not a pair of eyes.
+                 */
                 title={entry.prompt}
+                aria-label={`${entry.prompt} — ${t(`state.${entry.state}`)}${
+                  entry.failsPreflight ? ` — ${t('preflight')}` : ''
+                }`}
                 className={cn(
                   'flex items-center gap-1 rounded-md border px-2 py-1 whitespace-nowrap',
                   isFocused ? 'border-foreground' : 'border-transparent',
@@ -82,12 +89,9 @@ export function Timeline({ view, api, run }: ZoneProps) {
                 {entry.state === 'SKIPPED' ? (
                   <SkipForward aria-hidden className="size-3" />
                 ) : null}
+                {/* PRD 2 §10's ⚠ — the master already chose to play it anyway. */}
                 {entry.failsPreflight ? (
-                  <AlertTriangle
-                    aria-hidden
-                    className="text-destructive size-3"
-                    /* PRD 2 §10's ⚠ — the master already chose to play it anyway. */
-                  />
+                  <AlertTriangle aria-hidden className="text-destructive size-3" />
                 ) : null}
               </button>
             </li>

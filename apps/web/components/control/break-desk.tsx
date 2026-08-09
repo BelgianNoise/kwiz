@@ -29,7 +29,7 @@ import { useCountdown } from '@/lib/client/use-countdown'
  * The leaderboard sits underneath because that is what the master wants to look at anyway, and the
  * break is when they are most likely to clear outstanding validations (§6).
  */
-export function BreakDesk({ view, api, run }: ZoneProps) {
+export function BreakDesk({ view, api, run, gameId }: ZoneProps) {
   const t = useTranslations('control.break')
   const remaining = useCountdown(view.break?.resumesAt ?? null)
 
@@ -49,7 +49,7 @@ export function BreakDesk({ view, api, run }: ZoneProps) {
         {t('resume')}
       </Button>
 
-      <Leaderboard view={view} api={api} run={run} />
+      <Leaderboard view={view} api={api} run={run} gameId={gameId} />
     </section>
   )
 }

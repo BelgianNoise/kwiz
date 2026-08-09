@@ -111,13 +111,23 @@ export function ControlHeader({
               {t('skipQuestion')}
             </DropdownMenuItem>
 
-            {/* §11.2 — refused over an open question, so late auto-submits cannot trickle in
-                from the phones still awake while the room is at the bar. */}
+            {/*
+             * §11.2 — refused over an open question, so late auto-submits cannot trickle in from
+             * the phones still awake while the room is at the bar. **With the reason shown**: a
+             * greyed item with no explanation is the master wondering whether the app is broken.
+             */}
             <DropdownMenuItem
               disabled={!live || questionOpen}
               onSelect={() => setBreakOpen(true)}
             >
-              {view.break ? tBreak('extend') : tBreak('start')}
+              <span className="flex flex-col items-start">
+                {view.break ? tBreak('extend') : tBreak('start')}
+                {questionOpen ? (
+                  <span className="text-muted-foreground text-xs">
+                    {tBreak('blocked')}
+                  </span>
+                ) : null}
+              </span>
             </DropdownMenuItem>
 
             <DropdownMenuItem
