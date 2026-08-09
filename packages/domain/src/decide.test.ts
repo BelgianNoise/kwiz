@@ -280,6 +280,29 @@ describe('join', () => {
       ).error,
     ).toBe('UNKNOWN_DEVICE')
   })
+
+  // P2 #11 — SWITCH_TEAM had no status guard at all, unlike JOIN just above.
+  it('refuses to switch teams on a finished game, mirroring JOIN', () => {
+    const game = driver([
+      ...LIVE,
+      {
+        type: 'DEVICE_JOINED',
+        payload: { deviceId: 'd1', teamId: A, deviceToken: 't1' },
+      },
+      { type: 'GAME_FINISHED', payload: {} },
+    ])
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SWITCH_TEAM',
+          deviceId: 'd1',
+          toTeamId: B,
+          maxDevicesPerTeam: 3,
+        }),
+      ).error,
+    ).toBe('GAME_NOT_JOINABLE')
+  })
 })
 
 // ─── submission finality (D43, protocol §7.3) ───
@@ -736,6 +759,60 @@ describe('buzz', () => {
   })
 })
 
+// ─── reviewing an answer (D42, D40) ───
+
+describe('reviewing an answer', () => {
+  const answered = (): ReturnType<typeof driver> => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+    game.act({ type: 'SUBMIT_ANSWER', gameQuestionId: FREE_Q, teamId: A, text: 'paris' })
+    return game
+  }
+
+  /*
+   * P2 #9 — the one deliberately unguarded action here: PRD 2 §13.1's post-game review grid
+   * must keep working after the game finishes.
+   */
+  it('validates an answer even after the game finishes (PRD 2 §13.1)', () => {
+    const game = answered()
+    accepted(game.act({ type: 'FINISH_GAME' }))
+
+    expect(
+      accepted(
+        game.act({
+          type: 'VALIDATE_ANSWER',
+          gameQuestionId: FREE_Q,
+          teamId: A,
+          accepted: true,
+        }),
+      ).events,
+    ).toEqual([
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: FREE_Q, teamId: A, accepted: true },
+      },
+    ])
+  })
+
+  // P2 #9 — unlike VALIDATE_ANSWER just above, spotlighting has no post-game life of its own
+  // (PRD 3 §5.3) and must refuse once the game is no longer live.
+  it('refuses to spotlight an answer once the game is no longer live', () => {
+    const game = answered()
+    accepted(game.act({ type: 'FINISH_GAME' }))
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SPOTLIGHT_ANSWER',
+          gameQuestionId: FREE_Q,
+          teamId: A,
+          spotlit: true,
+        }),
+      ).error,
+    ).toBe('GAME_NOT_LIVE')
+  })
+})
+
 // ─── DO scoring (D23, D24) ───
 
 describe('DO scoring', () => {
@@ -809,6 +886,17 @@ describe('pacing', () => {
     expect(accepted(game.act({ type: 'END_BREAK' })).events).toHaveLength(1)
     // A countdown reaching zero changes nothing server-side (D8), so a second end is a no-op.
     expect(accepted(game.act({ type: 'END_BREAK' })).events).toEqual([])
+  })
+
+  // P2 #9 — symmetric with START_BREAK's own guard: a stray END_BREAK against a game that
+  // ended mid-break must refuse, not append a BREAK_ENDED after the fact.
+  it('refuses to end a break once the game is no longer live', () => {
+    const game = driver([
+      ...LIVE,
+      { type: 'BREAK_STARTED', payload: { durationMs: 60_000 } },
+      { type: 'GAME_FINISHED', payload: {} },
+    ])
+    expect(refusal(game.act({ type: 'END_BREAK' })).error).toBe('GAME_NOT_LIVE')
   })
 
   it('appends PICKER_ASSIGNED even when it only confirms the rule (D30)', () => {

@@ -96,6 +96,11 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'SWITCH_TEAM': {
+      // Mirrors `JOIN`'s own guard just above, not `requireLive` — a device that joined during
+      // `SETUP` must be able to switch teams before the game goes live too (P2 #11).
+      if (state.status === 'FINISHED' || state.status === 'ABANDONED') {
+        return deny('GAME_NOT_JOINABLE', `game is ${state.status}`)
+      }
       const fromTeamId = state.devices.get(command.deviceId)
       if (fromTeamId === undefined) {
         return deny('UNKNOWN_DEVICE', `device ${command.deviceId} is not in this game`)
@@ -393,6 +398,17 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'REVEAL_QUESTION': {
+      /*
+       * P2 #12 — **flagged, not resolved.** This is one universal transition every question
+       * type shares (`question-state.ts`), and nothing here or in `REVEAL_KEYWORDS` (below)
+       * ties the two together for `DSMTW_FINALE` — a finale question can reach `REVEALED`
+       * without its keywords ever having been revealed, or vice versa. PRD 3 §10.5's own flow
+       * never mentions `REVEAL_QUESTION` at all for a finale round — only `[Reveal remaining]`
+       * → `KEYWORDS_REVEALED` → `[Next question]` — which reads as `REVEAL_QUESTION` simply not
+       * applying to a finale question, but nothing in the spec says so explicitly, and inventing
+       * a refusal the documents don't state would be the wrong way to resolve that silence
+       * (CLAUDE.md §10's own rule). Left as-is; genuinely needs a decision, not a guess.
+       */
       const live = requireLive(state)
       if (live) return live
       const found = locate(state, command.gameQuestionId)
@@ -480,6 +496,12 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'VALIDATE_ANSWER': {
+      /*
+       * No `requireLive`, deliberately — the one action this file has that must keep working
+       * after `FINISHED`. PRD 2 §13.1's post-game review grid is explicit: "clicking any cell
+       * toggles the verdict, appending `ANSWER_VALIDATED`" on "two views on a finished (or live)
+       * game." A guard here would break the one screen this whole feature promises.
+       */
       const found = locate(state, command.gameQuestionId)
       if (!found) return deny('QUESTION_NOT_OPEN', 'unknown question')
       const answer = found.play.answers.get(command.teamId)
@@ -504,6 +526,14 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'SPOTLIGHT_ANSWER': {
+      /*
+       * Unlike `VALIDATE_ANSWER` just above, this one has no post-game life of its own — PRD 3
+       * §5.3 frames it entirely as the live reveal's curation ("spotlights clear when the next
+       * question opens"), and §13.1's review grid never mentions re-spotlighting. A real gap,
+       * not a documented omission.
+       */
+      const live = requireLive(state)
+      if (live) return live
       const found = locate(state, command.gameQuestionId)
       if (!found) return deny('QUESTION_NOT_OPEN', 'unknown question')
       const answer = found.play.answers.get(command.teamId)
@@ -658,9 +688,16 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       ])
     }
 
-    case 'END_BREAK':
+    case 'END_BREAK': {
+      // Symmetric with `START_BREAK`'s own guard, above — a break can only ever have started on
+      // a `LIVE` game, but `FINISH_GAME`/`ABANDON_GAME` don't clear it (they are the emergency
+      // stop, not a lifecycle guard — see their own comment), so a stray `END_BREAK` against a
+      // game that ended mid-break must refuse rather than append a `BREAK_ENDED` after the fact.
+      const live = requireLive(state)
+      if (live) return live
       if (!state.break) return NOTHING_TO_DO
       return allow([{ type: 'BREAK_ENDED', payload: {} }])
+    }
 
     case 'ASSIGN_PICKER': {
       const live = requireLive(state)

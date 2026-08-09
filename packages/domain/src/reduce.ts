@@ -320,6 +320,22 @@ export function applyEvent(
       return
     }
 
+    /*
+     * P2 #14 — **left as-is, deliberately, after checking against `attention.test.ts`'s
+     * "reflects a partial `PER_TEAM_SCORE` save" test.** `DO_WINNERS_SET`'s unconditional
+     * every-team resolve (above) does not generalise here: PRD 3 §8.2's desk saves
+     * progressively, one or a few teams at a time ("1 of 4 scored" is real, server-tracked
+     * state), and a team not yet in `event.payload.scores` is genuinely *not yet judged* —
+     * zero-filling it here would collapse that into "scored 0," which is a different fact.
+     *
+     * D24's "blank scores 0" is real, but it applies once the master is *done*, not to every
+     * incremental save — and nothing today marks a `PER_TEAM_SCORE` question "done" the way
+     * `DO_WINNERS_SET` resolves everyone in one commit. The review's "depends on the UI always
+     * sending every team" is accurate; the fix belongs wherever "done" is decided (`SCORE_QUESTION`
+     * or `REVEAL_QUESTION` against a still-incomplete `PER_TEAM_SCORE` question is the candidate
+     * moment), which is a design decision for whoever builds that desk, not a change to make here
+     * without knowing what that moment is.
+     */
     case 'DO_SCORES_SET': {
       const play = state.questions.get(event.payload.gameQuestionId)
       const question = findQuestion(state.content, event.payload.gameQuestionId)
