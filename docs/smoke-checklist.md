@@ -179,3 +179,50 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       `HERO` layout, and the third shrinks — but **never below 4% of the frame height**, because
       below that the back tables cannot read it and it is a content problem for pre-flight, not a
       rendering one. A board tile must show its **ladder** value, not the question row's own (O3).
+
+### After slice 5 — master control
+
+- [ ] **The four regions never move.** Walk a whole round — setup, question, lock, reveal, break,
+      board, finale — and watch the header, the right rail and the timeline stay exactly where they
+      are. A layout that reflows makes the master re-locate the button they need, every time (§2).
+- [ ] **A freshly started game offers a way to start.** `[Start the quiz]` → `[Start the next
+      round]` → `[Open the next question]`, with no dead end between them. This was broken for the
+      whole of slice 5's build and no test caught it: `attention` was `NONE`, and `NONE` looks like
+      a perfectly good leaderboard.
+- [ ] Open a question and let the timer run out. It says `Time up` and **nothing else happens** —
+      `[Close answers]` is identical before and after, because only the master locks (D8).
+- [ ] Judge an answer inline while the question is still open, then lock. The verdict is still
+      there and the row did not move (§5.1, D42).
+- [ ] `Y` and `N` act on the **topmost undecided row**, and `Enter` fires whatever the primary
+      button says. Then click into the adjustment popover's reason field and type `y` — it must
+      appear as the letter `y`, not accept an answer.
+- [ ] **Defer a validation and move on.** Open the next question, finish it, and confirm the desk
+      comes back to the deferred one (§6.2) — but *not* while a question is open, where it would
+      pull the master backwards mid-question.
+- [ ] Reveal, then `[Show on screen]` one answer. The button says `On screen` afterwards, and
+      pressing it again takes it back off (§5.3).
+- [ ] Two devices on one team, one buzzer question: adjudicate the first buzz as **wrong** and
+      confirm buzzers reopen, the denied team is listed as locked out, and `[Reopen for everyone]`
+      clears it (D35).
+- [ ] Score a `DO` question both ways: winner-takes-all with **two** teams selected (the button
+      must state the payout), and per-team scores where an empty box is visibly not a zero (D24).
+- [ ] Adjust a score with a reason, watch the banner line appear in the rail, then `[Undo]`. The
+      total reconciles and the row stays listed, struck through (D41).
+- [ ] Start a break over a locked question, watch the `m:ss` countdown run to zero, and confirm
+      **nothing resumes by itself**. `[Extend break]` adds time; `[Resume]` is the only way back
+      (§11.2, D8). Then try to start one over an *open* question — the menu item is disabled.
+- [ ] **Kill the server mid-question and restart it.** The desk shows `Reconnecting…`, keeps the
+      last view on screen, and comes back to the same state with **no reload and no click** (D4).
+- [ ] Open a second `/control/<gameId>` tab. Both desks show `1 other control screen` within a
+      few seconds, and closing one clears it on the other (§12).
+- [ ] The finale, end to end: pick finalists and watch the penalty line and the suggested question
+      count move as you deselect teams; start a turn; mark a keyword with `1`; un-mark it with
+      `Shift`+`1` and confirm **the seconds come back to every other team** (§10.4); pass with
+      `Space`. Then let a clock run out and confirm the team goes out on its own.
+- [ ] The finale's ranking has **two tabs** — survival, and points before the finale — and they
+      disagree, which is the whole point of showing both (D51).
+- [ ] Nothing irreversible is bound to a key (§13). Press every key on the map during a live
+      question and confirm none of them ends the game, abandons it, skips a question or submits on
+      a team's behalf.
+- [ ] Switch to `/nl` and walk the same screens. Dutch runs 20–30% longer; the header and the
+      finale's clock strip are where that shows first.

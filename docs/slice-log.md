@@ -12,6 +12,133 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 5 — Master control
+
+**Status:** complete · `pnpm check` green · **617 tests** · lint silent · `pnpm build` clean, no
+warnings · the whole desk driven by hand against a real game, including a **server restart
+mid-question**
+
+### What was built
+
+PRD 3, end to end: the four-region frame, all eight `attention` states, the question desk with inline
+validation and master-side media playback, the round-end sweep, buzzer adjudication and the deny
+loop, both `DO` modes, the Jeopardy board with its picker override and tie-break, breaks, score
+adjustment with revocation, the finale desk, and §13's keyboard map.
+
+Underneath it: `useLiveView` — **the first client-side consumer of slice 3's streams** — and
+`control(gameId)` in `lib/client/api.ts`, which is protocol §7.2's master half as one object.
+
+### The domain did not carry enough for the surface, in eleven places
+
+Slice 2 built `MasterControlView` against protocol §5.4 faithfully. That shape turns out not to
+express PRD 3's desk, and **none of the gaps would have failed a test** — the view was internally
+consistent, it just could not answer questions the surface has to ask. All eleven are now in
+protocol §5.4/§5.5 as well as in the code:
+
+`status` · `round.type` · `nextRoundId` · the §2.1 `timeline` · §11's recent `adjustments` ·
+`break` · `scoreboardShown` · `controlScreens` · `finaleRanking` · `spotlit` on `ValidationItem` ·
+`failsPreflight` on the question detail and every timeline entry.
+
+Two are worth singling out:
+
+- **`controlScreens` is the only field on any pushed view that is not a function of `GameState`.**
+  §12's *"2 control screens connected"* is a fact about sockets: not in the log, not replayable. It
+  is counted by the transport and passed **into** the filter, and `sse.ts` now re-pushes to the other
+  subscribers when one connects or leaves — without that the count only changed when the game did,
+  so a second desk could sit there for an hour saying it was alone.
+- **`failsPreflight` is re-derived, not remembered.** Nothing records the verdict `[Play anyway]` was
+  pressed against, so the `⚠` comes from `questionFindings` — the same function the authoring row's
+  `✓`/`⚠` uses, which is what stops the two disagreeing. The one check it cannot repeat is
+  `ATTACHMENT_MISSING`: re-hashing is filesystem work and `packages/domain` has no filesystem.
+
+### Five real bugs in `attention()`, four of them stated in a PRD and simply not implemented
+
+`attention` is the whole surface (G4), so a wrong answer here is not a cosmetic bug — it is the
+master being told the wrong thing to do.
+
+1. **A break did not suspend it.** PRD 3 §11.2 says `attention` *"stays `NONE`"* during an interval;
+   a break with questions left read as `ADVANCE`, a call to action aimed at a room that is at the
+   bar. It now outranks `VALIDATE_QUESTION` and `ADVANCE` and nothing above them — those five are
+   states where a room is genuinely waiting.
+2. **`ADVANCE` could not say `LOCK`.** While a question was open — the most common state in a game —
+   the suggestion was `NEXT_QUESTION`, pointing the master *past* the question the room is answering.
+3. **The round-end sweep did not exist.** §6.2 and D6 both promise it. `attention` looked only at the
+   *current* question, so an answer deferred in question 1 became unreachable the moment question 2
+   opened, while `pendingValidationCount` went on counting it with nothing that could clear it.
+4. **A live game with no round open had no way to open one** (found in the browser, not by a test).
+   `advanceSuggestion` returned `null`, so `attention` was `NONE` — and `NONE` renders as a
+   perfectly reasonable leaderboard. Every game was stuck the second it started.
+5. **A finale question with no turn running had no way to start one.** `FINALE_TURN` required an
+   active turn, so a freshly opened finale question fell through to the *question* desk, which drew a
+   proxy-answer control for a round nobody types in. `FINALE_TURN` now also covers the gap between
+   turns — §10.5 says clocks stop while nobody is on turn, so it is the same screen with the clock
+   not yet running — and `nextTeamId` is then who `[Start <team>]` starts.
+
+**Four of those five were found by driving the surface, not by reading.** The tests were green
+throughout; so was the spec.
+
+### Spec deviations
+
+None knowingly. Everything above is an *addition* to protocol §5.4/§5.5, written into the spec in
+this change (agent-workflow §3.3) rather than left as a divergence.
+
+One judgement call worth flagging: **PRD 3 §10.1's example penalty arithmetic does not reproduce.**
+*"Penalty per keyword: 20s → up to 320s off a 490s pool"* — with 4 finalists, 5 keywords and a 20s
+penalty, the seconds a question can take out of the pool is `20 × 5 × (4−1) = 300`, not 320. The
+formula implemented is that one, matching `suggestFinaleQuestions`'s inner term (conventions §8.1) so
+the picker and the suggestion cannot disagree. If 320 was arithmetic rather than an illustration, the
+PRD needs a correction I could not derive.
+
+### Raised, not resolved
+
+- **`EventSource` cannot set headers, and `/api/live/:gameId/play` requires `X-Kwiz-Device`.** Slice 7
+  will hit a wall here: no browser can send that header on a stream. The fix is a query parameter or
+  a cookie, and it is a protocol §2.1/§7.1 decision, not an implementation detail — worth settling
+  before the player surface starts.
+- **The timeline shows a past question's prompt and state, never its answers.** Those are
+  O(questions × teams) and belong to PRD 2 §13's review grid over REST (§1.1) — which is slice 8's.
+  So §2.1's *"a read-only jump to see what happened"* is currently half-built: you can see *which*
+  question and *what* happened to it, not who answered what.
+- **`adjustments` is capped at the most recent eight.** Enough for `[Undo]`, which is what §11 asks
+  for; the full audit is §13.3's and needs a REST read.
+- **Nothing exercises two live games at once from this surface.** Cross-game isolation is covered at
+  the transport level (slice 3) and belongs to slice 9's scenario 22 end to end.
+
+### Deliberately left out
+
+- **`/screen/:gameId`** — the link in the header points at PRD 4's route, which slice 6 builds. It is
+  a link to a 404 today, deliberately: a stub main screen would be exactly what agent-workflow §3.1
+  forbids.
+- **Post-game review** stays slice 8's, so §9.2's *"where instead"* column points at a screen that
+  does not exist yet.
+
+### What the next agent would otherwise rediscover
+
+- **`useLiveView` is the whole client half of the transport** (`lib/client/use-live-view.ts`).
+  Slices 6 and 7 should use it rather than opening their own `EventSource`; the only thing in it that
+  is not obvious is the `FAILED` path, which **fetches the same URL once** to read the typed body —
+  `EventSource` reports "it broke" and never why, and D14's 503 has to be distinguishable from a 404.
+- **`components/admin/live-teams.tsx` still opens its own stream** and narrows with zod. It predates
+  the hook and is deliberately different: it merges into server-rendered state and consumes four
+  fields, where the desk consumes a whole `MasterControlView` that has no schema to narrow against
+  without restating it. Do not "unify" them without deciding which of those two things you want.
+- **The keyboard map is one file** (`components/control/keys.tsx`). §13 also lists what must *never*
+  be bound — ending, abandoning, skipping, proxy-submitting — and that absence is only checkable if
+  there is one list. `digitIndex` reads `event.code`, not `event.key`, because §10.3 binds
+  `Shift`+`1`–`5` and with Shift held `key` is `!` on a US layout and something else on a Belgian one.
+- **Clocks tick on the client, never on the server** (`lib/client/use-countdown.ts`, D52). Both hooks
+  read the *local* clock, which is the same machine for control and a possible skew on a phone — no
+  game fact depends on it, since the deadline is advisory (D8).
+- **Actions are fire-and-forget through one `run()`** in `control-desk.tsx`. Awaiting one is only ever
+  waiting for the refusal; the resulting view arrives on the stream (protocol §7).
+- **`ControlKeys` must wrap anything that binds a key**, and a zone returns `true` to say it consumed
+  one. The most recently mounted zone is asked first, so the attention zone beats the frame.
+- **A `409` in the console during a smoke run is usually correct** — it is a typed refusal
+  (`QUESTION_STILL_OPEN` on a break over an open question, most often), not a bug.
+- **`minuteSeconds` lives in `break-desk.tsx`** and is used by the media controls too. `m:ss` for
+  breaks and media, whole seconds for timers and finale clocks — conventions §8.2, and the two are
+  not interchangeable.
+
 ## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
 
 **Status:** complete · `pnpm check` green · **512 tests** · lint silent · every screen driven by
