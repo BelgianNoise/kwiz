@@ -1,0 +1,211 @@
+'use client'
+
+import type { ActionResult, ErrorCode, MasterControlView, Notice } from '@kwiz/domain'
+import { SCORE_BANNER_MS } from '@kwiz/domain'
+import { useTranslations } from 'next-intl'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { BoardDesk } from '@/components/control/board-desk'
+import { BreakDesk } from '@/components/control/break-desk'
+import { BuzzDesk } from '@/components/control/buzz-desk'
+import { DoDesk } from '@/components/control/do-desk'
+import {
+  FinaleDesk,
+  FinaleRanking,
+  FinalistPicker,
+} from '@/components/control/finale-desk'
+import { ControlHeader } from '@/components/control/header'
+import { ControlKeys, useControlKeys } from '@/components/control/keys'
+import { Leaderboard } from '@/components/control/leaderboard'
+import { QuestionDesk } from '@/components/control/question-desk'
+import { RightRail } from '@/components/control/right-rail'
+import { SetupDesk } from '@/components/control/setup-desk'
+import { Timeline } from '@/components/control/timeline'
+import { control, type ControlApi } from '@/lib/client/api'
+import { useLiveView } from '@/lib/client/use-live-view'
+
+/**
+ * PRD 3 — the desk.
+ *
+ * **One frame, four regions, stable for the whole game** (§2). Only the attention zone's contents
+ * change; the header, the right rail and the timeline never move. A layout that reflows as the game
+ * progresses makes the master re-locate the button they need, every single time.
+ *
+ * The client renders `attention` and **never derives it** (§3). Every branch below is a `kind` the
+ * server chose, in the priority order PRD 3 §3.1 sets out — so "what needs me now?" is answered
+ * before the view is even sent, which is the whole of PRD 1 G4.
+ */
+export function ControlDesk({ gameId, quizName }: { gameId: string; quizName: string }) {
+  const t = useTranslations('control')
+  // conventions §6.1 — `errors.<CODE>` is the one place a typed refusal becomes copy (D11).
+  const tError = useTranslations('errors')
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [refusal, setRefusal] = useState<ErrorCode | null>(null)
+
+  const onNotice = useCallback((next: Notice) => setNotice(next), [])
+  const { view, status, error } = useLiveView<MasterControlView>(
+    `/api/live/${gameId}/control`,
+    onNotice,
+  )
+
+  const api = useMemo(() => control(gameId), [gameId])
+
+  /**
+   * Every action goes through here, so a typed refusal has exactly one place to land. Actions are
+   * fire-and-forget by design: the resulting view arrives on the stream, never as a response
+   * (protocol §7), so awaiting one of these is only ever waiting for the *no*.
+   */
+  const run = useCallback<Run>((call) => {
+    void call().then((result) => setRefusal(result.ok ? null : result.error))
+  }, [])
+
+  // A notice is a moment, not a state (§2.3) — it fades rather than accumulating.
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = setTimeout(() => setNotice(null), SCORE_BANNER_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  useEffect(() => {
+    if (!refusal) return undefined
+    const timer = setTimeout(() => setRefusal(null), SCORE_BANNER_MS)
+    return () => clearTimeout(timer)
+  }, [refusal])
+
+  if (status === 'FAILED') {
+    return (
+      <main className="grid min-h-dvh place-items-center p-8">
+        <p className="text-destructive max-w-prose text-center text-lg">
+          {error ? tError(error) : t('frame.reconnecting')}
+        </p>
+      </main>
+    )
+  }
+
+  if (!view) {
+    return (
+      <main className="text-muted-foreground grid min-h-dvh place-items-center p-8">
+        {t('frame.connecting')}
+      </main>
+    )
+  }
+
+  return (
+    <ControlKeys>
+      <div className="grid h-dvh grid-cols-[minmax(0,1fr)_20rem] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+        <ControlHeader
+          view={view}
+          quizName={quizName}
+          gameId={gameId}
+          api={api}
+          run={run}
+          reconnecting={status === 'RECONNECTING'}
+        />
+
+        {/* The one region that changes. Everything else is fixed for the whole game (§2). */}
+        <main className="col-start-1 row-start-2 min-h-0 overflow-y-auto p-6">
+          <AttentionZone view={view} api={api} run={run} />
+        </main>
+
+        <div className="col-start-1 row-start-3 border-t">
+          <Timeline view={view} api={api} run={run} />
+        </div>
+
+        <div className="col-start-2 row-span-3 row-start-1 border-l">
+          <RightRail view={view} api={api} run={run} notice={notice} refusal={refusal} />
+        </div>
+      </div>
+    </ControlKeys>
+  )
+}
+
+/** What every zone needs: the typed client, and the one place a refusal lands. */
+export type Run = (call: () => Promise<ActionResult>) => void
+
+export interface ZoneProps {
+  view: MasterControlView
+  api: ControlApi
+  run: Run
+}
+
+/**
+ * §3.1's priority order, rendered.
+ *
+ * The order of these branches is not free: it **is** the priority table, and the server has already
+ * chosen exactly one `kind`. The two checks above the switch are states the union cannot express —
+ * a game that has not started, and one that is over.
+ */
+function AttentionZone({ view, api, run }: ZoneProps) {
+  if (view.status === 'SETUP') return <SetupDesk view={view} api={api} run={run} />
+  if (view.status === 'FINISHED' || view.status === 'ABANDONED') {
+    return <FinaleRanking view={view} api={api} run={run} finished />
+  }
+  // §11.2 — a break holds the desk, and `attention` is `NONE` throughout it.
+  if (view.break) return <BreakDesk view={view} api={api} run={run} />
+
+  switch (view.attention.kind) {
+    case 'ADJUDICATE_BUZZ':
+      return <BuzzDesk view={view} api={api} run={run} buzz={view.attention} />
+    case 'FINALE_TURN':
+      return <FinaleDesk view={view} api={api} run={run} turn={view.attention} />
+    case 'SCORE_DO':
+      return <DoDesk view={view} api={api} run={run} scoring={view.attention} />
+    case 'BREAK_TIE_FOR_PICK':
+      return (
+        <BoardDesk
+          view={view}
+          api={api}
+          run={run}
+          tiedTeamIds={view.attention.tiedTeamIds}
+        />
+      )
+    case 'PICK_FINALISTS':
+      return <FinalistPicker view={view} api={api} run={run} picking={view.attention} />
+    case 'VALIDATE_QUESTION':
+      return <QuestionDesk view={view} api={api} run={run} validating={view.attention} />
+    case 'ADVANCE':
+      return <AdvanceZone view={view} api={api} run={run} />
+    default:
+      // §10.6 — the finale is over but the round has not been closed yet.
+      if (view.finaleRanking) return <FinaleRanking view={view} api={api} run={run} />
+      return <Leaderboard view={view} api={api} run={run} />
+  }
+}
+
+/**
+ * `ADVANCE` — nothing is wrong and the master decides the pace (§3.1 priority 7).
+ *
+ * Which surface that means depends on what is in front of them: a live question is the question
+ * desk, a Jeopardy round with no open tile is the board, and anything else is the leaderboard with
+ * the suggested action under it.
+ */
+function AdvanceZone({ view, api, run }: ZoneProps) {
+  if (
+    view.question &&
+    view.question.state !== 'PENDING' &&
+    view.question.state !== 'SKIPPED'
+  ) {
+    return <QuestionDesk view={view} api={api} run={run} />
+  }
+  if (view.round?.type === 'JEOPARDY') {
+    return <BoardDesk view={view} api={api} run={run} tiedTeamIds={[]} />
+  }
+  if (view.round?.type === 'DSMTW_FINALE' && view.finaleRanking) {
+    return <FinaleRanking view={view} api={api} run={run} />
+  }
+  return <Leaderboard view={view} api={api} run={run} />
+}
+
+/**
+ * §13's `Enter` — the primary suggested action, wherever the master is.
+ *
+ * Exported because two zones offer the same button; binding it once here keeps the key and the
+ * button pointed at the same call.
+ */
+export function usePrimaryAction(action: (() => void) | null): void {
+  useControlKeys((event) => {
+    if (event.key !== 'Enter' || !action) return false
+    action()
+    return true
+  })
+}

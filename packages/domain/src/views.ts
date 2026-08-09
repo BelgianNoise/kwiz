@@ -840,6 +840,14 @@ export type Attention =
         score: number
         seconds: number
       }[]
+      /**
+       * The two settings behind `seconds`. PRD 3 §10.1 restates the penalty arithmetic live against
+       * the finalist count — *"20s → up to 320s off a 490s pool"* — and that is the one number
+       * deciding whether the round lasts five questions or one, so the desk must not have to
+       * reverse-engineer it from a candidate's score-to-seconds ratio.
+       */
+      penaltySeconds: number
+      secondsPerPoint: number
     }
   | {
       kind: 'VALIDATE_QUESTION'
@@ -862,6 +870,12 @@ export interface MasterControlView {
     type: RoundType
     number: number
     total: number
+    /**
+     * What `ADVANCE / NEXT_ROUND` actually opens. Without it the desk knows a next round exists and
+     * cannot name it — and a client that had to fetch the quiz tree to press one button would be
+     * holding a second copy of the running order.
+     */
+    nextRoundId: string | null
   } | null
   attention: Attention
   question: MasterQuestionDetail | null
@@ -926,6 +940,7 @@ export function toMasterControlView(
           type: round.type,
           number: roundIndex + 1,
           total: state.content.rounds.length,
+          nextRoundId: state.content.rounds[roundIndex + 1]?.id ?? null,
         }
       : null,
     attention: attention(state, now),
@@ -1238,6 +1253,8 @@ export function attention(state: GameState, now: number): Attention {
     const rate = state.finale.secondsPerPoint ?? 0
     return {
       kind: 'PICK_FINALISTS',
+      penaltySeconds: state.finale.penaltySeconds ?? 0,
+      secondsPerPoint: rate,
       // Descending score order, so deselecting the bottom few is a two-second job (D55).
       candidates: [...state.teams.values()]
         .sort((a, b) => b.score - a.score || a.position - b.position)

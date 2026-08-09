@@ -578,8 +578,13 @@ type MasterControlView = {
   status: GameStatus                      // PRD 3 §4 exists only in SETUP, §10.6 only in FINISHED
   teams: (TeamPublic & { deviceCount: number })[]
   // `type` because the desk differs per round type, and the client must not infer it from
-  // whether `board` happens to be present.
-  round: { id: string; title: string; type: RoundType; number: number; total: number } | null
+  // whether `board` happens to be present. `nextRoundId` is what ADVANCE / NEXT_ROUND opens —
+  // without it the desk knows a next round exists and cannot name it, and a client that fetched
+  // the quiz tree to press one button would hold a second copy of the running order.
+  round: {
+    id: string; title: string; type: RoundType
+    number: number; total: number; nextRoundId: string | null
+  } | null
 
   // What needs the master's attention RIGHT NOW. This is the whole point of the
   // surface (PRD 1 G4): one thing at a time, chosen by the server.
@@ -770,6 +775,11 @@ type DoScoringDetail = {
 
 // attention: PICK_FINALISTS - shown in DESCENDING score order so deselecting the bottom
 // few is a two-second job (D55). `seconds` makes a 0s row visible while choosing (D56).
+//
+// The state also carries `penaltySeconds` and `secondsPerPoint` alongside `candidates[]`, added
+// in slice 5: PRD 3 §10.1 restates the penalty arithmetic live against the finalist count, and
+// that is the one number deciding whether the round lasts five questions or one. Without them
+// the desk would reverse-engineer the rate from a candidate's score-to-seconds ratio.
 type FinalistCandidate = {
   teamId: string; name: string; colour: string
   score: number
