@@ -6,7 +6,7 @@ import type {
   QuizContent,
   RoundContent,
 } from '@kwiz/domain'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
 import {
@@ -30,6 +30,12 @@ import {
  *
  * Same shape as there — flat queries, assembled in memory, ordered by the explicit `position`
  * column and never by id or insertion order (CLAUDE.md §2.7).
+ *
+ * Scoped by parent id at the query, the way `export-read.ts`'s `collectQuizExport` already does
+ * for the identical problem — not loaded whole and filtered in memory (code review dup #5). The
+ * difference is invisible at PRD 1 §2.1's scale, but it scales with the *total* number of quizzes
+ * ever authored rather than the one being loaded, which is the wrong axis as a venue's library
+ * grows.
  */
 export function loadQuizTree(
   database: KwizDatabase,
@@ -45,46 +51,58 @@ export function loadQuizTree(
     .where(eq(round.quizId, quizId))
     .orderBy(round.position)
     .all()
-  const roundIds = new Set(rounds.map((entry) => entry.id))
+  const roundIds = rounds.map((entry) => entry.id)
 
-  const categories = db
-    .select()
-    .from(jeopardyCategory)
-    .orderBy(jeopardyCategory.position)
-    .all()
-    .filter((entry) => roundIds.has(entry.roundId))
-  const questions = db
-    .select()
-    .from(question)
-    .orderBy(question.position)
-    .all()
-    .filter((entry) => roundIds.has(entry.roundId))
-  const questionIds = new Set(questions.map((entry) => entry.id))
+  const categories = ids(roundIds, (list) =>
+    db
+      .select()
+      .from(jeopardyCategory)
+      .where(inArray(jeopardyCategory.roundId, list))
+      .orderBy(jeopardyCategory.position)
+      .all(),
+  )
+  const questions = ids(roundIds, (list) =>
+    db
+      .select()
+      .from(question)
+      .where(inArray(question.roundId, list))
+      .orderBy(question.position)
+      .all(),
+  )
+  const questionIds = questions.map((entry) => entry.id)
 
-  const answers = db
-    .select()
-    .from(acceptedAnswer)
-    .orderBy(acceptedAnswer.position)
-    .all()
-    .filter((entry) => questionIds.has(entry.questionId))
-  const options = db
-    .select()
-    .from(questionOption)
-    .orderBy(questionOption.position)
-    .all()
-    .filter((entry) => questionIds.has(entry.questionId))
-  const keywords = db
-    .select()
-    .from(questionKeyword)
-    .orderBy(questionKeyword.position)
-    .all()
-    .filter((entry) => questionIds.has(entry.questionId))
-  const media = db
-    .select()
-    .from(attachment)
-    .orderBy(attachment.position)
-    .all()
-    .filter((entry) => questionIds.has(entry.questionId))
+  const answers = ids(questionIds, (list) =>
+    db
+      .select()
+      .from(acceptedAnswer)
+      .where(inArray(acceptedAnswer.questionId, list))
+      .orderBy(acceptedAnswer.position)
+      .all(),
+  )
+  const options = ids(questionIds, (list) =>
+    db
+      .select()
+      .from(questionOption)
+      .where(inArray(questionOption.questionId, list))
+      .orderBy(questionOption.position)
+      .all(),
+  )
+  const keywords = ids(questionIds, (list) =>
+    db
+      .select()
+      .from(questionKeyword)
+      .where(inArray(questionKeyword.questionId, list))
+      .orderBy(questionKeyword.position)
+      .all(),
+  )
+  const media = ids(questionIds, (list) =>
+    db
+      .select()
+      .from(attachment)
+      .where(inArray(attachment.questionId, list))
+      .orderBy(attachment.position)
+      .all(),
+  )
 
   const group = <T extends { questionId: string }>(rows: T[]): Map<string, T[]> => {
     const grouped = new Map<string, T[]>()
@@ -163,4 +181,13 @@ export function loadQuizTree(
         })),
     })),
   }
+}
+
+/**
+ * `inArray` with an empty list generates `in ()`, which SQLite rejects as a syntax error — so an
+ * empty parent list short-circuits. It is the ordinary case, not an edge one: a quiz with a round
+ * that has no questions yet reaches this on every load. Mirrors `export-read.ts`'s own helper.
+ */
+function ids<T>(parents: string[], query: (list: string[]) => T[]): T[] {
+  return parents.length === 0 ? [] : query(parents)
 }
