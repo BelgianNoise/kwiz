@@ -8,6 +8,7 @@ import {
   createQuestion,
   createQuiz,
   createRound,
+  deleteAttachment,
   deleteRound,
   duplicateQuiz,
   listQuizzes,
@@ -483,5 +484,112 @@ describe('jeopardy categories', () => {
     // Off the end is a no-op rather than an error — the UI offers the control at the ends anyway.
     expect(moveCategory(database, ids[0] ?? '', 'LEFT')).toMatchObject({ ok: true })
     expect(order()).toEqual(names)
+  })
+})
+
+/**
+ * Code review — `setAttachmentVisibility` and `deleteAttachment` were exercised only
+ * incidentally, as one step inside a much bigger `duplicateQuiz` test, never on their own terms.
+ */
+describe('attachments', () => {
+  const addAttachment = (
+    over: Partial<Parameters<typeof insertTemplateAttachment>[1]> = {},
+  ): string => {
+    const roundId = addRound('QUESTION_SET', 'Round')
+    const questionId = unwrap(createQuestion(database, roundId)).questionId
+    const id = insertTemplateAttachment(database, {
+      questionId,
+      kind: 'IMAGE',
+      mimeType: 'image/png',
+      originalName: 'photo.png',
+      ext: 'png',
+      sizeBytes: 1_024,
+      checksum: 'a'.repeat(64),
+      ...over,
+    })
+    if (!id) throw new Error('expected an attachment id')
+    return id
+  }
+
+  describe('setAttachmentVisibility', () => {
+    it('toggles an image on and off', () => {
+      const id = addAttachment()
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).get()
+          ?.showOnPlayerDevices,
+      ).toBe(true)
+
+      expect(setAttachmentVisibility(database, id, false)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).get()
+          ?.showOnPlayerDevices,
+      ).toBe(false)
+    })
+
+    it('refuses to show audio on player devices (D27, I3)', () => {
+      const id = addAttachment({
+        kind: 'AUDIO',
+        mimeType: 'audio/mpeg',
+        originalName: 'clip.mp3',
+        ext: 'mp3',
+      })
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+      // Turning it back off is never the refused direction.
+      expect(setAttachmentVisibility(database, id, false)).toMatchObject({ ok: true })
+    })
+
+    it('refuses to show video on player devices (D27, I3)', () => {
+      const id = addAttachment({
+        kind: 'VIDEO',
+        mimeType: 'video/mp4',
+        originalName: 'clip.mp4',
+        ext: 'mp4',
+      })
+      expect(setAttachmentVisibility(database, id, true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+    })
+
+    it('refuses an unknown attachment', () => {
+      expect(setAttachmentVisibility(database, 'nope', true)).toMatchObject({
+        ok: false,
+        error: 'VALIDATION_ERROR',
+      })
+    })
+  })
+
+  describe('deleteAttachment', () => {
+    it('removes the row', () => {
+      const id = addAttachment()
+      expect(deleteAttachment(database, id)).toMatchObject({ ok: true })
+      expect(
+        database.db.select().from(attachment).where(eq(attachment.id, id)).all(),
+      ).toHaveLength(0)
+    })
+
+    it('is a no-op rather than an error for an attachment that is already gone', () => {
+      expect(deleteAttachment(database, 'nope')).toMatchObject({ ok: true })
+    })
+
+    it('touches the quiz, so autosave and revision tracking see the change', () => {
+      const id = addAttachment()
+      const before = database.db
+        .select()
+        .from(quiz)
+        .where(eq(quiz.id, quizId))
+        .get()?.revision
+      deleteAttachment(database, id)
+      const after = database.db
+        .select()
+        .from(quiz)
+        .where(eq(quiz.id, quizId))
+        .get()?.revision
+      expect(after).toBeGreaterThan(before ?? 0)
+    })
   })
 })
