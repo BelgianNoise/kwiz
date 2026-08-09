@@ -55,7 +55,15 @@ export const ERROR_CODES = [
   'KEYWORD_ALREADY_MARKED',
   // ─── import ───
   'SCHEMA_VERSION_UNSUPPORTED',
+  /**
+   * Declared but never returned (P2 #10, conventions §4) — kept because the *shape* is real, just
+   * carried on a different channel: PRD 2 §14.2 previews an import before anything is written, so
+   * a corrupt/missing attachment surfaces per file in `ParsedExport.missingAttachments` (protocol
+   * §8.1) rather than as a failure discovered partway through.
+   */
   'CHECKSUM_MISMATCH',
+  /** Same reasoning as `CHECKSUM_MISMATCH` — the Replace/Copy choice (D9) lives in
+   * `ImportPreview.collision`, decided before import runs, not raised as a failure during it. */
   'IMPORT_COLLISION',
   'MANIFEST_INVALID',
   // ─── boundary ───

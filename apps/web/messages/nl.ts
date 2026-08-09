@@ -305,6 +305,7 @@ const nl: Messages = {
         DO_NO_SCORING_MODE: 'geen scorewijze gekozen',
         ATTACHMENT_MISSING: 'een bestand ontbreekt of is gewijzigd',
         FINALE_KEYWORD_COUNT: 'heeft precies vijf kernwoorden nodig, heeft {count}',
+        FINALE_KEYWORD_BLANK: '{count} van de 5 kernwoorden hebben tekst - een is leeg',
         MULTIPLE_FINALES: 'een quiz kan maar een finale hebben',
         FINALE_NOT_LAST: 'de finale moet de laatste ronde zijn',
         FINALE_RATE_MISSING: 'geen punten-naar-seconden ingesteld',
