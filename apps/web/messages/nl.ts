@@ -346,7 +346,7 @@ const nl: Messages = {
       questionsOk: 'Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
       questionsShort:
         'De finale heeft {have, plural, one {# vraag} other {# vragen}}. Ongeveer {suggested} zijn meestal nodig voor deze {teams} teams.',
-      lowerPenalty: 'Straf verlagen',
+      raisePenalty: 'Straf verhogen naar {seconds}s',
     },
 
     game: {
@@ -405,6 +405,7 @@ const nl: Messages = {
       reclaimed:
         '{count, plural, one {# bestand} other {# bestanden}} verwijderd, {size} vrijgemaakt.',
       about: 'Over',
+      appVersion: 'Versie',
       schemaVersion: 'Exportformaat',
       migrationStatus: 'Database',
       migration: {

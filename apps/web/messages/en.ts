@@ -385,7 +385,14 @@ const en = {
       questionsOk: 'About {suggested} are usually needed for these {teams} teams.',
       questionsShort:
         'The finale has {have, plural, one {# question} other {# questions}}. About {suggested} are usually needed for these {teams} teams.',
-      lowerPenalty: 'Lower the penalty',
+      /**
+       * §11.1's quick fix for a question shortfall — "raising the drain per question is often
+       * the easier fix... than writing three more keyword questions." A higher penalty drains
+       * banks faster, so *fewer* questions are needed to reach one survivor — the opposite of
+       * what this key's old name (`lowerPenalty`) said, which is why it was never wired up
+       * correctly. Renamed rather than shipped under a label that describes the wrong direction.
+       */
+      raisePenalty: 'Raise the penalty to {seconds}s',
     },
 
     /** PRD 2 §12 — the hub for one game, before, during and after. */
@@ -441,6 +448,7 @@ const en = {
       nothingToReclaim: 'Nothing to reclaim.',
       reclaimed: 'Removed {count, plural, one {# file} other {# files}}, freeing {size}.',
       about: 'About',
+      appVersion: 'Version',
       schemaVersion: 'Export format',
       migrationStatus: 'Database',
       migration: {

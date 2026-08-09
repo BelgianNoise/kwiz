@@ -27,7 +27,11 @@ export function SettingsScreen({
   muted: boolean
   storage: StorageStats
   /** The outcome's `kind`, not a string: it indexes a message key, so a typo must not compile. */
-  about: { schemaVersion: number; migration: MigrationOutcome['kind'] }
+  about: {
+    appVersion: string
+    schemaVersion: number
+    migration: MigrationOutcome['kind']
+  }
 }) {
   const t = useTranslations('admin.settings')
   const dashboard = useTranslations('admin.dashboard')
@@ -154,6 +158,10 @@ export function SettingsScreen({
 
       <Section title={t('about')}>
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+          {/* P2 #23 — schema version and migration status were shown here with no app version at
+              all, even though `package.json` already carries one. */}
+          <dt className="text-muted-foreground">{t('appVersion')}</dt>
+          <dd>{about.appVersion}</dd>
           <dt className="text-muted-foreground">{t('schemaVersion')}</dt>
           <dd>{about.schemaVersion}</dd>
           <dt className="text-muted-foreground">{t('migrationStatus')}</dt>
