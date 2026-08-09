@@ -398,17 +398,6 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     case 'REVEAL_QUESTION': {
-      /*
-       * P2 #12 — **flagged, not resolved.** This is one universal transition every question
-       * type shares (`question-state.ts`), and nothing here or in `REVEAL_KEYWORDS` (below)
-       * ties the two together for `DSMTW_FINALE` — a finale question can reach `REVEALED`
-       * without its keywords ever having been revealed, or vice versa. PRD 3 §10.5's own flow
-       * never mentions `REVEAL_QUESTION` at all for a finale round — only `[Reveal remaining]`
-       * → `KEYWORDS_REVEALED` → `[Next question]` — which reads as `REVEAL_QUESTION` simply not
-       * applying to a finale question, but nothing in the spec says so explicitly, and inventing
-       * a refusal the documents don't state would be the wrong way to resolve that silence
-       * (CLAUDE.md §10's own rule). Left as-is; genuinely needs a decision, not a guess.
-       */
       const live = requireLive(state)
       if (live) return live
       const found = locate(state, command.gameQuestionId)
@@ -419,8 +408,23 @@ export function decide(state: GameState, command: Command, now: number): Decisio
         // what the `ADVANCE / REVEAL` suggestion means when every team is locked out (D35 rule 4).
         return deny('QUESTION_NOT_OPEN', `question is ${found.play.state}`)
       }
+      /*
+       * P2 #12 — coupled with `REVEAL_KEYWORDS` below, in both directions, so a finale question's
+       * two REVEALED-ish facts (the question itself, and its keywords) can never diverge no
+       * matter which command a client happens to send. This is the one universal transition
+       * every question type shares (`question-state.ts`), so nothing upstream stops a stray
+       * `REVEAL_QUESTION` from reaching a finale question — it should just do the right thing.
+       */
       return allow([
         { type: 'QUESTION_REVEALED', payload: { gameQuestionId: found.question.id } },
+        ...(found.question.keywords.length > 0
+          ? [
+              {
+                type: 'KEYWORDS_REVEALED' as const,
+                payload: { gameQuestionId: found.question.id },
+              },
+            ]
+          : []),
       ])
     }
 
@@ -842,7 +846,23 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (found.question.keywords.length === 0) {
         return deny('NOT_A_FINALE_ROUND', 'that question has no keywords')
       }
+
+      // P2 #12 — coupled with `REVEAL_QUESTION` above: `[Reveal remaining]` (PRD 3 §10.5) is the
+      // finale desk's actual, only reveal button, so this is the path that must mark the question
+      // `REVEALED` too, or the common case never gets there at all.
+      if (found.play.state === 'REVEALED') {
+        return allow([
+          { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: found.question.id } },
+        ])
+      }
+      if (!canTransition(found.play.state, 'QUESTION_REVEALED')) {
+        // Same bound as `REVEAL_QUESTION`'s: legal from `LOCKED` only. A finale question is
+        // locked the same way any other is (`LOCK_QUESTION`'s finale-awareness ends the open
+        // turn first) — revealing before that would leave a turn silently still charging time.
+        return deny('QUESTION_NOT_OPEN', `question is ${found.play.state}`)
+      }
       return allow([
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: found.question.id } },
         { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: found.question.id } },
       ])
     }

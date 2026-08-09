@@ -1063,6 +1063,66 @@ describe('finale', () => {
     expect(restart.events).toEqual([{ type: 'TURN_STARTED', payload: { teamId: A } }])
   })
 
+  /**
+   * P2 #12 — `REVEAL_QUESTION` and `REVEAL_KEYWORDS` are coupled in both directions so the two
+   * REVEALED-ish facts on a finale question can never diverge, whichever command a client sends.
+   */
+  describe('a finale question is REVEALED together with its keywords', () => {
+    const lockedFinale = () => {
+      const game = finale()
+      game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+      game.act({ type: 'LOCK_QUESTION', gameQuestionId: FIN_Q, drafts: [] }, 20_000)
+      return game
+    }
+
+    it('REVEAL_QUESTION also reveals the keywords', () => {
+      const game = lockedFinale()
+      expect(
+        accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FIN_Q })).events,
+      ).toEqual([
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FIN_Q } },
+        { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } },
+      ])
+    })
+
+    it("REVEAL_KEYWORDS — PRD 3 §10.5's actual [Reveal remaining] button — also reveals the question", () => {
+      const game = lockedFinale()
+      expect(
+        accepted(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).events,
+      ).toEqual([
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FIN_Q } },
+        { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } },
+      ])
+    })
+
+    it("REVEAL_KEYWORDS refuses an open question, mirroring REVEAL_QUESTION's own bound", () => {
+      const game = finale()
+      game.act({ type: 'SET_FINALISTS', teamIds: [A, B] })
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FIN_Q }, 10_000)
+      expect(
+        refusal(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).error,
+      ).toBe('QUESTION_NOT_OPEN')
+    })
+
+    it('REVEAL_KEYWORDS a second time, once already REVEALED, only re-reveals keywords', () => {
+      const game = lockedFinale()
+      accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FIN_Q }))
+      expect(
+        accepted(game.act({ type: 'REVEAL_KEYWORDS', gameQuestionId: FIN_Q })).events,
+      ).toEqual([{ type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: FIN_Q } }])
+    })
+
+    it('REVEAL_QUESTION on an ordinary (non-finale) question never adds KEYWORDS_REVEALED', () => {
+      const game = driver(LIVE)
+      game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }, 1_000)
+      game.act({ type: 'LOCK_QUESTION', gameQuestionId: FREE_Q, drafts: [] }, 2_000)
+      expect(
+        accepted(game.act({ type: 'REVEAL_QUESTION', gameQuestionId: FREE_Q })).events,
+      ).toEqual([{ type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE_Q } }])
+    })
+  })
+
   /** D46's other question-ending transition gets the same handover treatment as a lock. */
   it('also ends the active turn when the question is skipped', () => {
     const game = finale()
