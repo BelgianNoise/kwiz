@@ -175,6 +175,13 @@ export interface KeywordMarkState {
   revokedAt: number | null
 }
 
+/**
+ * A finale turn. `endedAt`/`reason` are set by whatever stopped it — and **every transition that can
+ * stop a finale question being `OPEN` has to end the open turn**, or the clock keeps charging a team
+ * for a question nobody is playing. There is no compiler-enforced link, so the two call sites are
+ * named here: `endOpenFinaleTurn` in `decide.ts`, invoked from `LOCK_QUESTION` and `SKIP_QUESTION`.
+ * A future transition that closes a question needs a third call, by convention only.
+ */
 export interface FinaleTurn {
   teamId: string
   startedAt: number

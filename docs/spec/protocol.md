@@ -575,20 +575,55 @@ Everything, subject to §1.1's bounded-view rule.
 type MasterControlView = {
   code: string
   joinUrl: string
+  status: GameStatus                      // PRD 3 §4 exists only in SETUP, §10.6 only in FINISHED
   teams: (TeamPublic & { deviceCount: number })[]
-  round: { id: string; title: string; number: number; total: number } | null
+  // `type` because the desk differs per round type, and the client must not infer it from
+  // whether `board` happens to be present.
+  round: { id: string; title: string; type: RoundType; number: number; total: number } | null
+
+  // What ADVANCE / NEXT_ROUND opens: the round after the current one, or the FIRST round when
+  // none is open. Top-level rather than inside `round`, because the case that needs it most is
+  // the one where `round` is null — a game that has just started. `advanceSuggestion` returns
+  // NEXT_ROUND there too; before slice 5 it returned null, so a freshly started game showed a
+  // leaderboard and offered no way to open its first round at all.
+  nextRoundId: string | null
+
+  // What advancing would do, whatever currently has the master's attention. `attention: ADVANCE`
+  // carries the same value from the same function, so the two cannot disagree — but only one
+  // attention state is ever active, and a desk that can only see the suggestion when nothing else
+  // needs it has no way forward from the states that outrank it. That dead-ended the round-end
+  // sweep: VALIDATE_QUESTION outranks ADVANCE and sweeps the whole quiz (§6.2), while `timeline` is
+  // the current round, so a validation deferred in round 1 and revisited after round 1 ran out of
+  // unplayed questions left the master on a screen with no primary action at all.
+  advance: AdvanceSuggestion | null
 
   // What needs the master's attention RIGHT NOW. This is the whole point of the
   // surface (PRD 1 G4): one thing at a time, chosen by the server.
+  // **The detail types below are spread onto their variant, not nested under a key.** This block
+  // originally wrapped them (`buzz: BuzzDetail`, `question: DoScoringDetail`,
+  // `detail: FinaleTurnDetail`, `question: QuestionRef`); the implementation flattens all four, and
+  // this is the shape that exists. Narrowing on `kind` then reaches the fields directly, which is
+  // what a client actually wants — `attention.prompt`, not `attention.question.prompt`.
   attention:
     | { kind: 'NONE' }                                  // → show the leaderboard big
     | { kind: 'ADJUDICATE_BUZZ'; buzz: BuzzDetail; referenceAnswer: string }
-    | { kind: 'VALIDATE_QUESTION'; question: QuestionRef; items: ValidationItem[]; remainingQuestions: number }
-    | { kind: 'SCORE_DO'; question: DoScoringDetail }
+    | { kind: 'VALIDATE_QUESTION'
+        gameQuestionId: string
+        // Was `QuestionRef`. The sweep can be about a question from an EARLIER round (§6.2), so
+        // neither `question` (the current one) nor `timeline` (the current round) can supply these
+        // — and §6.1's screen without them asks for a verdict with the evidence on another page.
+        prompt: string; acceptedAnswers: string[]; masterNotes: string | null
+        items: ValidationItem[]; remainingQuestions: number }
+    | ({ kind: 'SCORE_DO' } & DoScoringDetail)
     | { kind: 'BREAK_TIE_FOR_PICK'; tiedTeamIds: string[] }
-    | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[] }
-    | { kind: 'FINALE_TURN'; detail: FinaleTurnDetail }
-    | { kind: 'ADVANCE'; suggestion: 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
+    // Plus `penaltySeconds` and `secondsPerPoint` — see the note on `FinalistCandidate`.
+    | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[]
+        penaltySeconds: number; secondsPerPoint: number }
+    | ({ kind: 'FINALE_TURN' } & FinaleTurnDetail)
+    // `LOCK` is `[Close answers]`. It was missing until slice 5, which meant the most common
+    // state in a game — a question the room is answering — suggested `NEXT_QUESTION`, pointing
+    // the master past the live question (PRD 3 §5.1: nothing but this closes a question, D8).
+    | { kind: 'ADVANCE'; suggestion: AdvanceSuggestion }
 
   // Full detail incl. masterNotes, plus every team's answer with its verdict and a
   // needsValidation flag — so the master can judge inline while the question is still
@@ -596,19 +631,65 @@ type MasterControlView = {
   question: MasterQuestionDetail | null
   board?: MasterBoardView                 // Jeopardy: prompts included, master-only
 
+  // PRD 3 §2.1's timeline — the CURRENT ROUND's questions, so O(questions in a round). That is
+  // the bound MasterBoardView's tiles already carry, and nowhere near D39's O(questions × teams).
+  timeline: TimelineEntry[]
+
+  // PRD 3 §11's "recent adjustments … with [Undo]". Capped and newest first; the full audit is
+  // PRD 2 §13.3's REST read, because an evening's worth of them is unbounded (§1.1).
+  adjustments: MasterAdjustment[]
+
+  // PRD 3 §11.2. `attention` is NONE during a break, so without this the master has no way to
+  // see they are on one, extend it, or resume.
+  break: { startedAt: number; resumesAt: number | null } | null
+
+  scoreboardShown: boolean                // §11.1's toggle has to render its own state (O4)
+
+  // PRD 3 §12's "2 control screens connected". A TRANSPORT fact, not a game fact: it is not in
+  // the log and cannot be replayed, so it is passed into the filter rather than derived inside it.
+  controlScreens: number
+
+  // PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends.
+  // The second tab — pre-finale points — is `teams`, unchanged: a finale scores in seconds.
+  finaleRanking: string[][] | null
+
+  // What a team joining now would have missed (PRD 2 §11.2, O5). `[+ Add team]` is required at
+  // every status from master control as well as config, and the dialog's whole justification is
+  // that these five numbers are computed rather than worked out in a noisy room. Null in SETUP.
+  missed: MissedSoFar | null
+
   // COUNTS ONLY — never the list (§1.1).
   pendingValidationCount: number
+}
+
+// `LOCK` is [Close answers] — the only thing that ends a question, since the timer never does (D8).
+type AdvanceSuggestion = 'LOCK' | 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH'
+
+type TimelineEntry = {
+  gameQuestionId: string
+  position: number
+  prompt: string                    // master-only, like a tile's; answers "what did I skip?"
+  state: 'PENDING' | 'OPEN' | 'LOCKED' | 'REVEALED' | 'SCORED' | 'SKIPPED'
+  failsPreflight?: PreflightCode    // PRD 2 §10's ⚠, re-derived from the game copy
+}
+
+type MasterAdjustment = {
+  id: string
+  teamId: string
+  delta: number
+  reason: string | null
+  announced: boolean
+  revoked: boolean                  // stays listed when revoked, greyed (D41)
+  createdAt: number
 }
 
 // One question's worth of validation, all teams together (PRD 3 §6.1). Bounded by team
 // count, so D39 holds. Grouping is what makes inconsistency visible: judging
 // "Radio Head" in isolation, the master cannot see they just accepted "radiohead".
-type QuestionRef = {
-  gameQuestionId: string
-  prompt: string
-  acceptedAnswers: string[]
-  masterNotes: string | null
-}
+//
+// **`QuestionRef` is superseded**: its three fields are spread onto the `VALIDATE_QUESTION`
+// variant above rather than nested under a `question` key, so there is no such exported type.
+// Kept here only to name what those three fields are and why they travel together.
 
 type ValidationItem = {
   teamId: string
@@ -623,8 +704,33 @@ type ValidationItem = {
   // the master still decides each team separately, but identical text is visually linked
   // so an inconsistent pair is hard to miss. Never auto-applies a verdict.
   hasIdenticalSibling: boolean
+
+  spotlit: boolean                  // PRD 3 §5.3's [● On screen] is a toggle (D40)
 }
 ```
+
+> **The eight fields above `pendingValidationCount` were added in slice 5**, building PRD 3 against
+> this shape. Each is something the desk cannot be built without and none of them was expressible
+> before: a timeline with no question list, a `[Undo]` with no adjustment to undo, a break the master
+> cannot see they are in, a `SETUP` screen with no status to key on. They are recorded here rather
+> than left as a divergence, per agent-workflow §3.3.
+>
+> **`attention` gained three behaviours** in the same slice, each a rule a PRD states and nothing
+> implemented:
+>
+> - **A break suspends it.** PRD 3 §11.2 says it *"stays `NONE`"* during an interval; a break with
+>   unplayed questions left read as `ADVANCE`, a call to action pointed at a room that is at the bar.
+>   The break now outranks `VALIDATE_QUESTION` and `ADVANCE` and nothing above them, since those five
+>   are the states where a room is genuinely waiting. Only `SCORE_DO` can co-occur at all: a break is
+>   refused while a question is `OPEN`.
+> - **`ADVANCE` gained `LOCK`**, above.
+> - **`VALIDATE_QUESTION` sweeps past questions**, which is PRD 3 §6.2 and D6's original promise. It
+>   previously looked only at the *current* question, so an answer deferred in question 1 became
+>   unreachable from the desk the moment question 2 opened — while `pendingValidationCount` went on
+>   counting it with nothing that could ever clear it. It now prefers the current question (D42's
+>   inline path) and otherwise walks the quiz in play order for the earliest one still owed a verdict
+>   — but never while the current question is `OPEN` or `LOCKED`, because pulling a master back to
+>   round 1 mid-question is worse than the deferral.
 
 `attention` is computed **server-side**, not by the client inspecting state and guessing.
 The rule for what deserves the master's attention is game logic and belongs in
@@ -664,7 +770,12 @@ type MasterQuestionDetail = {
 
   buzzes?: BuzzSummary[]
   lockedOutTeamIds?: string[]
-  failsPreflight?: string             // PRD 2 §10 "play anyway" marker, if any
+
+  // PRD 2 §10's "play anyway" marker, if any. A `PreflightCode`, never a sentence — copy lives in
+  // the messages module (D11). Re-derived from the game copy through the same `questionFindings`
+  // the authoring row's ✓/⚠ uses, so the two can never disagree; the one check it does not repeat
+  // is ATTACHMENT_MISSING, which is filesystem work `packages/domain` cannot do.
+  failsPreflight?: PreflightCode
 }
 
 type BuzzSummary = {
@@ -694,6 +805,11 @@ type DoScoringDetail = {
 
 // attention: PICK_FINALISTS - shown in DESCENDING score order so deselecting the bottom
 // few is a two-second job (D55). `seconds` makes a 0s row visible while choosing (D56).
+//
+// The state also carries `penaltySeconds` and `secondsPerPoint` alongside `candidates[]`, added
+// in slice 5: PRD 3 §10.1 restates the penalty arithmetic live against the finalist count, and
+// that is the one number deciding whether the round lasts five questions or one. Without them
+// the desk would reverse-engineer the rate from a candidate's score-to-seconds ratio.
 type FinalistCandidate = {
   teamId: string; name: string; colour: string
   score: number
@@ -706,6 +822,10 @@ type FinaleTurnDetail = {
   gameQuestionId: string
   prompt: string
   masterNotes: string | null
+  // PRD 1 §8.5/§8.8 — attachments work on every question type, a finale included ("though a
+  // keyword question rarely needs one"). The authoring surface lets a master attach one, so the
+  // desk has to be able to trigger it: rare is not never.
+  media: MediaRef[]
   questionNumber: number
   questionTotal: number
 
@@ -715,15 +835,21 @@ type FinaleTurnDetail = {
     revealed: boolean
   }[]
 
-  currentTeamId: string
+  // Null BETWEEN turns — a finale question that has just opened, and the gap after a pass before
+  // the next team is started. §10.5 stops the clocks while nobody is on turn, so this is the same
+  // desk with the clock not yet running rather than a screen of its own; `nextTeamId` is then who
+  // `[Start <team>]` starts, by the fewest-seconds rule (PRD 1 §8.8). Before slice 5 this state
+  // was unrepresentable, so a freshly opened finale question fell through to the *question* desk.
+  currentTeamId: string | null
   nextTeamId: string | null
-  turnStartedAt: number
+  turnStartedAt: number | null
   penaltySeconds: number
 
   clocks: {
     teamId: string; name: string; colour: string
     secondsAtTurnStart: number
     onTurn: boolean; eliminated: boolean
+    eliminatedAt: number | null    // §10.2's "out 21:03" — HH:mm, a wall-clock instant (§8.2)
     passedThisQuestion: boolean
   }[]
 

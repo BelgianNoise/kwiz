@@ -12,6 +12,233 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 5 — Master control
+
+**Status:** complete · `pnpm check` green · **624 tests** · lint silent · `pnpm build` clean, no
+warnings · the whole desk driven by hand against a real game, including a **server restart
+mid-question** · three review passes: a clause-by-clause self-audit, then an independent review
+whose two criticals are fixed and tested
+
+### What was built
+
+PRD 3, end to end: the four-region frame, all eight `attention` states, the question desk with inline
+validation and master-side media playback, the round-end sweep, buzzer adjudication and the deny
+loop, both `DO` modes, the Jeopardy board with its picker override and tie-break, breaks, score
+adjustment with revocation, the finale desk, and §13's keyboard map.
+
+Underneath it: `useLiveView` — **the first client-side consumer of slice 3's streams** — and
+`control(gameId)` in `lib/client/api.ts`, which is protocol §7.2's master half as one object.
+
+### The domain did not carry enough for the surface, in eleven places
+
+Slice 2 built `MasterControlView` against protocol §5.4 faithfully. That shape turns out not to
+express PRD 3's desk, and **none of the gaps would have failed a test** — the view was internally
+consistent, it just could not answer questions the surface has to ask. All eleven are now in
+protocol §5.4/§5.5 as well as in the code:
+
+`status` · `round.type` · `nextRoundId` · the §2.1 `timeline` · §11's recent `adjustments` ·
+`break` · `scoreboardShown` · `controlScreens` · `finaleRanking` · `spotlit` on `ValidationItem` ·
+`failsPreflight` on the question detail and every timeline entry.
+
+Two are worth singling out:
+
+- **`controlScreens` is the only field on any pushed view that is not a function of `GameState`.**
+  §12's *"2 control screens connected"* is a fact about sockets: not in the log, not replayable. It
+  is counted by the transport and passed **into** the filter, and `sse.ts` now re-pushes to the other
+  subscribers when one connects or leaves — without that the count only changed when the game did,
+  so a second desk could sit there for an hour saying it was alone.
+- **`failsPreflight` is re-derived, not remembered.** Nothing records the verdict `[Play anyway]` was
+  pressed against, so the `⚠` comes from `questionFindings` — the same function the authoring row's
+  `✓`/`⚠` uses, which is what stops the two disagreeing. The one check it cannot repeat is
+  `ATTACHMENT_MISSING`: re-hashing is filesystem work and `packages/domain` has no filesystem.
+
+### Five real bugs in `attention()`, four of them stated in a PRD and simply not implemented
+
+`attention` is the whole surface (G4), so a wrong answer here is not a cosmetic bug — it is the
+master being told the wrong thing to do.
+
+1. **A break did not suspend it.** PRD 3 §11.2 says `attention` *"stays `NONE`"* during an interval;
+   a break with questions left read as `ADVANCE`, a call to action aimed at a room that is at the
+   bar. It now outranks `VALIDATE_QUESTION` and `ADVANCE` and nothing above them — those five are
+   states where a room is genuinely waiting.
+2. **`ADVANCE` could not say `LOCK`.** While a question was open — the most common state in a game —
+   the suggestion was `NEXT_QUESTION`, pointing the master *past* the question the room is answering.
+3. **The round-end sweep did not exist.** §6.2 and D6 both promise it. `attention` looked only at the
+   *current* question, so an answer deferred in question 1 became unreachable the moment question 2
+   opened, while `pendingValidationCount` went on counting it with nothing that could clear it.
+4. **A live game with no round open had no way to open one** (found in the browser, not by a test).
+   `advanceSuggestion` returned `null`, so `attention` was `NONE` — and `NONE` renders as a
+   perfectly reasonable leaderboard. Every game was stuck the second it started.
+5. **A finale question with no turn running had no way to start one.** `FINALE_TURN` required an
+   active turn, so a freshly opened finale question fell through to the *question* desk, which drew a
+   proxy-answer control for a round nobody types in. `FINALE_TURN` now also covers the gap between
+   turns — §10.5 says clocks stop while nobody is on turn, so it is the same screen with the clock
+   not yet running — and `nextTeamId` is then who `[Start <team>]` starts.
+
+**Four of those five were found by driving the surface, not by reading.** The tests were green
+throughout; so was the spec.
+
+### The clause-by-clause audit, and the sixteen things it found
+
+Slice 4's log ends with *"go clause by clause through the PRD, not feature by feature"*. Doing that
+after the surface was built and green found **sixteen more gaps**, every one of them a sentence in
+PRD 3 that the first pass had read, written the copy for, and then not rendered.
+
+The mechanical version is worth stealing: **grep the message catalogue for keys nothing uses.** A
+key written from a PRD clause and never rendered is that clause, missing. Sixteen keys, sixteen
+gaps, no judgement required:
+
+- **§3.2** — a buzz landing behind the open adjustment popover said nothing. The popover correctly
+  stayed open; the master had no way to know why the screen behind it had changed.
+- **§4 / PRD 2 §11.2** — **`[+ Add team]` did not exist on this surface at all**, at any status.
+- **§5.1** — `Time up` without §5.1's `· 4 of 4 submitted`, which is the number that decides whether
+  to wait.
+- **§5.3** — no *"showing 'Radiohead' to the room"* line, and no "nothing to spotlight" on a buzzer.
+- **§6.1** — **the sweep showed answers with no accepted answers to judge them against.** protocol
+  §5.4 declares a `QuestionRef` for exactly this and the implementation had flattened it to an id.
+- **§6.1** — and no way *out* of the sweep, though §6.2 explicitly permits deferring.
+- **§7.1** — the deny loop was a quiet line. §7.1 asks for **loud**, in colour and words.
+- **§8.2** — scores clamped on save rather than on entry, so `99` looked accepted until it wasn't.
+- **§9** — *"hover **or focus**"*: a `title` answers hover only, which excludes the keyboard exactly.
+- **§10.2** — `out` without §10.2's `21:03`, and `eliminatedAt` was not on the payload to say it.
+- **§10.5** — no unguessed count, no `[Next question]`, and **the all-five-found close was missing**:
+  a question where everything was found offered only `[Pass]`.
+- **§11.2** — the break was disabled over an open question **without the reason**, which is the
+  difference between a rule and an app that looks broken.
+- **§12** — a media file that will not decode showed nothing on the master's own controls.
+- **§2.1** — the timeline's state markers were icons with no accessible name.
+
+Three needed payload work, and are in protocol §5.4/§5.5: `VALIDATE_QUESTION`'s question reference,
+`clocks[].eliminatedAt`, and `missed` (`missedSoFar`, five numbers, so `[+ Add team]` can be answered
+from the desk as §11.2 requires rather than sending the master back to PRD 2's hub).
+
+**None of these would have failed a test, and the surface demoed fine without them.** They are the
+difference between a screen that works and a screen that does what it was specified to do.
+
+### Then an independent review found two criticals the clause audit structurally could not
+
+The clause-by-clause pass greps for **a clause with no rendered copy**. Both of these are *control
+flow reaching a dead end* — nothing missing, everything rendered, wired wrong. Worth internalising:
+the unused-key trick has a blind spot exactly the shape of a bug where the code is all present.
+
+**1. `Enter` ended the game with no confirmation.** PRD 3 §13 lists ending the game among the acts a
+stray keystroke must never reach; §1.1 exempts it from the no-dialogs rule *because* it is one of two
+things that cannot be undone. `FINISH` came back from `advanceSuggestion` as just another member of
+the same union as `LOCK` and `REVEAL`, so the advance button rendered it through the generic path —
+one click ended the game, and `Enter`, the key the master has been pressing all night to advance,
+ended it without one. At the moment the game legitimately ends, which is when that reflex is
+strongest. The header had the correct pattern the whole time (a `ConfirmDialog` behind a pointer-only
+menu) and the advance path bypassed it.
+
+**2. The round-end sweep could dead-end at a round boundary.** `VALIDATE_QUESTION` outranks `ADVANCE`
+and correctly sweeps the **whole quiz** (§6.2), but every "way out" read `timeline` — the **current
+round**. With a validation deferred in round 1 and round 1's questions all played, there was nothing
+to offer and no `ADVANCE` state to fall back to, so the sweep rendered with **no primary action at
+all**. §6.2 promises the exact opposite in as many words.
+
+The second one had two halves, and the browser found the half the first fix missed: putting the
+suggestion on the view was not enough, because `advanceSuggestion` also answered `NEXT_QUESTION` for
+a `SCORED` question **without checking whether a next question existed**. `SCORED` now falls through
+to the round logic; only `REVEALED` short-circuits, because awarding points is genuinely an act on
+*this* question.
+
+Both are now fixed, both are tested, and the root cause the code review named — *"the next-pending
+selector is duplicated four times, and the duplication is why the round-boundary dead-end wasn't
+caught"* — is gone: `components/control/advance.ts` is the one place that maps a suggestion to a
+call, and the one place that knows which advance is irreversible.
+
+Also from that round: the finale desk now renders a finale question's attachment (PRD 1 §8.8 permits
+one), `protocol.md`'s whole `attention` union was corrected to the **flattened** shape the code
+actually has (the drift was wider than the review spotted — `SCORE_DO` and `FINALE_TURN` were wrapped
+in the spec too), the skip menu item's disabled state now mirrors §9.1's real legality window, and
+the sentinel test says in writing why eleven new master-only fields do not belong in its table.
+
+One carried-over finding was already closed: conventions §4's `CHECKSUM_MISMATCH` and
+`IMPORT_COLLISION` rows already document, at length, that they are declared and never returned and
+why. No change needed.
+
+### Spec deviations
+
+None knowingly. Everything above is an *addition* to protocol §5.4/§5.5, written into the spec in
+this change (agent-workflow §3.3) rather than left as a divergence.
+
+One reading recorded rather than silently taken: **§7.1 says that when every team is locked out this
+resolves to `ADVANCE / suggestion: 'REVEAL'`.** It cannot — an `OPEN` question has no legal
+transition to `REVEALED` (PRD 1 §7.1), so the honest sequence is *"nobody got it"* → `[Close
+answers]` → `[Reveal answer]`, which is what the desk does. D35 rule 4's actual requirement — the
+master is never left with no live buzzers and no prompt — holds either way. The example in §7.1
+predates `LOCK` existing in the suggestion union.
+
+One judgement call worth flagging: **PRD 3 §10.1's example penalty arithmetic does not reproduce.**
+*"Penalty per keyword: 20s → up to 320s off a 490s pool"* — with 4 finalists, 5 keywords and a 20s
+penalty, the seconds a question can take out of the pool is `20 × 5 × (4−1) = 300`, not 320. The
+formula implemented is that one, matching `suggestFinaleQuestions`'s inner term (conventions §8.1) so
+the picker and the suggestion cannot disagree. If 320 was arithmetic rather than an illustration, the
+PRD needs a correction I could not derive.
+
+### Raised, not resolved
+
+- **`EventSource` cannot set headers, and `/api/live/:gameId/play` requires `X-Kwiz-Device`.** Slice 7
+  will hit a wall here: no browser can send that header on a stream. The fix is a query parameter or
+  a cookie, and it is a protocol §2.1/§7.1 decision, not an implementation detail — worth settling
+  before the player surface starts.
+- **The timeline shows a past question's prompt and state, never its answers.** Those are
+  O(questions × teams) and belong to PRD 2 §13's review grid over REST (§1.1) — which is slice 8's.
+  So §2.1's *"a read-only jump to see what happened"* is currently half-built: you can see *which*
+  question and *what* happened to it, not who answered what.
+- **`adjustments` is capped at the most recent eight.** Enough for `[Undo]`, which is what §11 asks
+  for; the full audit is §13.3's and needs a REST read.
+- **Nothing exercises two live games at once from this surface.** Cross-game isolation is covered at
+  the transport level (slice 3) and belongs to slice 9's scenario 22 end to end.
+
+### Deliberately left out
+
+- **`/screen/:gameId`** — the link in the header points at PRD 4's route, which slice 6 builds. It is
+  a link to a 404 today, deliberately: a stub main screen would be exactly what agent-workflow §3.1
+  forbids.
+- **Post-game review** stays slice 8's, so §9.2's *"where instead"* column points at a screen that
+  does not exist yet.
+
+### What the next agent would otherwise rediscover
+
+- **`useLiveView` is the whole client half of the transport** (`lib/client/use-live-view.ts`).
+  Slices 6 and 7 should use it rather than opening their own `EventSource`; the only thing in it that
+  is not obvious is the `FAILED` path, which **fetches the same URL once** to read the typed body —
+  `EventSource` reports "it broke" and never why, and D14's 503 has to be distinguishable from a 404.
+- **`components/admin/live-teams.tsx` still opens its own stream** and narrows with zod. It predates
+  the hook and is deliberately different: it merges into server-rendered state and consumes four
+  fields, where the desk consumes a whole `MasterControlView` that has no schema to narrow against
+  without restating it. Do not "unify" them without deciding which of those two things you want.
+- **The keyboard map is one file** (`components/control/keys.tsx`). §13 also lists what must *never*
+  be bound — ending, abandoning, skipping, proxy-submitting — and that absence is only checkable if
+  there is one list. `digitIndex` reads `event.code`, not `event.key`, because §10.3 binds
+  `Shift`+`1`–`5` and with Shift held `key` is `!` on a US layout and something else on a Belgian one.
+- **Clocks tick on the client, never on the server** (`lib/client/use-countdown.ts`, D52). Both hooks
+  read the *local* clock, which is the same machine for control and a possible skew on a phone — no
+  game fact depends on it, since the deadline is advisory (D8).
+- **Actions are fire-and-forget through one `run()`** in `control-desk.tsx`. Awaiting one is only ever
+  waiting for the refusal; the resulting view arrives on the stream (protocol §7).
+- **`ControlKeys` must wrap anything that binds a key**, and a zone returns `true` to say it consumed
+  one. The most recently mounted zone is asked first, so the attention zone beats the frame.
+- **A `409` in the console during a smoke run is usually correct** — it is a typed refusal
+  (`QUESTION_STILL_OPEN` on a break over an open question, most often), not a bug.
+- **`minuteSeconds` lives in `break-desk.tsx`** and is used by the media controls too. `m:ss` for
+  breaks and media, whole seconds for timers and finale clocks, `HH:mm` for an elimination instant —
+  conventions §8.2, and the three are not interchangeable.
+- **`AddTeamButton` wraps PRD 2's dialog rather than growing a second one.** A table walking in is
+  the same event whichever screen the master is on, and the dialog's numbers (`missedSoFar`) are the
+  entire reason it is justified. If you add a third entry point, add it there.
+- **Grep the message catalogue for unused keys before calling a surface done.** It found sixteen
+  missing PRD clauses here in about a minute, and it will keep working for slices 6 and 7 — but it is
+  blind to a bug where every clause *is* rendered and the control flow is wrong, which is what the
+  independent review's two criticals were. Both kinds of pass are needed.
+- **`components/control/advance.ts` is the only place that decides what advancing does**, and the
+  only place that knows `FINISH` is irreversible. If you add a surface with a "next" button, call it
+  rather than reading `view.timeline` — that read is per-round, and four copies of it hid a dead end.
+- **`vitest` still resolves no `@/` alias**, so a test in `apps/web` imports relatively. It cost a
+  few minutes here and it is the reason no route handler has a test; worth fixing properly before
+  slices 6 and 7 write component tests of their own.
+
 ## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
 
 **Status:** complete · `pnpm check` green · **512 tests** · lint silent · every screen driven by

@@ -17,8 +17,11 @@ import {
   type Standing,
   type Timer,
 } from './derive'
+import { missedSoFar, type MissedSoFar } from './late-team'
+import { questionFindings, type PreflightCode } from './preflight'
 import { revealsCorrectAnswer } from './question-state'
 import {
+  allQuestions,
   findQuestion,
   roundOf,
   type GameState,
@@ -26,12 +29,15 @@ import {
   type OptionContent,
   type QuestionContent,
   type QuestionPlayState,
+  type RoundContent,
 } from './state'
 import type {
   AnswerVerdict,
   BuzzOutcome,
   DoScoringMode,
+  GameStatus,
   Locale,
+  RoundType,
   TiePayout,
 } from './vocabulary'
 
@@ -686,6 +692,8 @@ export interface ValidationItem {
   enteredByMaster: boolean
   /** A soft aid only: identical text is linked so an inconsistent pair is hard to miss. */
   hasIdenticalSibling: boolean
+  /** PRD 3 §5.3 — whether this answer is currently on the projector, so the toggle can say so. */
+  spotlit: boolean
 }
 
 export interface MasterQuestionDetail {
@@ -702,7 +710,57 @@ export interface MasterQuestionDetail {
   teamAnswers: ValidationItem[]
   buzzes?: { buzzId: string; teamId: string; offsetMs: number; outcome: BuzzOutcome }[]
   lockedOutTeamIds?: string[]
+  /** PRD 2 §10's *play anyway* marker (`⚠`). The code only — copy lives in the messages module. */
+  failsPreflight?: PreflightCode
 }
+
+/**
+ * One row of PRD 3 §2.1's timeline: `Q1✓ Q2✓ Q3✓ [Q4] Q5 Q6⚠ Q7`.
+ *
+ * The **current round's** questions, so this is O(questions in a round) — the same bound
+ * `MasterBoardView` already accepts for a Jeopardy board's tiles, and nowhere near D39's
+ * O(questions × teams) ceiling. `prompt` is master-only, for the same reason a tile's is: the master
+ * has to be able to answer *"what did I skip?"* without navigating away from the desk.
+ */
+export interface TimelineEntry {
+  gameQuestionId: string
+  position: number
+  prompt: string
+  state: QuestionPlayState['state']
+  failsPreflight?: PreflightCode
+}
+
+/**
+ * PRD 3 §11's *"recent adjustments are listed with `[Undo]`"*.
+ *
+ * **Capped at the most recent few, newest first.** The full audit is PRD 2 §13.3's, which is a REST
+ * read over a finished game — an evening's worth of adjustments is unbounded and has no business on
+ * every push (§1.1). Revoked ones stay in the list, greyed, because a master who undid the wrong one
+ * needs to see that they did.
+ */
+export interface MasterAdjustment {
+  id: string
+  teamId: string
+  delta: number
+  reason: string | null
+  announced: boolean
+  revoked: boolean
+  createdAt: number
+}
+
+/** How many of §11's adjustments ride along on every push. */
+const RECENT_ADJUSTMENTS = 8
+
+/**
+ * What the master's primary button should do next. `LOCK` is `[Close answers]` — the only thing
+ * that ends a question, since the timer is advisory and never does (D8).
+ */
+export type AdvanceSuggestion =
+  | 'LOCK'
+  | 'REVEAL'
+  | 'NEXT_QUESTION'
+  | 'NEXT_ROUND'
+  | 'FINISH'
 
 export type Attention =
   | { kind: 'NONE' }
@@ -730,11 +788,25 @@ export type Attention =
       gameQuestionId: string
       prompt: string
       masterNotes: string | null
+      /**
+       * PRD 1 §8.5 — attachments work on **every** question type, and §8.8 says so explicitly for a
+       * finale: *"attachments work as on any question, though a keyword question rarely needs one."*
+       * The authoring surface agrees and lets a master attach one, so the desk has to be able to
+       * play it — rare is not never, and the alternative is media that can be attached and never
+       * triggered.
+       */
+      media: MediaRef[]
       questionNumber: number
       questionTotal: number
-      currentTeamId: string
+      /**
+       * **Null between turns** — a finale question that has just opened, and the gap after a pass
+       * before the next team is started. §10.5 says clocks stop while nobody is on turn, so this is
+       * the same desk with the clock not yet running rather than a screen of its own; `nextTeamId`
+       * is then who `[Start <team>]` would start, by the fewest-seconds rule (PRD 1 §8.8).
+       */
+      currentTeamId: string | null
       nextTeamId: string | null
-      turnStartedAt: number
+      turnStartedAt: number | null
       penaltySeconds: number
       /** The master always sees the text; no other audience does before marking (D53). */
       keywords: {
@@ -751,6 +823,8 @@ export type Attention =
         secondsAtTurnStart: number
         onTurn: boolean
         eliminated: boolean
+        /** §10.2's *"out 21:03"* — a wall-clock instant, so the master can say when (§8.2). */
+        eliminatedAt: number | null
         passedThisQuestion: boolean
       }[]
       /** Nobody left to pass to → offer `[Reveal remaining]`. */
@@ -783,20 +857,70 @@ export type Attention =
         score: number
         seconds: number
       }[]
+      /**
+       * The two settings behind `seconds`. PRD 3 §10.1 restates the penalty arithmetic live against
+       * the finalist count — *"20s → up to 320s off a 490s pool"* — and that is the one number
+       * deciding whether the round lasts five questions or one, so the desk must not have to
+       * reverse-engineer it from a candidate's score-to-seconds ratio.
+       */
+      penaltySeconds: number
+      secondsPerPoint: number
     }
   | {
       kind: 'VALIDATE_QUESTION'
       gameQuestionId: string
+      /**
+       * protocol §5.4 declares a `QuestionRef` here and the first implementation flattened it to the
+       * id alone — which left §6.1's screen **asking for a verdict with the evidence on another
+       * page**. The sweep can be about a question from an earlier round, so nothing else on the view
+       * can supply these: `question` is the current one, and the timeline is the current round.
+       */
+      prompt: string
+      acceptedAnswers: string[]
+      masterNotes: string | null
       items: ValidationItem[]
       remainingQuestions: number
     }
-  | { kind: 'ADVANCE'; suggestion: 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
+  | { kind: 'ADVANCE'; suggestion: AdvanceSuggestion }
 
 export interface MasterControlView {
   code: string
   joinUrl: string
+  /** PRD 3 §4 is a whole screen that exists only in `SETUP`, and §10.6 only in `FINISHED`. */
+  status: GameStatus
   teams: (TeamPublic & { deviceCount: number })[]
-  round: { id: string; title: string; number: number; total: number } | null
+  round: {
+    id: string
+    title: string
+    /** The desk is a different desk per round type; the client must not infer it from `board`. */
+    type: RoundType
+    number: number
+    total: number
+  } | null
+  /**
+   * What `ADVANCE / NEXT_ROUND` opens: the round after the current one, or the **first** round when
+   * none is open yet.
+   *
+   * Top-level rather than inside `round`, because the case that needs it most is the one where
+   * `round` is `null` — a game that has just started and has no round open. Without it the desk
+   * knows a round exists and cannot name it, and a client that fetched the quiz tree to press one
+   * button would be holding a second copy of the running order.
+   */
+  nextRoundId: string | null
+  /**
+   * What advancing would do **regardless of what currently has the master's attention.**
+   *
+   * `attention: ADVANCE` carries the same value, and both are assigned from one expression below so
+   * they cannot disagree — but only one `attention` state is ever active, and a desk that can only
+   * see the suggestion when nothing else needs it has no way forward from the states that outrank
+   * it. That is not hypothetical: it dead-ended the round-end sweep. `VALIDATE_QUESTION` outranks
+   * `ADVANCE` unconditionally and correctly sweeps the **whole quiz** (§6.2), while `timeline` is
+   * the current round — so a validation deferred in round 1, revisited once round 1 had no unplayed
+   * questions left, left the master on a screen with no primary action at all. §6.2 promises the
+   * exact opposite: *"blocking the master from moving on would be the one thing worse than
+   * provisional scores."*
+   */
+  advance: AdvanceSuggestion | null
   attention: Attention
   question: MasterQuestionDetail | null
   board?: {
@@ -811,6 +935,34 @@ export interface MasterControlView {
     currentPickerTeamId: string | null
     tiedForPickTeamIds: string[]
   }
+  /** PRD 3 §2.1 — the current round's questions, with state markers. */
+  timeline: TimelineEntry[]
+  /** PRD 3 §11 — the most recent few, newest first. */
+  adjustments: MasterAdjustment[]
+  /**
+   * PRD 3 §11.2 — `attention` is `NONE` during a break, so without this the master would have no
+   * way to see they are on one, extend it, or resume.
+   */
+  break: { startedAt: number; resumesAt: number | null } | null
+  /** PRD 3 §11.1's `[Show scores on screen]`, which is a toggle and has to render its state (O4). */
+  scoreboardShown: boolean
+  /**
+   * PRD 3 §12 — *"2 control screens connected"*. A **transport** fact, not a game fact: it is not in
+   * the log, cannot be replayed, and is therefore passed in rather than derived. Zero means nobody
+   * told this filter, which is why the indicator only ever appears above one.
+   */
+  controlScreens: number
+  /** PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends. */
+  finaleRanking: string[][] | null
+  /**
+   * What a team joining now would have missed (PRD 2 §11.2, O5).
+   *
+   * `[+ Add team]` is required at **every** status from master control as well as the config
+   * surface, and the dialog's whole justification is that these numbers are computed rather than
+   * worked out in a noisy room. Five numbers, so it costs nothing to carry. `null` in `SETUP`,
+   * where nothing has been missed yet and the dialog drops the section entirely.
+   */
+  missed: MissedSoFar | null
   /** **Counts only** — never the list, so the bounded-view rule holds (§1.1). */
   pendingValidationCount: number
 }
@@ -819,6 +971,8 @@ export function toMasterControlView(
   state: GameState,
   now: number,
   joinUrl = '',
+  /** Live `MASTER_CONTROL` subscribers, counted by the transport (§12). */
+  controlScreens = 0,
 ): MasterControlView {
   const roundIndex = state.content.rounds.findIndex((r) => r.id === state.currentRoundId)
   const round = state.content.rounds[roundIndex]
@@ -828,6 +982,7 @@ export function toMasterControlView(
   const view: MasterControlView = {
     code: state.code,
     joinUrl,
+    status: state.status,
     teams: [...state.teams.values()]
       .sort((a, b) => a.position - b.position)
       .map((team) => ({ ...teamPublic(team), deviceCount: team.deviceCount })),
@@ -835,12 +990,43 @@ export function toMasterControlView(
       ? {
           id: round.id,
           title: round.title,
+          type: round.type,
           number: roundIndex + 1,
           total: state.content.rounds.length,
         }
       : null,
+    // `roundIndex` is -1 with nothing open, so this is the first round — which is exactly the case
+    // a freshly started game is in.
+    nextRoundId: state.content.rounds[roundIndex + 1]?.id ?? null,
+    /*
+     * The same suggestion `attention: ADVANCE` carries, from the same function — so the two can
+     * never disagree — but available whatever has the master's attention. See the field's own note.
+     */
+    advance: advanceSuggestion(state, play),
     attention: attention(state, now),
     question: question && play ? masterQuestionDetail(state, question, play, now) : null,
+    timeline: timeline(state, round),
+    // Newest first, so `[Undo]` is next to the thing most likely to be wrong.
+    adjustments: state.adjustments
+      .slice()
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, RECENT_ADJUSTMENTS)
+      .map((adjustment) => ({
+        id: adjustment.id,
+        teamId: adjustment.teamId,
+        delta: adjustment.delta,
+        reason: adjustment.reason,
+        announced: adjustment.announced,
+        revoked: adjustment.revokedAt !== null,
+        createdAt: adjustment.createdAt,
+      })),
+    break: state.break
+      ? { startedAt: state.break.startedAt, resumesAt: state.break.resumesAt }
+      : null,
+    scoreboardShown: state.scoreboardShown,
+    controlScreens,
+    finaleRanking: state.finale.ranking,
+    missed: state.status === 'SETUP' ? null : missedSoFar(state),
     pendingValidationCount: pendingValidationCount(state),
   }
 
@@ -870,6 +1056,50 @@ export function toMasterControlView(
   return view
 }
 
+/**
+ * PRD 2 §10's `⚠`, re-derived from the game copy rather than remembered.
+ *
+ * A game copy is write-once (I16), so this cannot change mid-game — but nothing records the verdict
+ * `[Play anyway]` was pressed against, and re-deriving is the only way the marker survives into the
+ * desk. It calls `questionFindings`, the same function the authoring row's `✓`/`⚠` uses, so the two
+ * can never disagree.
+ *
+ * **The one check it does not repeat is `ATTACHMENT_MISSING`**: re-hashing a file is filesystem work
+ * and this package cannot reach a filesystem. That check belongs to pre-flight at `[Play]` time, and
+ * PRD 3 §12 has the live fallback for a song that will not play — the master hears it first.
+ */
+function failsPreflight(
+  round: RoundContent,
+  question: QuestionContent,
+): PreflightCode | undefined {
+  return questionFindings(question, round).find((finding) => finding.severity === 'ERROR')
+    ?.code
+}
+
+/** PRD 3 §2.1 — the current round's questions in play order, with their state markers. */
+function timeline(state: GameState, round: RoundContent | undefined): TimelineEntry[] {
+  if (!round) return []
+
+  return (
+    round.questions
+      .slice()
+      // Sorted here for the same reason `boardView` sorts categories: `packages/domain` does not
+      // depend on the caller having already ordered rows.
+      .sort((a, b) => a.position - b.position)
+      .map((question) => {
+        const entry: TimelineEntry = {
+          gameQuestionId: question.id,
+          position: question.position,
+          prompt: question.prompt,
+          state: state.questions.get(question.id)?.state ?? 'PENDING',
+        }
+        const code = failsPreflight(round, question)
+        // Built up, never stripped: a healthy question's entry simply has no `failsPreflight` key.
+        return code ? { ...entry, failsPreflight: code } : entry
+      })
+  )
+}
+
 function validationItems(state: GameState, play: QuestionPlayState): ValidationItem[] {
   const answers = [...play.answers.values()]
   const counts = new Map<string, number>()
@@ -893,6 +1123,7 @@ function validationItems(state: GameState, play: QuestionPlayState): ValidationI
       enteredByMaster: answer.enteredByMaster,
       hasIdenticalSibling:
         answer.text !== null && (counts.get(normaliseAnswer(answer.text)) ?? 0) > 1,
+      spotlit: answer.spotlit,
     }
   })
 }
@@ -935,6 +1166,10 @@ function masterQuestionDetail(
     }))
     detail.lockedOutTeamIds = lockedOutTeamIds(play)
   }
+
+  const round = roundOf(state.content, question.id)
+  const broken = round && failsPreflight(round, question)
+  if (broken) detail.failsPreflight = broken
 
   return detail
 }
@@ -993,12 +1228,28 @@ export function attention(state: GameState, now: number): Attention {
     }
   }
 
-  // 2. FINALE_TURN — clocks are running and every second costs a team.
-  if (round?.type === 'DSMTW_FINALE' && question) {
+  /*
+   * 2. FINALE_TURN — clocks are running and every second costs a team.
+   *
+   * Also the state **between** turns: a finale question that has just opened has no turn yet, and
+   * nothing else on the desk could start one. §10.5 says clocks stop while nobody is on turn, so
+   * this is the same screen with the clock not yet running rather than a state of its own — and
+   * `nextTeamId` is then who `[Start <team>]` starts, by the fewest-seconds rule (PRD 1 §8.8).
+   */
+  // …but never once the round is over: the ranking is what needs the master then (§10.6), and a
+  // turn desk with nobody left on it shows an empty team name where a name should be.
+  if (
+    round?.type === 'DSMTW_FINALE' &&
+    question &&
+    play &&
+    state.finale.ranking === null
+  ) {
     const turn = currentFinaleTurn(state)
-    if (turn) {
+    if (turn || (play.state === 'OPEN' && state.finale.finalistIds.length > 0)) {
       const passed = new Set(passedThisQuestion(state, question.id))
       const order = finaleTurnOrder(state, question.id, now)
+      // Every clock is read at the same instant, so the strip is internally consistent (D52).
+      const at = turn?.startedAt ?? now
       // Same computation as `finaleView`'s (§5.5's `FinaleTurnDetail` — "Q3 of 6" — P2 #13).
       const finaleQuestions = round.questions
       return {
@@ -1006,11 +1257,14 @@ export function attention(state: GameState, now: number): Attention {
         gameQuestionId: question.id,
         prompt: question.prompt,
         masterNotes: question.masterNotes,
+        // Rare on a keyword question, and explicitly permitted (PRD 1 §8.8).
+        media: question.media.map(mediaRef),
         questionNumber: finaleQuestions.findIndex((q) => q.id === question.id) + 1,
         questionTotal: finaleQuestions.length,
-        currentTeamId: turn.teamId,
-        nextTeamId: order.find((teamId) => teamId !== turn.teamId) ?? null,
-        turnStartedAt: turn.startedAt,
+        currentTeamId: turn?.teamId ?? null,
+        // With no turn running this is `order[0]` — the team the rule says goes first.
+        nextTeamId: order.find((teamId) => teamId !== turn?.teamId) ?? null,
+        turnStartedAt: turn?.startedAt ?? null,
         penaltySeconds: state.finale.penaltySeconds ?? 0,
         keywords: question.keywords.map((keyword) => {
           const mark = state.keywordMarks.get(keyword.id)
@@ -1030,9 +1284,10 @@ export function attention(state: GameState, now: number): Attention {
             name: team?.name ?? '',
             colour: team?.colour ?? '',
             // At turn start, not now: the client counts down from `turnStartedAt` (D52).
-            secondsAtTurnStart: finaleRemainingSeconds(state, teamId, turn.startedAt),
-            onTurn: turn.teamId === teamId,
+            secondsAtTurnStart: finaleRemainingSeconds(state, teamId, at),
+            onTurn: turn?.teamId === teamId,
             eliminated: (team?.eliminatedAt ?? null) !== null,
+            eliminatedAt: team?.eliminatedAt ?? null,
             passedThisQuestion: passed.has(teamId),
           }
         }),
@@ -1079,6 +1334,8 @@ export function attention(state: GameState, now: number): Attention {
     const rate = state.finale.secondsPerPoint ?? 0
     return {
       kind: 'PICK_FINALISTS',
+      penaltySeconds: state.finale.penaltySeconds ?? 0,
+      secondsPerPoint: rate,
       // Descending score order, so deselecting the bottom few is a two-second job (D55).
       candidates: [...state.teams.values()]
         .sort((a, b) => b.score - a.score || a.position - b.position)
@@ -1093,18 +1350,30 @@ export function attention(state: GameState, now: number): Attention {
     }
   }
 
+  /*
+   * A break outranks the two states where the room is **not** blocked (PRD 3 §11.2: *"while on
+   * break, `attention` stays `NONE`, so control shows the leaderboard"*). The five above it stay
+   * where they are: those are the states where a room is actually waiting, and hiding a buzz or a
+   * running finale clock behind an interval would be worse than the interruption.
+   *
+   * In practice only `SCORE_DO` can co-occur at all — a break is refused while a question is `OPEN`
+   * (§11.2), which rules the other four out by construction.
+   */
+  if (state.break) return { kind: 'NONE' }
+
   // 6. VALIDATE_QUESTION — needed before scores are honest, but the room is not blocked.
-  if (question && play && play.state !== 'PENDING' && play.state !== 'SKIPPED') {
-    const items = validationItems(state, play)
-    if (items.some((item) => item.verdict === 'PENDING')) {
-      return {
-        kind: 'VALIDATE_QUESTION',
-        gameQuestionId: question.id,
-        // Grouped by question, all teams together: judging one answer in isolation is what makes
-        // an inconsistent pair invisible (PRD 3 §6.1).
-        items,
-        remainingQuestions: remainingUnvalidatedQuestions(state, question.id),
-      }
+  const validating = questionNeedingValidation(state, question?.id ?? null, play)
+  if (validating) {
+    return {
+      kind: 'VALIDATE_QUESTION',
+      gameQuestionId: validating.question.id,
+      prompt: validating.question.prompt,
+      acceptedAnswers: validating.question.acceptedAnswers,
+      masterNotes: validating.question.masterNotes,
+      // Grouped by question, all teams together: judging one answer in isolation is what makes
+      // an inconsistent pair invisible (PRD 3 §6.1).
+      items: validationItems(state, validating.play),
+      remainingQuestions: remainingUnvalidatedQuestions(state, validating.question.id),
     }
   }
 
@@ -1114,6 +1383,51 @@ export function attention(state: GameState, now: number): Attention {
 
   // 8. NONE — show the leaderboard big.
   return { kind: 'NONE' }
+}
+
+const hasPendingAnswer = (play: QuestionPlayState): boolean =>
+  [...play.answers.values()].some((answer) => answer.verdict === 'PENDING')
+
+/**
+ * Which question `VALIDATE_QUESTION` should be about — and the whole of PRD 3 §6.2's **round-end
+ * sweep**, which until slice 5 did not exist: `attention` only ever looked at the current question,
+ * so once a round closed, every answer deferred during it became unreachable from the desk while
+ * `pendingValidationCount` went on counting them. D6 promises that screen explicitly.
+ *
+ * Two rules, in this order:
+ *
+ * 1. **The current question wins**, which is D42's inline path (§5.1) — the master judges in the
+ *    dead time while one slow team is still typing.
+ * 2. **Otherwise sweep the earliest question still owed a verdict**, but only once the master is no
+ *    longer mid-question. An `OPEN` or `LOCKED` question means they are working; pulling them back
+ *    to round 1 in the middle of it is the one thing worse than deferring.
+ */
+function questionNeedingValidation(
+  state: GameState,
+  currentId: string | null,
+  current: QuestionPlayState | undefined,
+): { question: QuestionContent; play: QuestionPlayState } | undefined {
+  if (
+    currentId &&
+    current &&
+    current.state !== 'PENDING' &&
+    current.state !== 'SKIPPED' &&
+    hasPendingAnswer(current)
+  ) {
+    const question = findQuestion(state.content, currentId)
+    if (question) return { question, play: current }
+  }
+
+  if (current && (current.state === 'OPEN' || current.state === 'LOCKED'))
+    return undefined
+
+  // Play order, not `Map` insertion order: the sweep walks the quiz the way it was played.
+  for (const question of allQuestions(state.content)) {
+    const play = state.questions.get(question.id)
+    if (!play || play.state === 'PENDING' || play.state === 'SKIPPED') continue
+    if (hasPendingAnswer(play)) return { question, play }
+  }
+  return undefined
 }
 
 function remainingUnvalidatedQuestions(state: GameState, exceptId: string): number {
@@ -1129,14 +1443,42 @@ function remainingUnvalidatedQuestions(state: GameState, exceptId: string): numb
 function advanceSuggestion(
   state: GameState,
   play: QuestionPlayState | undefined,
-): 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' | null {
+): AdvanceSuggestion | null {
   if (state.status !== 'LIVE') return null
+
+  /*
+   * A finished finale outranks the open question it left behind (§10.6). The round ends on one
+   * survivor, on all of them out, or on the questions running out — and at that point the desk
+   * shows the ranking and the only thing left to do is end the game, since a finale is always the
+   * last round (I20). Suggesting `[Close answers]` over the ranking would be both wrong copy and
+   * the wrong step.
+   */
+  if (state.finale.ranking !== null) return 'FINISH'
+
+  /*
+   * `LOCK` was missing from this union until slice 5, and it is the single most common primary
+   * action in a game: while a question is `OPEN` the desk suggested `NEXT_QUESTION`, because the
+   * fall-through below found unplayed questions in the round. PRD 3 §1.1 says the master must never
+   * have to work out what needs them — a suggestion that points past the live question is worse
+   * than none.
+   */
+  if (play?.state === 'OPEN') return 'LOCK'
   if (play?.state === 'LOCKED') return 'REVEAL'
-  if (play && (play.state === 'REVEALED' || play.state === 'SCORED'))
-    return 'NEXT_QUESTION'
+  /*
+   * `REVEALED` is the one state whose next act is on *this* question — awarding the points. `SCORED`
+   * deliberately falls **through** to the round logic below rather than answering `NEXT_QUESTION`:
+   * there may not be a next question, and claiming there is was the second half of the round-boundary
+   * dead end. A scored last question of a round means `NEXT_ROUND`, and of the last round `FINISH`.
+   */
+  if (play?.state === 'REVEALED') return 'NEXT_QUESTION'
 
   const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
-  if (!round) return null
+  /*
+   * A live game with no round open — which every game is for the first few seconds after
+   * `[Start the quiz]`. This returned `null` before slice 5's browser pass, so `attention` was
+   * `NONE`, the desk showed a leaderboard, and **there was no way to open the first round at all**.
+   */
+  if (!round) return state.content.rounds.length > 0 ? 'NEXT_ROUND' : null
 
   const unplayed = round.questions.filter(
     (question) => (state.questions.get(question.id)?.state ?? 'PENDING') === 'PENDING',

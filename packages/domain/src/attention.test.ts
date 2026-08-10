@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { GameEvent } from './events/payload'
 import { reduce, type LoggedEvent } from './reduce'
 import type { GameContent, GameState } from './state'
-import { attention } from './views'
+import { attention, toMasterControlView } from './views'
 
 /**
  * PRD 3 §3.1 — **exactly one** attention state is active, and which one is game logic, computed
@@ -151,6 +151,18 @@ const pendingAnswer = (gameQuestionId: string, teamId: string): GameEvent => ({
 })
 
 describe('each state is reachable', () => {
+  /**
+   * Found by driving the desk: a game with no round open returned no suggestion at all, so the
+   * master was shown a leaderboard and **nothing that could open the first round**.
+   */
+  it('suggests NEXT_ROUND on a live game with no round open', () => {
+    const state = run([SETUP[0]!, SETUP[1]!, { type: 'GAME_STARTED', payload: {} }])
+    const result = attention(state, NOW)
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('NEXT_ROUND')
+    // …and the view names which one, since `round` is null and cannot carry it.
+    expect(toMasterControlView(state, NOW).nextRoundId).toBe('r1')
+  })
+
   it('is NONE before the game starts', () => {
     expect(kindOf(run([SETUP[0]!, SETUP[1]!]))).toBe('NONE')
   })
@@ -281,6 +293,32 @@ describe('each state is reachable', () => {
    * `questionNumber` and `questionTotal` so the master desk can render "Q1 of 1" without a
    * second lookup; the pushed view had omitted all four.
    */
+  /**
+   * §10.5 stops the clocks while nobody is on turn, so the desk between turns is the same screen
+   * with the clock not running. Before slice 5 this was unrepresentable — `FINALE_TURN` needed an
+   * active turn — so a freshly opened finale question fell through to the *question* desk, which
+   * drew a proxy-answer control for a round nobody types in, and nothing could start the first turn.
+   */
+  it('is FINALE_TURN between turns too, naming who goes next', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'ROUND_OPENED', payload: { gameRoundId: 'r3' } },
+      { type: 'FINALE_CONFIGURED', payload: { secondsPerPoint: 1, penaltySeconds: 20 } },
+      { type: 'FINALISTS_SET', payload: { teamIds: [A, B] } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FIN } },
+    ])
+
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('FINALE_TURN')
+    if (result.kind !== 'FINALE_TURN') return
+    expect(result.currentTeamId).toBeNull()
+    expect(result.turnStartedAt).toBeNull()
+    // Whoever the fewest-seconds rule puts first — which is what `[Start <team>]` starts.
+    expect(result.nextTeamId).not.toBeNull()
+    // §10.2's `out 21:03` needs the instant, not just the fact.
+    expect(result.clocks.every((clock) => clock.eliminatedAt === null)).toBe(true)
+  })
+
   it("FINALE_TURN carries the prompt and the question's position in the round", () => {
     const state = run([
       ...SETUP,
@@ -325,6 +363,20 @@ describe('each state is reachable', () => {
         ]),
       ),
     ).toBe('ADVANCE')
+  })
+
+  /**
+   * `LOCK` was missing from the suggestion union until slice 5, so an open question — the most
+   * common state in a game — suggested `NEXT_QUESTION`, pointing the master past the thing the room
+   * is currently answering.
+   */
+  it('suggests LOCK while a question is open, not NEXT_QUESTION', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('LOCK')
   })
 
   it('suggests REVEAL on a locked question and NEXT_QUESTION once revealed', () => {
@@ -411,7 +463,163 @@ describe('priority when conditions compete (PRD 3 §3.1)', () => {
     expect(kindOf(state)).toBe('ADVANCE')
   })
 
+  /**
+   * PRD 3 §11.2: *"while on break, `attention` stays `NONE`, so control shows the leaderboard"*.
+   * Before slice 5 nothing here looked at the break at all, so an interval with unplayed questions
+   * left still read as `ADVANCE` — a call to action pointed at a room that is at the bar.
+   */
+  it('drops to NONE during a break rather than urging the master on', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+    ])
+    expect(kindOf(state)).toBe('NONE')
+
+    // …and it is exactly a suspension: ending the break restores the same call to action.
+    const resumed = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+      { type: 'BREAK_ENDED', payload: {} },
+    ])
+    expect(kindOf(resumed)).toBe('ADVANCE')
+  })
+
+  /**
+   * The five urgent states keep their place: a break is refused while a question is `OPEN` (§11.2),
+   * so `SCORE_DO` is the only one that can co-occur — and a room watching for a verdict outranks an
+   * interval that has already started.
+   */
+  it('keeps SCORE_DO above a break', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: DO } },
+      { type: 'BREAK_STARTED', payload: { durationMs: 300_000 } },
+    ])
+    expect(kindOf(state)).toBe('SCORE_DO')
+  })
+
   /** A skipped question awards nothing and needs nothing — it must not hold the master. */
+  it('does not ask for validation on a skipped question', () => {
+    const state = run([
+      ...SETUP,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      pendingAnswer(FREE, A),
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: FREE } },
+    ])
+    expect(kindOf(state)).not.toBe('VALIDATE_QUESTION')
+  })
+})
+
+/**
+ * PRD 3 §6.2's sweep, and D6's original promise: *"at the end of a `QUESTION_SET` round, the admin
+ * is shown each question with each team's answer"*.
+ *
+ * Until slice 5 this did not exist. `attention` looked only at the current question, so an answer
+ * deferred in question 1 became unreachable from the desk the moment question 2 opened — while
+ * `pendingValidationCount` went on counting it, with nothing that could ever clear it.
+ */
+describe('the round-end validation sweep (§6.2)', () => {
+  const deferredThenMovedOn: GameEvent[] = [
+    ...SETUP,
+    { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+    pendingAnswer(FREE, A),
+    { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+    { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE } },
+  ]
+
+  it('comes back to an earlier question once the master is no longer mid-question', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: BUZZ } },
+    ])
+
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('VALIDATE_QUESTION')
+    if (result.kind !== 'VALIDATE_QUESTION') return
+    // The earliest one still owed a verdict, so the sweep walks the quiz in play order.
+    expect(result.gameQuestionId).toBe(FREE)
+    expect(result.items).toHaveLength(1)
+  })
+
+  it('still surfaces it after the round has closed', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'ROUND_CLOSED', payload: { gameRoundId: 'r1' } },
+    ])
+    expect(kindOf(state)).toBe('VALIDATE_QUESTION')
+  })
+
+  /**
+   * The rule that keeps the sweep from being a nuisance: an `OPEN` or `LOCKED` current question
+   * means the master is working, and being pulled back to round 1 mid-question is worse than the
+   * deferral it is trying to fix.
+   */
+  it('does not pull the master backwards while a question is open', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind).toBe('ADVANCE')
+    // …and the outstanding one is still counted, which is how it stays impossible to forget.
+    expect(toMasterControlView(state, NOW).pendingValidationCount).toBe(1)
+  })
+
+  /**
+   * The dead end, and the reason `advance` is on the view unconditionally.
+   *
+   * `VALIDATE_QUESTION` outranks `ADVANCE` and correctly sweeps the whole quiz, but the desk's way
+   * forward was read from `timeline` — the **current round**. Once this round had no unplayed
+   * question left and an earlier deferral was still outstanding, there was nothing to offer and no
+   * `ADVANCE` state to fall back to, so the sweep rendered with no primary action at all. §6.2
+   * promises the opposite: *"blocking the master from moving on would be the one thing worse than
+   * provisional scores."*
+   */
+  it('still says how to move on while the sweep holds the attention zone', () => {
+    const state = run([
+      ...SETUP,
+      // Every question in round 1 played, one of them with a verdict never given.
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      pendingAnswer(FREE, A),
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: PER_TEAM } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: PER_TEAM } },
+    ])
+
+    const view = toMasterControlView(state, NOW)
+    // The sweep still has the zone, which is right — the verdict is still owed.
+    expect(view.attention.kind).toBe('VALIDATE_QUESTION')
+    // …and the desk is still told what advancing does, which is what unsticks it.
+    expect(view.advance).toBe('NEXT_ROUND')
+    expect(view.nextRoundId).toBe('r2')
+    // Nothing left in this round to open, which is exactly the case that used to dead-end.
+    expect(view.timeline.some((entry) => entry.state === 'PENDING')).toBe(false)
+  })
+
+  it('prefers the current question when both are owed a verdict', () => {
+    const state = run([
+      ...deferredThenMovedOn,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      pendingAnswer(BUZZ, B),
+    ])
+    const result = attention(state, NOW)
+    expect(result.kind === 'VALIDATE_QUESTION' && result.gameQuestionId).toBe(BUZZ)
+    // `remainingQuestions` is what §6.2's "question 2 of 3" progress is built from.
+    expect(result.kind === 'VALIDATE_QUESTION' && result.remainingQuestions).toBe(1)
+  })
+
   it('does not ask for validation on a skipped question', () => {
     const state = run([
       ...SETUP,
