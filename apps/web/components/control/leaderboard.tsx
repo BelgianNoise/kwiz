@@ -1,11 +1,8 @@
 'use client'
 
-import type { AdvanceSuggestion } from '@kwiz/domain'
-import { useTranslations } from 'next-intl'
-
-import { usePrimaryAction, type ZoneProps } from '@/components/control/control-desk'
+import { AdvanceButton } from '@/components/control/advance-button'
+import type { ZoneProps } from '@/components/control/control-desk'
 import { TeamDot } from '@/components/control/team-dot'
-import { Button } from '@/components/ui/button'
 
 /**
  * `attention: NONE` — *"show the leaderboard, big"* (§3.1 priority 8), with the suggested action
@@ -14,7 +11,7 @@ import { Button } from '@/components/ui/button'
  * This is what the desk looks like between rounds and during a break, and it is the answer to the
  * question the master is asked more than any other.
  */
-export function Leaderboard({ view, api, run, gameId }: ZoneProps) {
+export function Leaderboard({ view, api, run }: ZoneProps) {
   const ranked = [...view.teams].sort((a, b) => b.score - a.score)
 
   return (
@@ -30,93 +27,7 @@ export function Leaderboard({ view, api, run, gameId }: ZoneProps) {
         ))}
       </ol>
 
-      <AdvanceButton view={view} api={api} run={run} gameId={gameId} />
+      <AdvanceButton view={view} api={api} run={run} />
     </section>
-  )
-}
-
-/**
- * §3.1 priority 7 — *"nothing is wrong; the master decides the pace"*, as one button.
- *
- * The suggestion is chosen server-side (protocol §5.4) and this only renders it, so the desk cannot
- * develop a second opinion about what comes next. `Enter` is bound to whatever this is (§13).
- */
-export function AdvanceButton({ view, api, run }: ZoneProps) {
-  const t = useTranslations('control.question')
-  const suggestion: AdvanceSuggestion | null =
-    view.attention.kind === 'ADVANCE' ? view.attention.suggestion : null
-
-  const nextPending = view.timeline.find((entry) => entry.state === 'PENDING')
-  const questionId = view.question?.gameQuestionId
-
-  const action = ((): { label: string; call: () => void } | null => {
-    if (view.status !== 'LIVE') return null
-
-    switch (suggestion) {
-      case 'LOCK':
-        return questionId
-          ? { label: t('close'), call: () => run(() => api.lockQuestion(questionId)) }
-          : null
-      case 'REVEAL':
-        return questionId
-          ? { label: t('reveal'), call: () => run(() => api.revealQuestion(questionId)) }
-          : null
-      case 'NEXT_QUESTION':
-        return nextPending
-          ? {
-              label: t('openNext'),
-              call: () => run(() => api.openQuestion(nextPending.gameQuestionId)),
-            }
-          : null
-      case 'NEXT_ROUND': {
-        const round = view.round
-        const next = view.nextRoundId
-        if (!next) return null
-        return {
-          label: t('nextRound'),
-          /*
-           * Close, then open. Both events matter: `ROUND_CLOSED` is what PRD 3 §6.2 hangs the
-           * validation sweep on, and skipping it would leave a round that was played and never
-           * ended in the log. Chained rather than fired together because the second is refused
-           * while the first has not landed — and there is nothing to close on the very first
-           * round, which is the state a game sits in the moment it starts.
-           */
-          call: () =>
-            run(async () => {
-              if (!round) return api.openRound(next)
-              const closed = await api.closeRound(round.id)
-              return closed.ok ? api.openRound(next) : closed
-            }),
-        }
-      }
-      case 'FINISH':
-        return {
-          label: t('finishGame'),
-          /*
-           * Lock the last question first when one is still open — which is exactly the finale's
-           * own case (§10.6): the round ends on a clock, not on the master closing the question,
-           * so the log would otherwise carry a question that was opened and never closed.
-           */
-          call: () =>
-            run(async () => {
-              if (questionId && view.question?.state === 'OPEN') {
-                const locked = await api.lockQuestion(questionId)
-                if (!locked.ok) return locked
-              }
-              return api.finish()
-            }),
-        }
-      default:
-        return null
-    }
-  })()
-
-  usePrimaryAction(action?.call ?? null)
-  if (!action) return null
-
-  return (
-    <Button size="lg" onClick={action.call}>
-      {action.label}
-    </Button>
   )
 }

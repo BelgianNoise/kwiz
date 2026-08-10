@@ -10,9 +10,10 @@ import { NotebookPen } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 
+import { AdvanceButton } from '@/components/control/advance-button'
 import { usePrimaryAction, type ZoneProps } from '@/components/control/control-desk'
 import { digitIndex, useControlKeys } from '@/components/control/keys'
-import { AdvanceButton } from '@/components/control/leaderboard'
+import { MediaControls } from '@/components/control/media-controls'
 import { TeamDot } from '@/components/control/team-dot'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -223,6 +224,13 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
             {turn.masterNotes}
           </p>
         ) : null}
+
+        {/*
+         * PRD 1 §8.8 — *"attachments work as on any question, though a keyword question rarely
+         * needs one."* Rare is not never, the authoring surface lets a master attach one, and
+         * playback is master-triggered on every other question type (D27), so it is here too.
+         */}
+        {turn.media.length > 0 ? <MediaControls media={turn.media} /> : null}
       </header>
 
       {/* Between turns the waiting team's name and clock take the same place, so the master's eye
@@ -421,7 +429,6 @@ export function FinaleRanking({
   view,
   api,
   run,
-  gameId,
   finished,
 }: ZoneProps & { finished?: boolean }) {
   const t = useTranslations('control.finale')
@@ -482,9 +489,7 @@ export function FinaleRanking({
         <PointsTable teams={byPoints} />
       )}
 
-      {finished ? null : (
-        <AdvanceButton view={view} api={api} run={run} gameId={gameId} />
-      )}
+      {finished ? null : <AdvanceButton view={view} api={api} run={run} />}
     </section>
   )
 }

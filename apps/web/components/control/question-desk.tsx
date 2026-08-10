@@ -5,12 +5,9 @@ import { AlertTriangle, Check, NotebookPen, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
+import { AdvanceButton } from '@/components/control/advance-button'
 import { BuzzerState } from '@/components/control/buzz-desk'
-import {
-  usePrimaryAction,
-  type Run,
-  type ZoneProps,
-} from '@/components/control/control-desk'
+import type { Run, ZoneProps } from '@/components/control/control-desk'
 import { useControlKeys } from '@/components/control/keys'
 import { MediaControls } from '@/components/control/media-controls'
 import { TeamDot } from '@/components/control/team-dot'
@@ -115,7 +112,6 @@ export function QuestionDesk({
         api={api}
         run={run}
         detail={detail ?? undefined}
-        sweeping={sweeping}
         items={items}
       />
     </section>
@@ -252,7 +248,6 @@ function AnswerList({
             key={item.teamId}
             item={item}
             questionId={questionId}
-            revealed={revealed}
             spotlightable={
               revealed && answerMethod !== 'MULTIPLE_CHOICE' && answerMethod !== 'BUZZER'
             }
@@ -285,14 +280,13 @@ function AnswerList({
 function AnswerRow({
   item,
   questionId,
-  revealed,
   spotlightable,
   api,
   run,
 }: {
   item: ValidationItem
   questionId: string
-  revealed: boolean
+  /** §5.3 — free-text only, and only once revealed. Everything else has nothing to curate. */
   spotlightable: boolean
   api: ControlApi
   run: Run
@@ -370,7 +364,7 @@ function AnswerRow({
         >
           {item.spotlit ? t('onScreen') : t('showOnScreen')}
         </Button>
-      ) : revealed ? null : null}
+      ) : null}
     </li>
   )
 }
@@ -439,66 +433,13 @@ function QuestionActions({
   api,
   run,
   detail,
-  sweeping,
   items,
-  // No `gameId`: every call this makes goes through the bound client, so it has no use for one.
 }: Omit<ZoneProps, 'gameId'> & {
   detail: MasterQuestionDetail | undefined
-  sweeping: boolean
   items: ValidationItem[]
 }) {
   const t = useTranslations('control.question')
-  const tv = useTranslations('control.validate')
   const unjudged = items.filter((item) => item.verdict === 'PENDING').length
-
-  const nextPending = view.timeline.find((entry) => entry.state === 'PENDING')
-
-  const action = ((): { label: string; call: () => void } | null => {
-    if (view.status !== 'LIVE') return null
-
-    /*
-     * §6.1's `[ Next question ]` on the sweep. **Deferring is explicitly allowed** (§6.2) — closing
-     * a round, or the game, with validations outstanding is legal — so the sweep must not be a trap.
-     * Since `attention` prefers the current question, opening the next one is exactly what leaves
-     * it, and it is the same call the advance button makes anywhere else.
-     */
-    if (sweeping || !detail) {
-      return nextPending
-        ? {
-            label: tv('done'),
-            call: () => run(() => api.openQuestion(nextPending.gameQuestionId)),
-          }
-        : null
-    }
-    switch (detail.state) {
-      case 'OPEN':
-        return {
-          label: t('close'),
-          call: () => run(() => api.lockQuestion(detail.gameQuestionId)),
-        }
-      case 'LOCKED':
-        return {
-          label: t('reveal'),
-          call: () => run(() => api.revealQuestion(detail.gameQuestionId)),
-        }
-      case 'REVEALED':
-        return {
-          label: t('score'),
-          call: () => run(() => api.scoreQuestion(detail.gameQuestionId)),
-        }
-      case 'SCORED':
-        return nextPending
-          ? {
-              label: t('next'),
-              call: () => run(() => api.openQuestion(nextPending.gameQuestionId)),
-            }
-          : null
-      default:
-        return null
-    }
-  })()
-
-  usePrimaryAction(action?.call ?? null)
 
   return (
     <footer className="flex items-center gap-4">
@@ -530,11 +471,16 @@ function QuestionActions({
         <span className="text-muted-foreground text-sm">{t('buzzerNothing')}</span>
       ) : null}
 
-      {action ? (
-        <Button className="ml-auto" size="lg" onClick={action.call}>
-          {action.label}
-        </Button>
-      ) : null}
+      {/*
+       * **The same button as everywhere else**, including on the sweep — which is the whole fix for
+       * §6.2: deferring is explicitly allowed, so the screen that shows a deferred question must
+       * offer the same way forward as any other, right through to `[Next round]` and the (confirmed)
+       * end of the game. It used to offer only "open the next question in this round", which is
+       * nothing at a round boundary.
+       */}
+      <span className="ml-auto">
+        <AdvanceButton view={view} api={api} run={run} />
+      </span>
     </footer>
   )
 }

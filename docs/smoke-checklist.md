@@ -223,6 +223,11 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       disagree, which is the whole point of showing both (D51).
 - [ ] Nothing irreversible is bound to a key (§13). Press every key on the map during a live
       question and confirm none of them ends the game, abandons it, skips a question or submits on
-      a team's behalf.
+      a team's behalf. **Then get the desk to suggest `[End the game]`** — play the last round out —
+      and press `Enter`: it must do **nothing**, and clicking the button must ask first (§1.1).
+- [ ] **The sweep must never be a trap** (§6.2). Defer a validation on a round's *last* question,
+      score it, and confirm the desk still offers a way forward — `[Start the next round]`, or
+      `[End the game]` on the last round. It offered nothing at all for most of slice 5, and the
+      screen looks completely reasonable while it does.
 - [ ] Switch to `/nl` and walk the same screens. Dutch runs 20–30% longer; the header and the
       finale's clock strip are where that shows first.

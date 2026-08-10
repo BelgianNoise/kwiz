@@ -114,6 +114,48 @@ from the desk as §11.2 requires rather than sending the master back to PRD 2's 
 **None of these would have failed a test, and the surface demoed fine without them.** They are the
 difference between a screen that works and a screen that does what it was specified to do.
 
+### Then an independent review found two criticals the clause audit structurally could not
+
+The clause-by-clause pass greps for **a clause with no rendered copy**. Both of these are *control
+flow reaching a dead end* — nothing missing, everything rendered, wired wrong. Worth internalising:
+the unused-key trick has a blind spot exactly the shape of a bug where the code is all present.
+
+**1. `Enter` ended the game with no confirmation.** PRD 3 §13 lists ending the game among the acts a
+stray keystroke must never reach; §1.1 exempts it from the no-dialogs rule *because* it is one of two
+things that cannot be undone. `FINISH` came back from `advanceSuggestion` as just another member of
+the same union as `LOCK` and `REVEAL`, so the advance button rendered it through the generic path —
+one click ended the game, and `Enter`, the key the master has been pressing all night to advance,
+ended it without one. At the moment the game legitimately ends, which is when that reflex is
+strongest. The header had the correct pattern the whole time (a `ConfirmDialog` behind a pointer-only
+menu) and the advance path bypassed it.
+
+**2. The round-end sweep could dead-end at a round boundary.** `VALIDATE_QUESTION` outranks `ADVANCE`
+and correctly sweeps the **whole quiz** (§6.2), but every "way out" read `timeline` — the **current
+round**. With a validation deferred in round 1 and round 1's questions all played, there was nothing
+to offer and no `ADVANCE` state to fall back to, so the sweep rendered with **no primary action at
+all**. §6.2 promises the exact opposite in as many words.
+
+The second one had two halves, and the browser found the half the first fix missed: putting the
+suggestion on the view was not enough, because `advanceSuggestion` also answered `NEXT_QUESTION` for
+a `SCORED` question **without checking whether a next question existed**. `SCORED` now falls through
+to the round logic; only `REVEALED` short-circuits, because awarding points is genuinely an act on
+*this* question.
+
+Both are now fixed, both are tested, and the root cause the code review named — *"the next-pending
+selector is duplicated four times, and the duplication is why the round-boundary dead-end wasn't
+caught"* — is gone: `components/control/advance.ts` is the one place that maps a suggestion to a
+call, and the one place that knows which advance is irreversible.
+
+Also from that round: the finale desk now renders a finale question's attachment (PRD 1 §8.8 permits
+one), `protocol.md`'s whole `attention` union was corrected to the **flattened** shape the code
+actually has (the drift was wider than the review spotted — `SCORE_DO` and `FINALE_TURN` were wrapped
+in the spec too), the skip menu item's disabled state now mirrors §9.1's real legality window, and
+the sentinel test says in writing why eleven new master-only fields do not belong in its table.
+
+One carried-over finding was already closed: conventions §4's `CHECKSUM_MISMATCH` and
+`IMPORT_COLLISION` rows already document, at length, that they are declared and never returned and
+why. No change needed.
+
 ### Spec deviations
 
 None knowingly. Everything above is an *addition* to protocol §5.4/§5.5, written into the spec in
@@ -186,7 +228,15 @@ PRD needs a correction I could not derive.
   the same event whichever screen the master is on, and the dialog's numbers (`missedSoFar`) are the
   entire reason it is justified. If you add a third entry point, add it there.
 - **Grep the message catalogue for unused keys before calling a surface done.** It found sixteen
-  missing PRD clauses here in about a minute, and it will keep working for slices 6 and 7.
+  missing PRD clauses here in about a minute, and it will keep working for slices 6 and 7 — but it is
+  blind to a bug where every clause *is* rendered and the control flow is wrong, which is what the
+  independent review's two criticals were. Both kinds of pass are needed.
+- **`components/control/advance.ts` is the only place that decides what advancing does**, and the
+  only place that knows `FINISH` is irreversible. If you add a surface with a "next" button, call it
+  rather than reading `view.timeline` — that read is per-round, and four copies of it hid a dead end.
+- **`vitest` still resolves no `@/` alias**, so a test in `apps/web` imports relatively. It cost a
+  few minutes here and it is the reason no route handler has a test; worth fixing properly before
+  slices 6 and 7 write component tests of their own.
 
 ## Slice 4 — Config surface: authoring, pre-flight, setup, transfer
 

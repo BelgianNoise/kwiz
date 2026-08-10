@@ -788,6 +788,14 @@ export type Attention =
       gameQuestionId: string
       prompt: string
       masterNotes: string | null
+      /**
+       * PRD 1 §8.5 — attachments work on **every** question type, and §8.8 says so explicitly for a
+       * finale: *"attachments work as on any question, though a keyword question rarely needs one."*
+       * The authoring surface agrees and lets a master attach one, so the desk has to be able to
+       * play it — rare is not never, and the alternative is media that can be attached and never
+       * triggered.
+       */
+      media: MediaRef[]
       questionNumber: number
       questionTotal: number
       /**
@@ -899,6 +907,20 @@ export interface MasterControlView {
    * button would be holding a second copy of the running order.
    */
   nextRoundId: string | null
+  /**
+   * What advancing would do **regardless of what currently has the master's attention.**
+   *
+   * `attention: ADVANCE` carries the same value, and both are assigned from one expression below so
+   * they cannot disagree — but only one `attention` state is ever active, and a desk that can only
+   * see the suggestion when nothing else needs it has no way forward from the states that outrank
+   * it. That is not hypothetical: it dead-ended the round-end sweep. `VALIDATE_QUESTION` outranks
+   * `ADVANCE` unconditionally and correctly sweeps the **whole quiz** (§6.2), while `timeline` is
+   * the current round — so a validation deferred in round 1, revisited once round 1 had no unplayed
+   * questions left, left the master on a screen with no primary action at all. §6.2 promises the
+   * exact opposite: *"blocking the master from moving on would be the one thing worse than
+   * provisional scores."*
+   */
+  advance: AdvanceSuggestion | null
   attention: Attention
   question: MasterQuestionDetail | null
   board?: {
@@ -976,6 +998,11 @@ export function toMasterControlView(
     // `roundIndex` is -1 with nothing open, so this is the first round — which is exactly the case
     // a freshly started game is in.
     nextRoundId: state.content.rounds[roundIndex + 1]?.id ?? null,
+    /*
+     * The same suggestion `attention: ADVANCE` carries, from the same function — so the two can
+     * never disagree — but available whatever has the master's attention. See the field's own note.
+     */
+    advance: advanceSuggestion(state, play),
     attention: attention(state, now),
     question: question && play ? masterQuestionDetail(state, question, play, now) : null,
     timeline: timeline(state, round),
@@ -1230,6 +1257,8 @@ export function attention(state: GameState, now: number): Attention {
         gameQuestionId: question.id,
         prompt: question.prompt,
         masterNotes: question.masterNotes,
+        // Rare on a keyword question, and explicitly permitted (PRD 1 §8.8).
+        media: question.media.map(mediaRef),
         questionNumber: finaleQuestions.findIndex((q) => q.id === question.id) + 1,
         questionTotal: finaleQuestions.length,
         currentTeamId: turn?.teamId ?? null,
@@ -1435,8 +1464,13 @@ function advanceSuggestion(
    */
   if (play?.state === 'OPEN') return 'LOCK'
   if (play?.state === 'LOCKED') return 'REVEAL'
-  if (play && (play.state === 'REVEALED' || play.state === 'SCORED'))
-    return 'NEXT_QUESTION'
+  /*
+   * `REVEALED` is the one state whose next act is on *this* question — awarding the points. `SCORED`
+   * deliberately falls **through** to the round logic below rather than answering `NEXT_QUESTION`:
+   * there may not be a next question, and claiming there is was the second half of the round-boundary
+   * dead end. A scored last question of a round means `NEXT_ROUND`, and of the last round `FINISH`.
+   */
+  if (play?.state === 'REVEALED') return 'NEXT_QUESTION'
 
   const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
   /*

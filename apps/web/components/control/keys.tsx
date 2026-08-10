@@ -14,6 +14,11 @@ import type { ReactNode } from 'react'
  *
  * A zone registers a handler and returns `true` when it consumed the key. The most recently mounted
  * zone is asked first, so the attention zone always wins over the frame around it.
+ *
+ * **One binding in §13's table is deliberately not here:** `Esc` closes a popover, and that is
+ * Radix's own behaviour on `Popover` and `Dialog` rather than anything this file does. It is listed
+ * in the map, it is not in this switch, and nothing here binds it — so an auditor grepping this
+ * file alone for `Escape` should read that absence as "delegated", not as "unimplemented".
  */
 
 export type KeyHandler = (event: KeyboardEvent) => boolean

@@ -48,6 +48,14 @@ export function ControlHeader({
   const live = view.status === 'LIVE'
   const questionOpen = view.question?.state === 'OPEN'
   const currentQuestionId = view.question?.gameQuestionId
+  /*
+   * §9.1 — skipping is legal from `PENDING` (never opened) or `OPEN` (opened, then abandoned) and
+   * nowhere else (D46). The disabled state says exactly that rather than leaving the domain to
+   * refuse with `QUESTION_NOT_OPEN`: a menu item that looks available and quietly does nothing is
+   * worse than one that is visibly not.
+   */
+  const canSkip =
+    live && (view.question?.state === 'PENDING' || view.question?.state === 'OPEN')
   const round = view.round
 
   return (
@@ -103,7 +111,7 @@ export function ControlHeader({
              * question in front of a room, which is why this lives in a menu and not on the desk.
              */}
             <DropdownMenuItem
-              disabled={!currentQuestionId || !live}
+              disabled={!canSkip}
               onSelect={() => {
                 if (currentQuestionId) run(() => api.skipQuestion(currentQuestionId))
               }}

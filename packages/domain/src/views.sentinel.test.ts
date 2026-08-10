@@ -15,6 +15,14 @@ import { toMainScreenView, toMasterControlView, toPlayerView } from './views'
  * those strings appear **nowhere** in the serialised payload. It catches any path, however nested.
  *
  * **Add a sentinel when you add a secret.**
+ *
+ * *"A secret"* means something that must not cross an **audience boundary** — not every new payload
+ * field. Slice 5 added eleven fields to `MasterControlView` (`timeline`, `adjustments`, `break`,
+ * `scoreboardShown`, `controlScreens`, `finaleRanking`, `advance`, `missed`, `spotlit`,
+ * `failsPreflight`, `clocks[].eliminatedAt`) and none of them appears below, which is correct: every
+ * one is built only by `toMasterControlView`, the audience this table calls *"always allowed"*. The
+ * table is not kept in lockstep with the master view, and does not need to be — what it guards is
+ * the two filters that face a room and a phone. A field reaching **those** needs a row here.
  */
 
 const SENTINELS = {

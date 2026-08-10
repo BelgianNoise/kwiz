@@ -588,20 +588,42 @@ type MasterControlView = {
   // leaderboard and offered no way to open its first round at all.
   nextRoundId: string | null
 
+  // What advancing would do, whatever currently has the master's attention. `attention: ADVANCE`
+  // carries the same value from the same function, so the two cannot disagree — but only one
+  // attention state is ever active, and a desk that can only see the suggestion when nothing else
+  // needs it has no way forward from the states that outrank it. That dead-ended the round-end
+  // sweep: VALIDATE_QUESTION outranks ADVANCE and sweeps the whole quiz (§6.2), while `timeline` is
+  // the current round, so a validation deferred in round 1 and revisited after round 1 ran out of
+  // unplayed questions left the master on a screen with no primary action at all.
+  advance: AdvanceSuggestion | null
+
   // What needs the master's attention RIGHT NOW. This is the whole point of the
   // surface (PRD 1 G4): one thing at a time, chosen by the server.
+  // **The detail types below are spread onto their variant, not nested under a key.** This block
+  // originally wrapped them (`buzz: BuzzDetail`, `question: DoScoringDetail`,
+  // `detail: FinaleTurnDetail`, `question: QuestionRef`); the implementation flattens all four, and
+  // this is the shape that exists. Narrowing on `kind` then reaches the fields directly, which is
+  // what a client actually wants — `attention.prompt`, not `attention.question.prompt`.
   attention:
     | { kind: 'NONE' }                                  // → show the leaderboard big
     | { kind: 'ADJUDICATE_BUZZ'; buzz: BuzzDetail; referenceAnswer: string }
-    | { kind: 'VALIDATE_QUESTION'; question: QuestionRef; items: ValidationItem[]; remainingQuestions: number }
-    | { kind: 'SCORE_DO'; question: DoScoringDetail }
+    | { kind: 'VALIDATE_QUESTION'
+        gameQuestionId: string
+        // Was `QuestionRef`. The sweep can be about a question from an EARLIER round (§6.2), so
+        // neither `question` (the current one) nor `timeline` (the current round) can supply these
+        // — and §6.1's screen without them asks for a verdict with the evidence on another page.
+        prompt: string; acceptedAnswers: string[]; masterNotes: string | null
+        items: ValidationItem[]; remainingQuestions: number }
+    | ({ kind: 'SCORE_DO' } & DoScoringDetail)
     | { kind: 'BREAK_TIE_FOR_PICK'; tiedTeamIds: string[] }
-    | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[] }
-    | { kind: 'FINALE_TURN'; detail: FinaleTurnDetail }
+    // Plus `penaltySeconds` and `secondsPerPoint` — see the note on `FinalistCandidate`.
+    | { kind: 'PICK_FINALISTS'; candidates: FinalistCandidate[]
+        penaltySeconds: number; secondsPerPoint: number }
+    | ({ kind: 'FINALE_TURN' } & FinaleTurnDetail)
     // `LOCK` is `[Close answers]`. It was missing until slice 5, which meant the most common
     // state in a game — a question the room is answering — suggested `NEXT_QUESTION`, pointing
     // the master past the live question (PRD 3 §5.1: nothing but this closes a question, D8).
-    | { kind: 'ADVANCE'; suggestion: 'LOCK' | 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH' }
+    | { kind: 'ADVANCE'; suggestion: AdvanceSuggestion }
 
   // Full detail incl. masterNotes, plus every team's answer with its verdict and a
   // needsValidation flag — so the master can judge inline while the question is still
@@ -640,6 +662,9 @@ type MasterControlView = {
   pendingValidationCount: number
 }
 
+// `LOCK` is [Close answers] — the only thing that ends a question, since the timer never does (D8).
+type AdvanceSuggestion = 'LOCK' | 'REVEAL' | 'NEXT_QUESTION' | 'NEXT_ROUND' | 'FINISH'
+
 type TimelineEntry = {
   gameQuestionId: string
   position: number
@@ -661,12 +686,10 @@ type MasterAdjustment = {
 // One question's worth of validation, all teams together (PRD 3 §6.1). Bounded by team
 // count, so D39 holds. Grouping is what makes inconsistency visible: judging
 // "Radio Head" in isolation, the master cannot see they just accepted "radiohead".
-type QuestionRef = {
-  gameQuestionId: string
-  prompt: string
-  acceptedAnswers: string[]
-  masterNotes: string | null
-}
+//
+// **`QuestionRef` is superseded**: its three fields are spread onto the `VALIDATE_QUESTION`
+// variant above rather than nested under a `question` key, so there is no such exported type.
+// Kept here only to name what those three fields are and why they travel together.
 
 type ValidationItem = {
   teamId: string
@@ -799,6 +822,10 @@ type FinaleTurnDetail = {
   gameQuestionId: string
   prompt: string
   masterNotes: string | null
+  // PRD 1 §8.5/§8.8 — attachments work on every question type, a finale included ("though a
+  // keyword question rarely needs one"). The authoring surface lets a master attach one, so the
+  // desk has to be able to trigger it: rare is not never.
+  media: MediaRef[]
   questionNumber: number
   questionTotal: number
 

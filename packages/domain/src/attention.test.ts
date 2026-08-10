@@ -572,6 +572,42 @@ describe('the round-end validation sweep (§6.2)', () => {
     expect(toMasterControlView(state, NOW).pendingValidationCount).toBe(1)
   })
 
+  /**
+   * The dead end, and the reason `advance` is on the view unconditionally.
+   *
+   * `VALIDATE_QUESTION` outranks `ADVANCE` and correctly sweeps the whole quiz, but the desk's way
+   * forward was read from `timeline` — the **current round**. Once this round had no unplayed
+   * question left and an earlier deferral was still outstanding, there was nothing to offer and no
+   * `ADVANCE` state to fall back to, so the sweep rendered with no primary action at all. §6.2
+   * promises the opposite: *"blocking the master from moving on would be the one thing worse than
+   * provisional scores."*
+   */
+  it('still says how to move on while the sweep holds the attention zone', () => {
+    const state = run([
+      ...SETUP,
+      // Every question in round 1 played, one of them with a verdict never given.
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: FREE } },
+      pendingAnswer(FREE, A),
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: FREE } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: BUZZ } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: DO } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: PER_TEAM } },
+      { type: 'QUESTION_SKIPPED', payload: { gameQuestionId: PER_TEAM } },
+    ])
+
+    const view = toMasterControlView(state, NOW)
+    // The sweep still has the zone, which is right — the verdict is still owed.
+    expect(view.attention.kind).toBe('VALIDATE_QUESTION')
+    // …and the desk is still told what advancing does, which is what unsticks it.
+    expect(view.advance).toBe('NEXT_ROUND')
+    expect(view.nextRoundId).toBe('r2')
+    // Nothing left in this round to open, which is exactly the case that used to dead-end.
+    expect(view.timeline.some((entry) => entry.state === 'PENDING')).toBe(false)
+  })
+
   it('prefers the current question when both are owed a verdict', () => {
     const state = run([
       ...deferredThenMovedOn,
