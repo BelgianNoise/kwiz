@@ -14,9 +14,10 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 5 — Master control
 
-**Status:** complete · `pnpm check` green · **617 tests** · lint silent · `pnpm build` clean, no
+**Status:** complete · `pnpm check` green · **624 tests** · lint silent · `pnpm build` clean, no
 warnings · the whole desk driven by hand against a real game, including a **server restart
-mid-question**
+mid-question** · three review passes: a clause-by-clause self-audit, then an independent review
+whose two criticals are fixed and tested
 
 ### What was built
 
