@@ -10,6 +10,7 @@ import { NotebookPen } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 
+import { nextPendingInRound } from '@/components/control/advance'
 import { AdvanceButton } from '@/components/control/advance-button'
 import { usePrimaryAction, type ZoneProps } from '@/components/control/control-desk'
 import { digitIndex, useControlKeys } from '@/components/control/keys'
@@ -200,10 +201,14 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
   ).length
   const allFound = unguessed === 0
 
-  /** The next unplayed finale question, which is what `[Next question]` opens. */
-  const nextFinaleQuestion = view.timeline.find((entry) => entry.state === 'PENDING')
+  /**
+   * The next unplayed finale question, which is what `[Next question]` opens — through the shared
+   * selector, not a fifth copy of the same `timeline.find`. A finale is always the last round (I20),
+   * so there is no round boundary for it to fall off.
+   */
+  const nextFinaleQuestion = nextPendingInRound(view)
   const nextQuestion = (): void => {
-    if (nextFinaleQuestion) run(() => api.openQuestion(nextFinaleQuestion.gameQuestionId))
+    if (nextFinaleQuestion) run(() => api.openQuestion(nextFinaleQuestion))
   }
 
   /** Whose clock the big number is: the team on turn, or the one about to be started. */
