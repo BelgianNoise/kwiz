@@ -769,6 +769,49 @@ const en = {
       reachedBody: 'This network works. Hand the phone back to the quiz master.',
     },
   },
+
+  /**
+   * PRD 4 — the projected screen.
+   *
+   * **Full EN/NL parity is required here** (D28): this and the player device are the two surfaces an
+   * audience reads, and Dutch runs 20–30% longer while being this screen's layout baseline
+   * (PRD 1 §9.2). Every string below is short on purpose — at §2.1's sizes there is room for very
+   * little, and a sentence that fits in English and wraps to three lines in Dutch breaks the stage.
+   */
+  screen: {
+    /** §4.1 — the one click that arms audio and fullscreen. Addressed to the master, not the room. */
+    arming: {
+      click: 'Click anywhere to start',
+      explain: 'This enables sound and fullscreen for the quiz.',
+    },
+    waiting: {
+      scanOrGoTo: 'Scan, or go to',
+      andEnter: 'and enter',
+      /** §4.1's verification, so a muted projector is found while the room is still filling. */
+      soundReady: 'sound ready',
+      soundFailed: 'Sound could not start. Click the screen once more.',
+    },
+    round: {
+      number: 'ROUND {number}',
+      shape: '{questions} questions · {points} points',
+    },
+    leaderboard: {
+      afterRound: 'After round {number}',
+      currentScores: 'Current scores',
+      provisional: 'scores provisional · {questions} answers still being checked',
+      /** Read out only by a screen reader — the room sees the arrow (§10). */
+      movementUp: 'up {places}',
+      movementDown: 'down {places}',
+      movementHeld: 'no change',
+    },
+    break: {
+      backIn: 'Back in',
+      /** §11 — no duration given, so no clock rather than an invented number. */
+      backShortly: 'Back shortly',
+      /** §11 — zero holds, and the master resumes when the room is actually back. */
+      startingSoon: 'Starting soon',
+    },
+  },
 }
 
 export type Messages = typeof en

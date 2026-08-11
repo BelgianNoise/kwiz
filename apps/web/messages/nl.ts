@@ -705,6 +705,41 @@ const nl: Messages = {
       reachedBody: 'Dit netwerk werkt. Geef de telefoon terug aan de quizmaster.',
     },
   },
+
+  /**
+   * PRD 4. Dutch is this surface's **layout baseline** (PRD 1 §9.2), so these are kept as short as the
+   * English rather than as literal translations — `Terug over` for `Back in`, not `We zijn terug over`.
+   * A heading that wraps at §2.1's sizes costs a line the stage does not have.
+   */
+  screen: {
+    arming: {
+      click: 'Klik ergens om te starten',
+      explain: 'Dit zet geluid en volledig scherm aan voor de quiz.',
+    },
+    waiting: {
+      scanOrGoTo: 'Scan, of ga naar',
+      andEnter: 'en voer in',
+      soundReady: 'geluid klaar',
+      soundFailed: 'Geluid kon niet starten. Klik nog één keer op het scherm.',
+    },
+    round: {
+      number: 'RONDE {number}',
+      shape: '{questions} vragen · {points} punten',
+    },
+    leaderboard: {
+      afterRound: 'Na ronde {number}',
+      currentScores: 'Tussenstand',
+      provisional: 'voorlopige stand · {questions} antwoorden nog te controleren',
+      movementUp: '{places} omhoog',
+      movementDown: '{places} omlaag',
+      movementHeld: 'onveranderd',
+    },
+    break: {
+      backIn: 'Terug over',
+      backShortly: 'Zo terug',
+      startingSoon: 'Begint zo',
+    },
+  },
 }
 
 export default nl

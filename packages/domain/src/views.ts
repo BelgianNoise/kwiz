@@ -342,7 +342,22 @@ export interface MainScreenView {
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
-    | { kind: 'ROUND_INTRO'; title: string; roundNumber: number; totalRounds: number }
+    | {
+        kind: 'ROUND_INTRO'
+        title: string
+        roundNumber: number
+        totalRounds: number
+        /**
+         * §5's `10 questions · 100 points`. The round's shape, stated once before it starts.
+         *
+         * Safe where a *question* number is not (§6): this is announced before anything can be
+         * skipped, so it never has to explain a gap. A skipped question (D46) later makes the total
+         * a small overstatement, which is the price of the line and cheaper than the alternative —
+         * a live count would tell the room a question had vanished.
+         */
+        questionCount: number
+        points: number
+      }
     | {
         kind: 'LEADERBOARD'
         standings: Standing[]
@@ -513,11 +528,15 @@ function mainScreenStage(
       }
     case 'ROUND_INTRO': {
       const index = state.content.rounds.findIndex((r) => r.id === state.currentRoundId)
+      const round = state.content.rounds[index]
+      const questions = round?.questions ?? []
       return {
         kind: 'ROUND_INTRO',
-        title: state.content.rounds[index]?.title ?? '',
+        title: round?.title ?? '',
         roundNumber: index + 1,
         totalRounds: state.content.rounds.length,
+        questionCount: questions.length,
+        points: questions.reduce((total, question) => total + question.points, 0),
       }
     }
     case 'FINALE': {

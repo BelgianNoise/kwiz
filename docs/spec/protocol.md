@@ -418,7 +418,20 @@ type MainScreenView = {
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
-    | { kind: 'ROUND_INTRO'; title: string; roundNumber: number; totalRounds: number }
+    | {
+        kind: 'ROUND_INTRO'
+        title: string
+        roundNumber: number
+        totalRounds: number
+        // PRD 4 §5's `10 questions · 100 points`. Added in slice 6 — the clause was there and
+        // nothing on the payload could render it.
+        //
+        // Safe where a *question* number is not (§6): announced before anything can be skipped,
+        // so it never has to explain a gap. A later skip (D46) makes the total a small
+        // overstatement, which is cheaper than a live count telling the room a question vanished.
+        questionCount: number
+        points: number
+      }
     | {
         kind: 'LEADERBOARD'
         standings: Standing[]
