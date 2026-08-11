@@ -21,6 +21,7 @@ const STATUS: Record<ErrorCode, number> = {
   BUZZERS_NOT_LIVE: 409,
   TEAM_LOCKED_OUT: 409,
   NOT_IN_SETUP: 409,
+  GAME_NOT_FINISHED: 409,
   RESYNC_BLOCKED: 409,
   SOURCE_QUIZ_DELETED: 409,
   // A copy bug, not a client mistake — the request was fine, the server's own write was not.

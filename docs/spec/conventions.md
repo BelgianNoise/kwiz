@@ -340,6 +340,10 @@ type ErrorCode =
   | 'TEAM_LOCKED_OUT'         // denied on this question already (D35)
   // ─── master actions ───
   | 'NOT_IN_SETUP'            // regenerate-code / re-sync outside SETUP
+  | 'GAME_NOT_FINISHED'       // NOT_IN_SETUP's mirror at the other end of a game's life.
+                              //   Only PRD 4 §10.2's FINISHED tabs need it: they exist once the
+                              //   game has ended, so GAME_NOT_LIVE would be the wrong refusal —
+                              //   LIVE is exactly the status this one rejects
   | 'RESYNC_BLOCKED'          // answers or buzzes exist (data model §7.1)
   | 'SOURCE_QUIZ_DELETED'     // nothing to re-sync from
   | 'COPY_INVALID'            // the freshly-copied rows failed preflight() (data model §7's

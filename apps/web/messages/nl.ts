@@ -30,6 +30,7 @@ const nl: Messages = {
     TEAM_LOCKED_OUT:
       'Je antwoord was fout, dus je kunt bij deze vraag niet opnieuw buzzen.',
     NOT_IN_SETUP: 'Dat kan alleen voordat de quiz begint.',
+    GAME_NOT_FINISHED: 'Dat kan pas nadat de quiz is afgelopen.',
     RESYNC_BLOCKED: 'Deze quiz is al gespeeld en kan niet meer worden bijgewerkt.',
     SOURCE_QUIZ_DELETED: 'De quiz waar dit spel uit komt bestaat niet meer.',
     COPY_INVALID: 'Deze kopie is niet geldig. Probeer het opnieuw of meld dit.',

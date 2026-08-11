@@ -35,6 +35,7 @@ const errors: Record<ErrorCode, string> = {
   TEAM_LOCKED_OUT:
     'Your answer was incorrect, so you cannot buzz again on this question.',
   NOT_IN_SETUP: 'That can only be changed before the game starts.',
+  GAME_NOT_FINISHED: 'That can only be changed once the game has ended.',
   RESYNC_BLOCKED:
     'This game has already been played, so it cannot be refreshed from the quiz.',
   SOURCE_QUIZ_DELETED: 'The quiz this game came from no longer exists.',

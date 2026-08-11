@@ -24,6 +24,7 @@ import {
   allQuestions,
   findQuestion,
   roundOf,
+  type FinishedTab,
   type GameState,
   type MediaContent,
   type OptionContent,
@@ -92,6 +93,12 @@ export interface FinaleView {
     secondsAtTurnStart: number
     onTurn: boolean
     eliminated: boolean
+    /**
+     * When they went out. §12.4's elimination moment is a *change* in this, so a screen that
+     * reconnects mid-round can tell an elimination it already announced from one it hasn't — a
+     * boolean cannot, and would replay the moment on every reconnect.
+     */
+    eliminatedAt: number | null
   }[]
   turnStartedAt: number | null
   currentTeamId: string | null
@@ -180,6 +187,7 @@ function finaleView(
         secondsAtTurnStart: finaleRemainingSeconds(state, teamId, turn?.startedAt ?? now),
         onTurn,
         eliminated: (team?.eliminatedAt ?? null) !== null,
+        eliminatedAt: team?.eliminatedAt ?? null,
       }
     }),
     turnStartedAt: turn?.startedAt ?? null,
@@ -247,6 +255,12 @@ function stageKind(state: GameState): StageKind {
   const round = state.currentRoundId
     ? state.content.rounds.find((r) => r.id === state.currentRoundId)
     : undefined
+  /*
+   * A **closed** round is the gap between rounds, and PRD 4 §3 puts a leaderboard there. Without
+   * this the room saw the finished round's intro again — `ROUND_CLOSED` leaves `currentRoundId`
+   * pointing at it on purpose, because the desk's timeline is still about that round.
+   */
+  if (round && state.closedRoundIds.has(round.id)) return 'LEADERBOARD'
   if (round?.type === 'JEOPARDY') return 'JEOPARDY_BOARD'
   if (round) return 'ROUND_INTRO'
   return 'WAITING'
@@ -280,27 +294,105 @@ export interface MainScreenQuestion {
   spotlitAnswers?: { teamId: string; text: string; correct: boolean | null }[]
   optionDistribution?: { optionId: string; teamIds: string[] }[]
   awarded?: { teamId: string; points: number }[]
+  /**
+   * §6.1's audio presence. Present only when this question has audio *and* the master's transport has
+   * touched it — absent means the equaliser is still and the clock reads zero, which is the honest
+   * state before anything has been played.
+   */
+  playback?: MediaPlayback
+}
+
+/**
+ * §10.2's `FINISHED` screen after a `DSMTW_FINALE` (D51) — one flat list, finalists first.
+ *
+ * Flat rather than two arrays because that is what the stage draws: survival order, then a rule,
+ * then the teams that did not play the finale continuing the same numbering. `finalist` is where the
+ * rule goes, and it is also what stops a non-finalist's position reading as an elimination.
+ */
+export interface FinishedRow {
+  rank: number
+  teamId: string
+  finalist: boolean
+  /** Set for a finalist who went out; `null` for a survivor and for every non-finalist. */
+  eliminatedAt: number | null
+  /** A surviving finalist's remaining bank — *"won with 41 seconds left"* is the story (§10.2). */
+  secondsLeft: number | null
+}
+
+/**
+ * Outstanding validations behind a standing (§10, PRD 3 §6.2).
+ *
+ * protocol §5.2 originally forbade **any** pending-validation information on this view, reasoning
+ * that the room does not need to know the master hasn't finished judging. PRD 4 §10 and PRD 3 §6.2
+ * both require the marker, for a different reason that does not contradict it: the room must not be
+ * told a standing is *final* when it isn't. Resolved by scope — a standing may say it is
+ * provisional; a **question** still carries nothing about the master's queue, which is where that
+ * prohibition now sits and what it was written under.
+ */
+export interface Provisional {
+  /** Questions with at least one unjudged answer. Only ever > 0 — `null` is the settled case. */
+  questions: number
 }
 
 export interface MainScreenView {
   code: string
   joinUrl: string
+  /** §4's title. The room is told which quiz it is on exactly once, while it fills up. */
+  quizName: string
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
     | { kind: 'ROUND_INTRO'; title: string; roundNumber: number; totalRounds: number }
-    | { kind: 'LEADERBOARD'; standings: Standing[] }
+    | {
+        kind: 'LEADERBOARD'
+        standings: Standing[]
+        provisional: Provisional | null
+        /**
+         * The round just closed, for §10's `AFTER ROUND 2` heading — `null` when the master pushed
+         * the board mid-round, which reads `CURRENT SCORES` instead. The two are different claims
+         * about the same numbers and the heading is the only thing that distinguishes them.
+         */
+        afterRoundNumber: number | null
+      }
     | { kind: 'BREAK'; resumesAt: number | null; standings: Standing[] }
     | { kind: 'QUESTION'; question: MainScreenQuestion }
     | { kind: 'FINALE'; finale: FinaleView }
     | { kind: 'JEOPARDY_BOARD'; board: BoardView; currentPickerTeamId: string | null }
-    | { kind: 'FINISHED'; standings: Standing[] }
+    | {
+        kind: 'FINISHED'
+        /** The `POINTS` tab, and the whole screen for a game that ended without a finale. */
+        standings: Standing[]
+        provisional: Provisional | null
+        /** Present only when the game ended out of a finale; `null` selects the one-tab screen. */
+        finale: FinishedRow[] | null
+        tab: FinishedTab
+      }
+}
+
+/**
+ * §6.1 — whether the master's transport is playing, so the room's equaliser can be still when the
+ * sound is.
+ *
+ * **The one field on this view that is not a function of `GameState`**, alongside
+ * `MasterControlView.controlScreens`: the `<audio>` element lives on the master's desk (PRD 3 §5.1),
+ * so playback is a fact about a browser rather than a game fact, and it is neither in the log nor
+ * replayable. Passed **in** rather than reached for, which is what keeps this package pure.
+ *
+ * Carried as an instant plus an offset rather than a position, so the screen derives elapsed time
+ * client-side and the server never pushes a tick — D52's pattern, for the same reason.
+ */
+export interface MediaPlayback {
+  mediaId: string
+  /** `null` while paused: the elapsed clock holds and the equaliser stops. */
+  playingSince: number | null
+  positionMs: number
 }
 
 export function toMainScreenView(
   state: GameState,
   now: number,
   joinUrl = '',
+  playback: MediaPlayback | null = null,
 ): MainScreenView {
   const teams = [...state.teams.values()]
     .sort((a, b) => a.position - b.position)
@@ -309,17 +401,97 @@ export function toMainScreenView(
   return {
     code: state.code,
     joinUrl,
+    quizName: state.content.quizName,
     teams,
-    stage: mainScreenStage(state, now),
+    stage: mainScreenStage(state, now, playback),
   }
 }
 
-function mainScreenStage(state: GameState, now: number): MainScreenView['stage'] {
+/**
+ * `null` once nothing is outstanding, rather than `{ questions: 0 }`.
+ *
+ * A zero would render as *"0 answers still being checked"* the first time someone forgot to guard
+ * it, and this screen is ten metres from a paying audience.
+ */
+function provisionalOf(state: GameState): Provisional | null {
+  const questions = pendingValidationCount(state)
+  return questions > 0 ? { questions } : null
+}
+
+/**
+ * §10.2's rows: finalists in survival order, then everyone else by points.
+ *
+ * `finale.ranking` is rank *groups* (D51), so a simultaneous elimination shares a rank and the next
+ * team's number skips accordingly — the same D32 rule the leaderboard follows, applied to survival
+ * instead of to points.
+ */
+function finishedRows(state: GameState, now: number): FinishedRow[] | null {
+  const ranking = state.finale.ranking
+  if (ranking === null) return null
+
+  const rows: FinishedRow[] = []
+  let rank = 1
+  for (const tier of ranking) {
+    for (const teamId of tier) {
+      const team = state.teams.get(teamId)
+      const eliminatedAt = team?.eliminatedAt ?? null
+      rows.push({
+        rank,
+        teamId,
+        finalist: true,
+        eliminatedAt,
+        // A survivor's bank stopped when the round did, so the clock is read at `endedAt` rather
+        // than at `now` — otherwise the winner's "41s left" would keep counting down all evening.
+        secondsLeft:
+          eliminatedAt === null
+            ? finaleRemainingSeconds(state, teamId, state.finale.endedAt ?? now)
+            : null,
+      })
+    }
+    rank += tier.length
+  }
+
+  /*
+   * The teams that never played it, *"ranked among themselves by points"* and numbered on from the
+   * finalists — labelled by `finalist: false` so nobody reads a position as an elimination.
+   *
+   * Their ranks come from `standings` and are offset, rather than counted off one by one, so two
+   * non-finalists level on points share a rank here exactly as they would on the leaderboard (D32).
+   */
+  const finalists = rows.length
+  const others = standings(state).filter(
+    (standing) => !state.finale.finalistIds.includes(standing.teamId),
+  )
+  const best = others[0]?.rank ?? 1
+  for (const standing of others) {
+    rows.push({
+      rank: finalists + 1 + (standing.rank - best),
+      teamId: standing.teamId,
+      finalist: false,
+      eliminatedAt: null,
+      secondsLeft: null,
+    })
+  }
+
+  return rows
+}
+
+function mainScreenStage(
+  state: GameState,
+  now: number,
+  playback: MediaPlayback | null,
+): MainScreenView['stage'] {
   const kind = stageKind(state)
 
   switch (kind) {
     case 'FINISHED':
-      return { kind: 'FINISHED', standings: standings(state) }
+      return {
+        kind: 'FINISHED',
+        standings: standings(state),
+        provisional: provisionalOf(state),
+        finale: finishedRows(state, now),
+        tab: state.finishedTab,
+      }
     case 'BREAK':
       return {
         kind: 'BREAK',
@@ -327,7 +499,7 @@ function mainScreenStage(state: GameState, now: number): MainScreenView['stage']
         standings: standings(state),
       }
     case 'LEADERBOARD':
-      return { kind: 'LEADERBOARD', standings: standings(state) }
+      return leaderboardStage(state)
     case 'WAITING':
       return {
         kind: 'WAITING_FOR_PLAYERS',
@@ -351,22 +523,41 @@ function mainScreenStage(state: GameState, now: number): MainScreenView['stage']
     case 'FINALE': {
       const question = findQuestion(state.content, state.currentQuestionId ?? '')
       // A finale round with no open question falls back rather than inventing a stage.
-      if (!question) return { kind: 'LEADERBOARD', standings: standings(state) }
+      if (!question) return leaderboardStage(state)
       return { kind: 'FINALE', finale: finaleView(state, question, now) }
     }
     case 'QUESTION': {
       const question = findQuestion(state.content, state.currentQuestionId ?? '')
       const play = question && state.questions.get(question.id)
-      if (!question || !play) return { kind: 'LEADERBOARD', standings: standings(state) }
+      if (!question || !play) return leaderboardStage(state)
       return {
         kind: 'QUESTION',
-        question: mainScreenQuestion(question, play, now),
+        question: mainScreenQuestion(question, play, now, playback),
       }
     }
     default:
       // `stageKind` is exhaustive; `default` rather than a trailing return, which reads as a
       // missing case.
-      return { kind: 'LEADERBOARD', standings: standings(state) }
+      return leaderboardStage(state)
+  }
+}
+
+/**
+ * §10's leaderboard, with the heading's two readings decided here rather than on the surface.
+ *
+ * `AFTER ROUND n` is a claim that a round is over; `CURRENT SCORES` is a claim that it isn't. Which
+ * one is true is a fact about the game, so it does not belong in a component.
+ */
+function leaderboardStage(state: GameState): MainScreenView['stage'] {
+  const index = state.content.rounds.findIndex((r) => r.id === state.currentRoundId)
+  const closed =
+    index >= 0 && state.closedRoundIds.has(state.content.rounds[index]?.id ?? '')
+
+  return {
+    kind: 'LEADERBOARD',
+    standings: standings(state),
+    provisional: provisionalOf(state),
+    afterRoundNumber: closed ? index + 1 : null,
   }
 }
 
@@ -374,6 +565,7 @@ function mainScreenQuestion(
   question: QuestionContent,
   play: QuestionPlayState,
   now: number,
+  playback: MediaPlayback | null = null,
 ): MainScreenQuestion {
   const revealed = revealsCorrectAnswer(play.state)
 
@@ -436,6 +628,12 @@ function mainScreenQuestion(
       teamId: answer.teamId,
       points: answer.pointsAwarded,
     }))
+  }
+
+  // Only if it belongs to this question's media — a stale mirror from the previous question would
+  // animate an equaliser over silence, which is the exact failure §6.1's stillness is a signal for.
+  if (playback && question.media.some((item) => item.id === playback.mediaId)) {
+    view.playback = playback
   }
 
   return view

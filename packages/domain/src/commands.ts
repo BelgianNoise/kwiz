@@ -11,6 +11,8 @@
  * decision that mints its own ids cannot be compared against an expected event list in a test.
  */
 
+import type { FinishedTab } from './state'
+
 /** A stored draft, as `LOCK_QUESTION` receives it from `game_answer_draft` (protocol §4.3). */
 export interface DraftSubmission {
   teamId: string
@@ -86,6 +88,7 @@ export type Command =
 
   // ─── §7.2 master: pacing ───
   | { type: 'TOGGLE_SCOREBOARD'; shown: boolean }
+  | { type: 'SET_FINISHED_TAB'; tab: FinishedTab }
   | { type: 'START_BREAK'; durationMs?: number }
   | { type: 'END_BREAK' }
   | {

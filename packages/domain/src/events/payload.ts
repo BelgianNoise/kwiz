@@ -178,6 +178,15 @@ export const gameEventPayloadSchemas = {
   /** Never automatic — the countdown reaching zero changes nothing server-side (D8). */
   BREAK_ENDED: empty,
   SCOREBOARD_TOGGLED: z.strictObject({ shown: z.boolean() }),
+  /**
+   * Which of the `FINISHED` screen's two tabs the room is on (PRD 4 §10.2, D51).
+   *
+   * An event rather than ephemeral state, for the same reason `SCOREBOARD_TOGGLED` is one: it
+   * changes the pushed view, and a projector that reconnected — or a second one opened halfway
+   * through the applause — has to come back to the tab the master left it on. `RESULT` is the
+   * default and needs no event.
+   */
+  FINISHED_TAB_SET: z.strictObject({ tab: z.enum(['RESULT', 'POINTS']) }),
   /** Appended even when it merely confirms the rule, so the log always answers whose pick it
    * was without the reader re-deriving it (D30). */
   PICKER_ASSIGNED: z.strictObject({
