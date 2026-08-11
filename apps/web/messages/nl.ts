@@ -748,6 +748,20 @@ const nl: Messages = {
       picks: '{team} kiest',
       choosing: 'Wie kiest wordt bepaald…',
     },
+    finale: {
+      question: 'V{number} / {total}',
+      guessing: 'raadt',
+      betweenTurns: 'Volgende ploeg…',
+      out: 'Uit',
+    },
+    finished: {
+      tabResult: 'Uitslag',
+      tabPoints: 'Punten',
+      survived: 'overleefd',
+      survivedWith: 'overleefd · {seconds}s over',
+      outAt: 'uit {at}',
+      didNotPlay: 'speelde de finale niet',
+    },
   },
 }
 

@@ -57,6 +57,7 @@ const view = (over: Partial<MasterControlView>): MasterControlView => ({
   scoreboardShown: false,
   controlScreens: 1,
   finaleRanking: null,
+  finishedTab: 'RESULT',
   missed: null,
   pendingValidationCount: 0,
   ...over,

@@ -769,6 +769,14 @@ type MasterControlView = {
   // The second tab — pre-finale points — is `teams`, unchanged: a finale scores in seconds.
   finaleRanking: string[][] | null
 
+  // Which of PRD 4 §10.2's two tabs the ROOM is on (D51). Added in slice 6.
+  //
+  // PRD 3 §10.6's ranking has the same two tabs "mirroring PRD 4's FINISHED stage", and mirroring
+  // only means something if they agree — so the desk's tabs are driven by this rather than by local
+  // state, and switching one switches the other. It also settles the two-control-screen case (§12)
+  // for free: a second desk shows the tab the room is on, not the one it happened to open with.
+  finishedTab: 'RESULT' | 'POINTS'
+
   // What a team joining now would have missed (PRD 2 §11.2, O5). `[+ Add team]` is required at
   // every status from master control as well as config, and the dialog's whole justification is
   // that these five numbers are computed rather than worked out in a noisy room. Null in SETUP.

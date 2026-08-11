@@ -825,6 +825,28 @@ const en = {
       /** No picker yet: the master is breaking a tie, so the room is told nothing rather than a name. */
       choosing: 'Choosing who picks…',
     },
+    /** §12 — the busiest this screen ever gets, so every string here is two words or fewer. */
+    finale: {
+      question: 'Q{number} / {total}',
+      /** §12.2's `← guessing` marker on the team whose clock is running. */
+      guessing: 'guessing',
+      /** §12.2 — between turns nothing ticks, and the room should see that it costs nobody. */
+      betweenTurns: 'Next team to go…',
+      /** §12.2 / §12.4 — eliminated teams stay listed, greyed, reading this. */
+      out: 'Out',
+    },
+    finished: {
+      /** §10.2 — `RESULT` decides the game; `POINTS` is kept because it is often a different story. */
+      tabResult: 'Result',
+      tabPoints: 'Points',
+      survived: 'survived',
+      /** "won with 41 seconds left" is the story (§10.2). */
+      survivedWith: 'survived · {seconds}s left',
+      /** conventions §8.2's `HH:mm` — a time of night, not a duration. */
+      outAt: 'out {at}',
+      /** §10.2 — labelled so nobody reads a non-finalist's position as an elimination. */
+      didNotPlay: 'did not play the finale',
+    },
   },
 }
 

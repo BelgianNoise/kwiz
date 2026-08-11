@@ -1172,6 +1172,15 @@ export interface MasterControlView {
   /** PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends. */
   finaleRanking: string[][] | null
   /**
+   * Which tab the **room** is on (PRD 4 §10.2, D51).
+   *
+   * PRD 3 §10.6's ranking has the same two tabs *"mirroring PRD 4's `FINISHED` stage"*, and mirroring
+   * only means something if they agree — so the desk's tabs are driven by this rather than by local
+   * state. It also settles the two-control-screen case (§12) for free: a second desk shows the tab the
+   * room is on, not the one it happened to open with.
+   */
+  finishedTab: FinishedTab
+  /**
    * What a team joining now would have missed (PRD 2 §11.2, O5).
    *
    * `[+ Add team]` is required at **every** status from master control as well as the config
@@ -1243,6 +1252,7 @@ export function toMasterControlView(
     scoreboardShown: state.scoreboardShown,
     controlScreens,
     finaleRanking: state.finale.ranking,
+    finishedTab: state.finishedTab,
     missed: state.status === 'SETUP' ? null : missedSoFar(state),
     pendingValidationCount: pendingValidationCount(state),
   }

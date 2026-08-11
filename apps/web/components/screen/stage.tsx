@@ -5,6 +5,8 @@ import { STAGE_TRANSITION_MS_MAX } from '@kwiz/domain'
 
 import { BoardStage } from '@/components/screen/board-stage'
 import { BreakStage } from '@/components/screen/break-stage'
+import { FinaleStage } from '@/components/screen/finale-stage'
+import { FinishedStage } from '@/components/screen/finished-stage'
 import { LeaderboardStage } from '@/components/screen/leaderboard-stage'
 import { QuestionStage } from '@/components/screen/question-stage'
 import { RoundIntroStage } from '@/components/screen/round-intro-stage'
@@ -23,14 +25,14 @@ import { WaitingStage } from '@/components/screen/waiting-stage'
  */
 export function Stage({
   view,
+  teams,
   sound,
 }: {
   view: MainScreenView
+  teams: Teams
   /** §4.1's arming result — `false` means the room will not hear the two sounds. */
   sound: boolean
 }) {
-  const teams = new Map(view.teams.map((team) => [team.id, team]))
-
   return (
     /*
      * §15 — *"stage transitions are 250–400 ms and directional. Long enough to be caught peripherally;
@@ -89,11 +91,11 @@ function StageBody({
     case 'JEOPARDY_BOARD':
       return <BoardStage stage={stage} teams={teams} />
 
-    // Built in the pieces that follow; `case`s so the switch stays exhaustive rather than falling
-    // through to a blank projector.
     case 'FINALE':
+      return <FinaleStage finale={stage.finale} />
+
     case 'FINISHED':
-      return null
+      return <FinishedStage stage={stage} teams={teams} />
   }
 
   /*

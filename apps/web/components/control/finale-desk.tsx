@@ -465,7 +465,19 @@ export function FinaleRanking({
       </h1>
 
       {ranking ? (
-        <Tabs defaultValue="survival">
+        /*
+         * PRD 4 §10.2 — **these tabs are the room's tabs.** That surface has no controls of its own
+         * (§2.3), so switching here switches there; PRD 3 §10.6 calls it *"mirroring PRD 4's `FINISHED`
+         * stage"*, and mirroring only means something if the two agree. Controlled by the pushed view
+         * rather than by local state, which also makes a second desk (§12) show the tab the room is on
+         * rather than the one it opened with.
+         */
+        <Tabs
+          value={view.finishedTab === 'POINTS' ? 'points' : 'survival'}
+          onValueChange={(next) =>
+            run(() => api.setFinishedTab(next === 'points' ? 'POINTS' : 'RESULT'))
+          }
+        >
           <TabsList>
             <TabsTrigger value="survival">{t('survivalTab')}</TabsTrigger>
             <TabsTrigger value="points">{t('pointsTab')}</TabsTrigger>

@@ -1,10 +1,11 @@
 'use client'
 
-import type { MainScreenView } from '@kwiz/domain'
+import type { MainScreenView, Notice } from '@kwiz/domain'
 import { DISCONNECT_GRACE_MS } from '@kwiz/domain'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { AdjustmentBanner } from '@/components/screen/adjustment-banner'
 import { Arming, DisconnectedPulse, KwizMark } from '@/components/screen/arming'
 import { Stage } from '@/components/screen/stage'
 import { StageFrame } from '@/components/screen/stage-frame'
@@ -29,9 +30,22 @@ import { requestFullscreen } from '@/lib/client/use-screen-chrome'
 export function MainScreen({ gameId }: { gameId: string }) {
   /** `null` until §4.1's click; then whether the room will actually hear anything. */
   const [sound, setSound] = useState<boolean | null>(null)
-  const { view, status } = useLiveView<MainScreenView>(`/api/live/${gameId}/screen`)
+  // §10.1's banner is a *moment*, so it arrives as a notice rather than on the view (protocol §2.3).
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const onNotice = useCallback((next: Notice) => setNotice(next), [])
+
+  const { view, status } = useLiveView<MainScreenView>(
+    `/api/live/${gameId}/screen`,
+    onNotice,
+  )
 
   const pointerActive = usePointerActive()
+
+  // Built here rather than per stage: the banner needs it too, and it must be the same map.
+  const teams = useMemo(
+    () => new Map((view?.teams ?? []).map((team) => [team.id, team])),
+    [view?.teams],
+  )
 
   /*
    * O4 — *"if fullscreen is exited mid-game, re-arm silently on the next click, never show the room a
@@ -54,7 +68,11 @@ export function MainScreen({ gameId }: { gameId: string }) {
           blanking a projector mid-question is the one thing worse than a stale standing. Only the
           very first connect has nothing to show.
         */}
-        {view ? <Stage view={view} sound={sound} /> : <KwizMark />}
+        {view ? <Stage view={view} teams={teams} sound={sound} /> : <KwizMark />}
+
+        {/* §10.1 — below whatever the stage is showing, never over it, and the same band on all eight. */}
+        <AdjustmentBanner notice={notice} teams={teams} />
+
         {status === 'RECONNECTING' ? <GracedPulse /> : null}
       </StageFrame>
 
