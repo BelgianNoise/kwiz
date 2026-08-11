@@ -12,6 +12,175 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 6 — The main screen
+
+**Status:** complete · `pnpm check` green · **652 tests** · lint silent · every one of the eight stages
+driven in a real game at 1920×1080 and again in `nl` · server killed mid-question and restarted
+
+### What was built
+
+PRD 4, end to end: `/screen/:gameId` on `useLiveView`, §4.1's arming click, all eight stages, §7's
+depleting-ring timer, §8's two reveal beats including P5's 1.5-second multiple-choice delay, §8.3's
+buzz display and deny flip, §9's board, §12's finale with word-shape tiles and the penalty and
+elimination moments, §10.2's two tabs, §10.1's banner, §13's two sounds, and §14's calm failure states.
+
+**Everything lives inside one letterboxed 1920×1080 `StageFrame`**, so every size on the surface is
+`cqh` and transcribes §2.1's table directly. `vh` inside a scaled frame is wrong in a way that only
+shows up on a projector, which is why slice 4 built the frame that way and why nothing here deviates.
+
+### The domain did not carry enough for the surface, in nine places
+
+Same story as slice 5, one layer down: slice 2 built `MainScreenView` faithfully against protocol §5.2,
+it was internally consistent, and it could not answer nine questions PRD 4 has to ask. All nine are now
+in protocol §5.1/§5.2 as well as in the code:
+
+`quizName` · `soundMuted` · `Timer.durationMs` · `Standing.movement` · `LEADERBOARD.afterRoundNumber` ·
+`provisional` · `ROUND_INTRO.questionCount`/`points` · `FinishedRow[]` + `finishedTab` · `MediaPlayback`
+
+Four are worth singling out:
+
+- **`Timer.durationMs`** — §7's timer is *"a depleting ring plus the number"*, and `deadlineAt` gives a
+  client the number but never the proportion. It cannot know whether 18 seconds is most of the time or
+  the last of it. Pauses deliberately do **not** grow the span: a ring whose total grew mid-question
+  would visibly jump *backwards* on every deny loop.
+- **`Standing.movement`** is the one addition that needed real reducer state, because a baseline is
+  **not derivable from scores** — two teams can swap twice between showings and end where they started.
+  So the three events that put a leaderboard in front of the room capture the ranks they displayed, and
+  the *previous* capture is what the arrows measure against. Hiding the board captures nothing; there is
+  a test for that, because it is the plausible-looking wrong version.
+- **`provisional`** resolved a real contradiction rather than picking a winner. protocol §5.2 forbade
+  *any* pending-validation information on this view; PRD 4 §10 and PRD 3 §6.2 both require the marker.
+  The reasons do not actually conflict — the prohibition is about the master's judging queue, the
+  requirement is about not calling a standing final — so it is **scoped**: a standing may say it is
+  provisional, a question still says nothing. protocol §5.2.1 now states that in those terms.
+- **`MediaPlayback`** is the second field on any pushed view that is passed **into** the filter rather
+  than folded from the log (`controlScreens` was the first, and `soundMuted` is now the third). §6.1's
+  equaliser is a diagnostic — *"its going still is the no-sound signal"* — and that only works if
+  stillness means something. The `<audio>` element is on the master's desk and stays there (PRD 3 §5.1),
+  so `media/playback` mirrors the *fact* of playback across. It is the one master action that **appends
+  nothing**: there is no game fact in a scrub bar.
+
+### Four real bugs, three of them found only by driving the surface
+
+1. **A closed round showed the room that round's intro again.** `ROUND_CLOSED` leaves `currentRoundId`
+   pointing at the closed round on purpose — PRD 3 §2.1's timeline is still about it — so the gap
+   between rounds fell through to the intro the room had already watched. PRD 4 §3 puts a leaderboard
+   there. `closedRoundIds` is what tells the resolver the difference, and §10's `AFTER ROUND n` versus
+   `CURRENT SCORES` falls out of the same fact.
+2. **A scored Jeopardy tile never handed the stage back to the board**, so §9's picker line — the only
+   instruction the board gives, and the entire reason the stage exists — never appeared, and the next
+   team never learned it was their turn. `SCORED` and not `REVEALED`: a revealed tile is still a moment
+   the master is presenting, and pulling it off screen mid-sentence is worse than a pause on the board.
+3. **Every pushed `joinUrl` was relative.** `service.ts` had its own `joinUrlFor` returning `/play/CODE`
+   with a comment saying PRD 2's network picker would make it absolute *in slice 4*. The picker landed,
+   `settings.joinUrl` landed, and nothing came back to that line. Invisible until something rendered a
+   QR code from a pushed `joinUrl` — and the admin game page used the real builder, so the master saw a
+   correct address while the projector would have encoded a path no phone camera can resolve. Exactly
+   PRD 1 §14's first stated risk.
+4. **Awaiting `requestFullscreen()` hung §4.1's arming screen.** In some embedders that promise never
+   settles rather than rejecting, so the screen sat there disabled with the room watching. Arming must
+   always reach an answer, because there is no other way out of that screen: fullscreen is now fired and
+   not waited on (§4.1 only asks the master to be told about the *sound*, and O4 makes fullscreen silent
+   either way), and `armSound` races a deadline.
+
+Jeopardy category names were also below §2.1's absolute `4vh` floor, at `3.6cqh` — caught by measuring
+rather than by looking, which is now a smoke-checklist row with the snippet in it.
+
+### Spec deviations
+
+None knowingly. Every addition above is written into protocol §5.1/§5.2/§4.7/§7.2 and conventions §4 in
+this change (agent-workflow §3.3), and PRD 4 §3 gained a paragraph on what *"between rounds"* means,
+because that was a real bug rather than a hypothetical.
+
+Three judgement calls recorded rather than silently taken:
+
+- **PRD 2 §16's mute already existed server-side** (`data/settings.json`, `/api/settings/sound/mute`,
+  slice 4) — I had assumed it was slice 8's and nearly invented a `localStorage` key beside it. It is on
+  the pushed view rather than read at page load, which is the difference between the setting working and
+  merely existing: §16's justification is that *"hunting for OS volume mid-quiz is not acceptable"*, so
+  a mute has to reach a projector nobody is going to reload.
+- **§10.1's banner is suppressed by *stage*, not by status.** `WAITING_FOR_PLAYERS` covers `SETUP` *and*
+  a `LIVE` game with no round open, and in both cases the room is looking at a join screen where a `+5`
+  announces a change to a game nobody has watched. The question worth asking is *"is the room looking at
+  something a score announcement makes sense against?"*, and the stage is what answers it.
+- **The notice itself is not suppressed**, because control shows the same one and a master correcting a
+  score after the game ends (PRD 2 §13) should be told it landed. The two audiences disagree about that
+  notice on purpose, and the disagreement lives on the surface that has the rule.
+
+### Raised, not resolved
+
+- **`EventSource` cannot set headers and `/api/live/:gameId/play` requires `X-Kwiz-Device`.** Carried
+  over from slice 5 and still unresolved. **Slice 7 hits this on day one** — the player stream is
+  unreachable from a browser as specified. It needs a query parameter or a cookie, and it is a protocol
+  §2.1/§7.1 decision. Settle it before writing the player surface, not during.
+- **`FINALE_PENALTY_FLASH_MS` is presentational and unsynchronised.** The room's `−20s` runs for 1.2 s
+  from when *each screen* receives the mark. Two projectors would flash a few milliseconds apart, which
+  nobody can perceive; a genuinely synchronised flash would need an instant on the payload, and that is
+  a real cost for an imperceptible gain.
+- **No component tests.** `vitest` still resolves no `@/` alias (slice 5 raised this), so the parts of
+  this surface that are pure presentation are verified by driving the browser and by the domain tests
+  underneath them. `useEliminationMoment` and `usePenaltyFlash` are the two I would most want covered —
+  both turn on *change* detection, which is exactly the kind of logic a reload can hide.
+- **§15's "only one thing animates at a time"** is honoured by construction rather than enforced. The
+  stage transition, the penalty flash and the elimination moment cannot overlap in practice because each
+  is triggered by a different event, but nothing checks that.
+
+### Deliberately left out
+
+- **PRD 5's player surface**, including anything that would make the player's `FINALE` stage or the
+  break countdown on a phone work. Slice 7's.
+- **The `DO` answer method has no main-screen stage of its own**, and correctly: `DO` is scored entirely
+  on the master's desk (PRD 3 §8), so the room sees an ordinary `QUESTION` and then the leaderboard.
+- **Rank movement is not shown above ten teams** — §10's own overflow ladder drops it at the point two
+  columns start.
+
+### Not verifiable here (agent-workflow §4.5)
+
+- **10 m legibility and projector contrast.** What was checked is stronger than a squint but narrower
+  than a room: every text node on every stage measured against §2.1's `43.2px` floor, which is that
+  clause made mechanical. Contrast, overscan and a washed-out wall are slice 10's.
+- **Screenshots.** The browser pane would not composite in this environment, so nothing was judged by
+  eye — and that is why a frozen entry animation briefly looked like a layout overflow. The measurement
+  approach above exists because of that limitation, and it is the better check regardless.
+- **The two sounds were never heard.** `AudioContext` armed and reported `running`, and both call sites
+  fire on the right transition, but a tone at projector volume is a rehearsal item.
+
+### What the next agent would otherwise rediscover
+
+- **Turbopack does not reliably reload `messages/*.ts`.** A new key renders as its own path
+  (`screen.finale.guessing`) with a `MISSING_MESSAGE` console error, through a hard reload, until the
+  **dev server is restarted**. This cost time twice. If copy looks missing, restart before debugging.
+- **A change to `packages/domain` does not reach an open screen until the next push.** The server holds
+  a live projection and only rebuilds a view when something happens, so after editing a view filter,
+  fire any harmless action (`picker`, `scoreboard`) to see it.
+- **`components/screen/stage.tsx` is the one place that maps a stage to a component**, and the switch
+  ends in `const unhandled: never = stage`. A stage added to the view without a branch is a **compile
+  error** rather than a blank projector, which is the one failure this surface cannot recover from.
+- **`Teams` (a `ReadonlyMap`) is built once in `main-screen.tsx`** and passed down, because the banner
+  needs the same map as the stages. Do not rebuild it per stage.
+- **Nothing in `components/screen` imports from `components/control`, deliberately** (CLAUDE.md §7).
+  `minuteSeconds` is duplicated rather than shared: the same helper at 0.5 m and at 10 m is two
+  components that happen to look alike, and sharing one would be the first thread of a dependency
+  between two surfaces whose type scales must stay independent.
+- **Three duration formats on one surface, and they are not interchangeable** (conventions §8.2): whole
+  seconds for the question timer and every finale clock (D57), `m:ss` for a break and a media position,
+  `HH:mm` for an elimination instant on the `FINISHED` screen.
+- **Two components turn on *change*, not on state**, and both would be wrong the other way:
+  `useEliminationMoment` watches `eliminatedAt` appearing (a boolean cannot tell an elimination that
+  just happened from one already announced, so a reconnect would replay it) and `usePenaltyFlash`
+  watches the marked-keyword count *growing* (an un-mark returns the penalty, and a `−20s` beside a
+  clock that went up says the opposite of what happened).
+- **`playback.ts` is ephemeral per-game server state**, cleared when a question opens. A server restart
+  mid-song loses the position while the master's browser keeps playing, so the room hears music over a
+  still equaliser until they touch the transport. That is the honest cost of not making it an event.
+- **The unused-message-key grep has a second blind spot.** Slice 5 documented the first (a bug where
+  every clause renders and the control flow is wrong). The second: a key chosen by a ternary —
+  `t(up ? 'movementUp' : 'movementDown')` — reads as unused. Check the hits before believing them.
+- **A driving fixture is worth keeping.** Reaching all eight stages needs a quiz with a timed free-text
+  question, a multiple choice, a buzzer, a board with a deliberately short column, and a finale with
+  multi-word keywords. Slice 9's fixtures want the same shape, and three of this slice's four bugs were
+  only reachable with it.
+
 ## Slice 5 — Master control
 
 **Status:** complete · `pnpm check` green · **624 tests** · lint silent · `pnpm build` clean, no

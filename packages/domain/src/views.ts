@@ -249,6 +249,19 @@ function stageKind(state: GameState): StageKind {
   if (question && play && play.state !== 'SKIPPED') {
     const round = roundOf(state.content, question.id)
     if (round?.type === 'DSMTW_FINALE') return 'FINALE'
+    /*
+     * A **scored Jeopardy tile hands the stage back to the board.**
+     *
+     * PRD 4 §3 puts `JEOPARDY_BOARD` *"between tiles"*, and `QUESTION_SCORED` is the master saying they
+     * are done with this one (protocol §4.2) — so this *is* between tiles. Without it the room sat on
+     * the revealed answer until the next tile opened, which means §9's picker line never appeared and
+     * the next team never learned it was their turn. That line is the only instruction the board gives
+     * and the whole reason the stage exists.
+     *
+     * `SCORED` and not `REVEALED`: a revealed tile is still a moment the master is presenting, and
+     * pulling it off screen mid-sentence would be worse than a short pause on the board.
+     */
+    if (round?.type === 'JEOPARDY' && play.state === 'SCORED') return 'JEOPARDY_BOARD'
     return 'QUESTION'
   }
 
@@ -339,6 +352,15 @@ export interface MainScreenView {
   joinUrl: string
   /** §4's title. The room is told which quiz it is on exactly once, while it fills up. */
   quizName: string
+  /**
+   * PRD 2 §16's `Mute all quiz sounds`, which silences §13's two sounds.
+   *
+   * On the view rather than read at page load, and that is the difference between the setting working
+   * and merely existing: §16's justification is that *"hunting for OS volume mid-quiz is not
+   * acceptable"*, so muting has to reach a projector nobody is going to reload. Like `controlScreens`
+   * and `playback`, it is a fact about the machine rather than about the game, and is passed **in**.
+   */
+  soundMuted: boolean
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
@@ -407,7 +429,8 @@ export function toMainScreenView(
   state: GameState,
   now: number,
   joinUrl = '',
-  playback: MediaPlayback | null = null,
+  /** The two facts about the machine this screen needs and `GameState` cannot hold (§6.1, §13). */
+  machine: { playback?: MediaPlayback | null; soundMuted?: boolean } = {},
 ): MainScreenView {
   const teams = [...state.teams.values()]
     .sort((a, b) => a.position - b.position)
@@ -417,8 +440,9 @@ export function toMainScreenView(
     code: state.code,
     joinUrl,
     quizName: state.content.quizName,
+    soundMuted: machine.soundMuted ?? false,
     teams,
-    stage: mainScreenStage(state, now, playback),
+    stage: mainScreenStage(state, now, machine.playback ?? null),
   }
 }
 

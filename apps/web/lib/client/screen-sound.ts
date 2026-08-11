@@ -19,24 +19,27 @@
  * the room is still filling, not during the music round.
  */
 
-/**
- * The mute from PRD 2 §16's settings, read from this machine's own storage.
- *
- * **Per-machine on purpose, not as a compromise.** What is being silenced is one set of speakers, and
- * the projector machine is the one with them. The settings *page* that writes this is slice 8's; the
- * key is fixed here so the two cannot disagree about its name.
- */
-export const SOUND_MUTED_KEY = 'kwiz.sound.muted'
-
 let context: AudioContext | null = null
 
+/**
+ * PRD 2 §16's `Mute all quiz sounds`, mirrored from the pushed view.
+ *
+ * **Held in a module rather than passed down**, because the two callers are an effect inside a timer
+ * and an effect inside a buzz list — threading a boolean through both would put a mute check in two
+ * components whose job is neither. `MainScreenView.soundMuted` is the source; this is just where the
+ * last value pushed lands.
+ *
+ * Setting it on every view is what makes the toggle work mid-quiz, which is §16's whole justification
+ * for having it at all: *"hunting for OS volume mid-quiz is not acceptable."*
+ */
+let muted = false
+
+export function setSoundMuted(next: boolean): void {
+  muted = next
+}
+
 function isMuted(): boolean {
-  try {
-    return localStorage.getItem(SOUND_MUTED_KEY) === 'true'
-  } catch {
-    // Storage can be unavailable, and a missing preference is not a reason to fail silent.
-    return false
-  }
+  return muted
 }
 
 /**

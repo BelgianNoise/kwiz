@@ -9,6 +9,7 @@ import { AdjustmentBanner } from '@/components/screen/adjustment-banner'
 import { Arming, DisconnectedPulse, KwizMark } from '@/components/screen/arming'
 import { Stage } from '@/components/screen/stage'
 import { StageFrame } from '@/components/screen/stage-frame'
+import { setSoundMuted } from '@/lib/client/screen-sound'
 import { useLiveView } from '@/lib/client/use-live-view'
 import { usePointerActive } from '@/lib/client/use-screen-chrome'
 import { requestFullscreen } from '@/lib/client/use-screen-chrome'
@@ -41,6 +42,14 @@ export function MainScreen({ gameId }: { gameId: string }) {
 
   const pointerActive = usePointerActive()
 
+  /*
+   * PRD 2 §16's mute, mirrored on every view so toggling it in settings silences the projector without
+   * anyone reloading it — which is the difference between the setting working and merely existing.
+   */
+  useEffect(() => {
+    if (view) setSoundMuted(view.soundMuted)
+  }, [view])
+
   // Built here rather than per stage: the banner needs it too, and it must be the same map.
   const teams = useMemo(
     () => new Map((view?.teams ?? []).map((team) => [team.id, team])),
@@ -71,7 +80,9 @@ export function MainScreen({ gameId }: { gameId: string }) {
         {view ? <Stage view={view} teams={teams} sound={sound} /> : <KwizMark />}
 
         {/* §10.1 — below whatever the stage is showing, never over it, and the same band on all eight. */}
-        <AdjustmentBanner notice={notice} teams={teams} />
+        {view ? (
+          <AdjustmentBanner notice={notice} teams={teams} stage={view.stage.kind} />
+        ) : null}
 
         {status === 'RECONNECTING' ? <GracedPulse /> : null}
       </StageFrame>

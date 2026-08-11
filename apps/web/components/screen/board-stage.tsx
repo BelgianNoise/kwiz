@@ -62,8 +62,15 @@ export function BoardStage({ stage, teams }: { stage: BoardStageView; teams: Tea
               at 5 categories each column is ~18% of width, which is why PRD 2 §10's pre-flight warns on
               names too long for here. Wrapping rather than truncating, because a clipped category name
               is a question the room cannot answer.
+
+              **`4cqh`, not smaller**, even though "smaller" is what §9 asks for relative to the values.
+              §2.1's floor is absolute — *"nothing is exempt, including timings and captions"* — and this
+              was 3.6cqh until a measurement caught it. The box is two lines at that size; a third is
+              clipped rather than allowed to push the grid, which is the same trade §2.4 makes for an
+              over-long prompt and for the same reason: it is a content problem, and pre-flight is where
+              it gets caught.
             */}
-            <p className="h-[9cqh] text-center text-[3.6cqh] leading-tight font-semibold tracking-wider break-words text-neutral-400 uppercase">
+            <p className="h-[11cqh] overflow-hidden text-center text-[4cqh] leading-tight font-semibold tracking-wider break-words text-neutral-400 uppercase">
               {category.name}
             </p>
 

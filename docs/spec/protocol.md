@@ -415,6 +415,11 @@ type MainScreenView = {
   code: string
   joinUrl: string
   quizName: string        // PRD 4 §4's title. Added in slice 6
+  // PRD 2 §16's `Mute all quiz sounds`, which silences PRD 4 §13's two sounds. On the view rather
+  // than read at page load, and that is the difference between the setting working and merely
+  // existing: §16's justification is that "hunting for OS volume mid-quiz is not acceptable", so a
+  // mute has to reach a projector nobody is going to reload. Passed into the filter. Added slice 6
+  soundMuted: boolean
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }

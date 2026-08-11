@@ -528,9 +528,7 @@ describe('the audio playback mirror', () => {
 
   it('carries the instant and the offset, never a position to be ticked', () => {
     const stage = toMainScreenView(state(), NOW, '', {
-      mediaId: 'media-1',
-      playingSince: 90_000,
-      positionMs: 4_000,
+      playback: { mediaId: 'media-1', playingSince: 90_000, positionMs: 4_000 },
     }).stage
     if (stage.kind !== 'QUESTION') throw new Error(`got ${stage.kind}`)
     expect(stage.question.playback).toEqual({
@@ -546,11 +544,98 @@ describe('the audio playback mirror', () => {
    */
   it('is dropped when it belongs to another question’s media', () => {
     const stage = toMainScreenView(state(), NOW, '', {
-      mediaId: 'media-from-the-last-round',
-      playingSince: 90_000,
-      positionMs: 4_000,
+      playback: {
+        mediaId: 'media-from-the-last-round',
+        playingSince: 90_000,
+        positionMs: 4_000,
+      },
     }).stage
     if (stage.kind !== 'QUESTION') throw new Error(`got ${stage.kind}`)
     expect(stage.question).not.toHaveProperty('playback')
+  })
+})
+
+/**
+ * §3 / §9 — the board is the stage *between tiles*, and `QUESTION_SCORED` is the master saying they are
+ * done with one (protocol §4.2).
+ *
+ * Found by driving a Jeopardy round: the room sat on the revealed answer until the next tile opened, so
+ * §9's picker line — the only instruction the board gives, and the whole reason the stage exists — never
+ * appeared, and the next team never learned it was their turn.
+ */
+describe('a Jeopardy tile handing the stage back', () => {
+  const board: GameContent = {
+    ...content,
+    rounds: [
+      {
+        id: 'rj',
+        position: 0,
+        type: 'JEOPARDY',
+        title: 'Board',
+        defaultPoints: 100,
+        defaultTimerMs: null,
+        config: { valueLadder: [100] },
+        categories: [{ id: 'cat', position: 0, name: 'Geography' }],
+        questions: [
+          question({
+            id: 'tile',
+            roundId: 'rj',
+            categoryId: 'cat',
+            position: 0,
+            answerMethod: 'BUZZER',
+            points: 100,
+          }),
+        ],
+      },
+    ],
+  }
+
+  const play = (states: GameEvent[]): GameState => {
+    const events: GameEvent[] = [
+      team(A, 'Quizzly Bears', 0),
+      team(B, 'The Quizinart', 1),
+      { type: 'GAME_STARTED', payload: {} },
+      { type: 'ROUND_OPENED', payload: { gameRoundId: 'rj' } },
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'tile' } },
+      ...states,
+    ]
+    return reduce(
+      board,
+      events.map((event, i): LoggedEvent => ({
+        seq: i + 1,
+        event,
+        createdAt: 1_000 + i * 100,
+      })),
+    )
+  }
+
+  it('keeps a revealed tile on screen — the master is still presenting it', () => {
+    const stage = toMainScreenView(
+      play([
+        { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'tile' } },
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: 'tile' } },
+      ]),
+      NOW,
+    ).stage
+    expect(stage.kind).toBe('QUESTION')
+  })
+
+  it('returns to the board once the tile is scored, showing the tile as spent', () => {
+    const stage = toMainScreenView(
+      play([
+        { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'tile' } },
+        { type: 'QUESTION_REVEALED', payload: { gameQuestionId: 'tile' } },
+        { type: 'QUESTION_SCORED', payload: { gameQuestionId: 'tile' } },
+        { type: 'PICKER_ASSIGNED', payload: { teamId: B, reason: 'RULE' } },
+      ]),
+      NOW,
+    ).stage
+
+    expect(stage.kind).toBe('JEOPARDY_BOARD')
+    if (stage.kind !== 'JEOPARDY_BOARD') return
+    // §9's picker line, which is the only instruction the board gives.
+    expect(stage.currentPickerTeamId).toBe(B)
+    // §9 — used tiles render as `—`, and the payload is what says so.
+    expect(stage.board.tiles[0]?.used).toBe(true)
   })
 })

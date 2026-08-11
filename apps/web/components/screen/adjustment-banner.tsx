@@ -1,6 +1,6 @@
 'use client'
 
-import type { Notice, TeamPublic } from '@kwiz/domain'
+import type { MainScreenView, Notice, TeamPublic } from '@kwiz/domain'
 import { SCORE_BANNER_MS } from '@kwiz/domain'
 import { useEffect, useState } from 'react'
 
@@ -30,12 +30,32 @@ import type { Teams } from '@/components/screen/stage'
 export function AdjustmentBanner({
   notice,
   teams,
+  stage,
 }: {
   notice: Notice | null
   teams: Teams
+  /** §10.1's third suppression needs to know whether a game is under way. */
+  stage: MainScreenView['stage']['kind']
 }) {
   const shown = useTransient(notice)
   if (!shown || shown.kind !== 'SCORE_ADJUSTED') return null
+
+  /*
+   * §10.1 — *"never shown for adjustments made before `GAME_STARTED` or after `GAME_FINISHED`."*
+   *
+   * Guarded here rather than by suppressing the notice, because the notice is not only the room's:
+   * control shows the same one as a §3.2 toast, and a master who adjusts a score after the game ends
+   * — PRD 2 §13's whole post-game correction flow — **should** be told it landed. So the two audiences
+   * disagree about this notice on purpose, and the disagreement lives on the surface that has the rule.
+   *
+   * **The stage is the test rather than the status**, and it is the better one rather than the
+   * convenient one. `WAITING_FOR_PLAYERS` is not only `SETUP` — a `LIVE` game with no round open shows
+   * it too — but in both cases the room is looking at a join screen, where a `+5` announces a change to
+   * a game nobody has watched yet. The question worth asking is *"is the room looking at something a
+   * score announcement makes sense against?"*, and the stage is what answers it. `FINISHED` covers
+   * abandoned as well, which §14 says gets no announcement of anything.
+   */
+  if (stage === 'WAITING_FOR_PLAYERS' || stage === 'FINISHED') return null
 
   const team: TeamPublic | undefined = teams.get(shown.teamId)
 

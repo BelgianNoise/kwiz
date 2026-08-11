@@ -231,3 +231,72 @@ a throwaway `packages/db/src/*.test.ts` calling `createGameFromQuiz` against `./
       screen looks completely reasonable while it does.
 - [ ] Switch to `/nl` and walk the same screens. Dutch runs 20–30% longer; the header and the
       finale's clock strip are where that shows first.
+
+### After slice 6 — the main screen
+
+Open `/screen/<gameId>` at **1920×1080**, and do the last row in `nl` rather than `en` — build-order
+says both are trivially skipped and are the whole point of the surface.
+
+- [ ] **Arming (§4.1).** The click enables sound and fullscreen and the waiting screen then says
+      `♪ sound ready`. Reopen the route: it asks again, because the browser's permission did not
+      survive either. It must **always** reach an answer — there is no other way out of that screen,
+      and awaiting `requestFullscreen()` hung it for a while in slice 6.
+- [ ] **Nothing on this screen is below `4vh`** (§2.1) — *"nothing is exempt, including timings and
+      captions."* The mechanical version, run on each stage, is worth more than a squint: measure
+      every text node's computed size against `43.2px` inside the 1080-tall stage. It caught Jeopardy
+      category names at `3.6cqh`.
+      ```js
+      const f = document.querySelector('[style*="container-type"]')
+      const bad = []
+      f.querySelectorAll('*').forEach((el) => {
+        const t = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim())
+        if (!t.length) return
+        const px = parseFloat(getComputedStyle(el).fontSize)
+        if (px < 43.15) bad.push([el.textContent.slice(0, 30), px])
+      })
+      bad
+      ```
+- [ ] **§4's QR resolves to something a phone can reach.** Not a relative `/play/CODE` — that was a
+      real bug until slice 6, invisible until something rendered a QR from the pushed `joinUrl`. If
+      the network picker has run, the address is absolute; if it has not, relative is correct and
+      deliberate (a guessed origin is a dead QR that looks authoritative).
+- [ ] **The gap between rounds is a leaderboard**, headed `AFTER ROUND n` — not the finished round's
+      intro again, which is what it was for most of slice 6.
+- [ ] **`▲2` needs two leaderboards.** Show one, change a score, show another. The first is blank
+      (nothing has moved yet) and only the second has arrows. Hiding the board in between must not
+      become the baseline.
+- [ ] **The timer (§7).** The ring visibly depletes, the last five seconds pulse, `⏸` shows while a
+      buzz is adjudicated, and at zero it says `TIME` and **holds** — the question is still open
+      server-side (D8) and a vanishing timer reads as "the question is over".
+- [ ] **The reveal's two beats (§8).** Free text: the answer at hero scale, then spotlight an answer
+      the master has *not* judged — it gets **no** verdict mark (D42). Judge it and the `✗` appears.
+      Multiple choice: the correct option is marked and the team dots arrive **~1.5 s later** (P5).
+- [ ] **Two buzzes, then deny the first** (§8.3, D35). Timings show two decimals — `24.19s` vs
+      `24.92s` is the drama — the denied team is **struck through, not removed**, and `BUZZERS OPEN`
+      appears at hero scale.
+- [ ] **A scored Jeopardy tile hands the stage back to the board** (§3, §9), which is where the next
+      picker learns it is their turn. Used tiles read `—`; a value a category never had is blank, and
+      the two must look different.
+- [ ] **The finale (§12).** A multi-word keyword draws **one block per word** — `i like cows` is three
+      blocks of 1 / 4 / 4, never one bar and never blurred text (D53). Mark one: the tile crossfades
+      to text, `−20s` flashes beside **every other** clock for about a second, and the team that found
+      it pays nothing. Whole seconds throughout, never `m:ss` (D57).
+- [ ] **An off-turn elimination gets its moment** (§12.4): a penalty takes a *waiting* team to zero,
+      and their name fills the screen with `OUT` before it returns to the turn. Without that the room
+      would just notice a row had greyed out.
+- [ ] **`FINISHED`'s two tabs (§10.2, D51)** are switched **from control** and the room follows.
+      `RESULT` shows survival with the winner's remaining seconds; `POINTS` shows the pre-finale
+      totals, and the two disagree. Simultaneous eliminations share a rank and the next number skips.
+- [ ] **§10.1's banner** shows team, signed delta and reason for ~6 s, below the stage's content and
+      never over it. A **revocation announces nothing** (D41), and nothing announces on the waiting or
+      finished screens.
+- [ ] **Kill the server mid-question.** Nothing happens for three seconds, then a small wordless pulse
+      appears in a corner — never a modal, never red, never the word "error" — and the last good view
+      **stays on screen** with its clock still running locally (D52). Restart: the pulse goes and the
+      state is exactly as it was (D4).
+- [ ] **No polling** (D2). One long-lived GET per stream in the network panel, `: ping` about every
+      15 s, and `X-Accel-Buffering: no` on the response.
+- [ ] **Two `/screen/<gameId>` tabs show the same view** (O5) — nothing about `MAIN_SCREEN` is
+      per-connection.
+- [ ] **Walk every stage in `nl`.** Dutch is this surface's layout baseline (PRD 1 §9.2), and the
+      round intro's `3 vragen · 40 punten` line and the finale's clock strip are where it shows first.
