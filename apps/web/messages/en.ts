@@ -811,6 +811,20 @@ const en = {
       /** §11 — zero holds, and the master resumes when the room is actually back. */
       startingSoon: 'Starting soon',
     },
+    question: {
+      /** §7 — at zero the timer holds and says this; the question is still open (D8). */
+      timeUp: 'Time',
+      /** §7 — paused while the master adjudicates a buzz (D35). Screen readers only; the room sees ⏸. */
+      paused: 'paused',
+      /** §8.3 — hero scale on a denial, loud enough to be caught peripherally. */
+      buzzersOpen: 'Buzzers open',
+    },
+    board: {
+      /** §9 — the only instruction the room needs, and it prevents the "whose turn?" pause. */
+      picks: '{team} pick',
+      /** No picker yet: the master is breaking a tie, so the room is told nothing rather than a name. */
+      choosing: 'Choosing who picks…',
+    },
   },
 }
 

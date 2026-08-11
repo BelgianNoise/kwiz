@@ -23,6 +23,7 @@ import { v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
 
 import { parseBody } from './http'
+import { clearPlayback, setPlayback } from './playback'
 import type { Runtime } from './runtime'
 import { publishState, publishToTeam, runCommand, type CommandContext } from './service'
 
@@ -104,6 +105,13 @@ export const ROUTES: readonly Route[] = [
 
   // §7.2 pacing
   route('scoreboard', 'scoreboard', 'MASTER'),
+  /*
+   * PRD 4 §6.1's audio presence and §10.2's two tabs. Both are the room's screen being driven from the
+   * master's, which is what PRD 4 §2.3 forces — that surface has no controls of its own — and neither
+   * existed in protocol §7.2's catalogue until slice 6 needed them.
+   */
+  route('media-playback', 'media/playback', 'MASTER'),
+  route('finished-tab', 'finished-tab', 'MASTER'),
   route('break', 'break', 'MASTER'),
   route('break-end', 'break/end', 'MASTER'),
   route('picker', 'picker', 'MASTER'),
@@ -337,9 +345,12 @@ function execute(
 
     case 'question-open':
       // The server computes `deadlineAt` from the question's timer — the client never sends one (D7).
-      return withNoBody(body, () =>
-        run({ type: 'OPEN_QUESTION', gameQuestionId: questionId }),
-      )
+      return withNoBody(body, () => {
+        // The previous question's transport state is not this question's, and a stale mirror would
+        // animate PRD 4 §6.1's equaliser over silence — the exact failure its stillness signals.
+        clearPlayback(gameId)
+        return run({ type: 'OPEN_QUESTION', gameQuestionId: questionId })
+      })
 
     case 'question-lock':
       return withNoBody(body, () => {
@@ -462,6 +473,42 @@ function execute(
       const parsed = parseBody(z.object({ shown: z.boolean() }), body)
       if (!parsed.ok) return parsed
       return run({ type: 'TOGGLE_SCOREBOARD', shown: parsed.data.shown })
+    }
+
+    /*
+     * PRD 4 §6.1 — the master's transport, mirrored to the room's equaliser and elapsed clock.
+     *
+     * **The one master action that appends nothing.** It has no command in `packages/domain` because
+     * there is no game fact here to decide (see `playback.ts`): it writes an ephemeral map and pushes
+     * the view, which is the whole of it. `publishState` rather than `runCommand`, so no `seq` moves
+     * and no log row is written for a scrub bar.
+     */
+    case 'media-playback': {
+      const parsed = parseBody(
+        z.object({
+          mediaId: z.string().min(1),
+          playing: z.boolean(),
+          positionMs: z.number().min(0),
+        }),
+        body,
+      )
+      if (!parsed.ok) return parsed
+      setPlayback(gameId, {
+        mediaId: parsed.data.mediaId,
+        // An absolute instant, so the room derives elapsed time itself and the server never ticks
+        // (D52). `null` while paused: the clock holds and the equaliser stops.
+        playingSince: parsed.data.playing ? now : null,
+        positionMs: parsed.data.positionMs,
+      })
+      publishState(context)
+      return ok()
+    }
+
+    /** PRD 4 §10.2 / D51 — which of the `FINISHED` screen's two tabs the room is on. */
+    case 'finished-tab': {
+      const parsed = parseBody(z.object({ tab: z.enum(['RESULT', 'POINTS']) }), body)
+      if (!parsed.ok) return parsed
+      return run({ type: 'SET_FINISHED_TAB', tab: parsed.data.tab })
     }
 
     case 'break': {

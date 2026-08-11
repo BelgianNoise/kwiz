@@ -739,6 +739,15 @@ const nl: Messages = {
       backShortly: 'Zo terug',
       startingSoon: 'Begint zo',
     },
+    question: {
+      timeUp: 'Tijd',
+      paused: 'gepauzeerd',
+      buzzersOpen: 'Buzzers open',
+    },
+    board: {
+      picks: '{team} kiest',
+      choosing: 'Wie kiest wordt bepaald…',
+    },
   },
 }
 

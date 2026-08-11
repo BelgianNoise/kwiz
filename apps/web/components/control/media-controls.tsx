@@ -29,7 +29,20 @@ import { Button } from '@/components/ui/button'
  * §12 — the master hears a failure on their own controls **before the room notices silence**, which
  * is what makes `[Skip this question]` a usable escape rather than a panic.
  */
-export function MediaControls({ media }: { media: MediaRef[] }) {
+export function MediaControls({
+  media,
+  onPlayback,
+}: {
+  media: MediaRef[]
+  /**
+   * PRD 4 §6.1 — mirror this transport to the room's equaliser and elapsed clock.
+   *
+   * The element stays here; only the *fact* that it is playing crosses over. Without this the
+   * projector's equaliser animates whether or not anything is audible, which destroys the one
+   * diagnostic §6.1 exists for: *"the equaliser going still is the 'no sound' signal."*
+   */
+  onPlayback: (mediaId: string, playing: boolean, positionMs: number) => void
+}) {
   const t = useTranslations('control.question')
   const audible = media.filter((item) => item.kind !== 'IMAGE')
 
@@ -48,18 +61,34 @@ export function MediaControls({ media }: { media: MediaRef[] }) {
     <div className="space-y-2">
       <p className="text-muted-foreground text-xs">{t('media')}</p>
       {audible.map((item) => (
-        <MediaRow key={item.id} media={item} />
+        <MediaRow key={item.id} media={item} onPlayback={onPlayback} />
       ))}
     </div>
   )
 }
 
-function MediaRow({ media }: { media: MediaRef }) {
+function MediaRow({
+  media,
+  onPlayback,
+}: {
+  media: MediaRef
+  onPlayback: (mediaId: string, playing: boolean, positionMs: number) => void
+}) {
   const t = useTranslations('control.question')
   const element = useRef<HTMLMediaElement | null>(null)
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [failed, setFailed] = useState(false)
+
+  /**
+   * One mirror per play, pause or seek — **never on `timeupdate`**, which fires four times a second.
+   *
+   * The room derives its own elapsed time from an absolute instant (D52), so it needs telling when
+   * playback *changes*, not where it has got to. Posting every tick would be exactly the polling D2
+   * rules out, in the opposite direction.
+   */
+  const mirror = (next: boolean, atSeconds: number): void =>
+    onPlayback(media.id, next, Math.round(atSeconds * 1000))
 
   const toggle = (): void => {
     const node = element.current
@@ -99,8 +128,14 @@ function MediaRow({ media }: { media: MediaRef }) {
           src={media.url}
           className="max-h-40 rounded-md"
           onError={() => setFailed(true)}
-          onPause={() => setPlaying(false)}
-          onPlay={() => setPlaying(true)}
+          onPause={(event) => {
+            setPlaying(false)
+            mirror(false, event.currentTarget.currentTime)
+          }}
+          onPlay={(event) => {
+            setPlaying(true)
+            mirror(true, event.currentTarget.currentTime)
+          }}
           onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
         />
       ) : (
@@ -110,8 +145,14 @@ function MediaRow({ media }: { media: MediaRef }) {
           }}
           src={media.url}
           onError={() => setFailed(true)}
-          onPause={() => setPlaying(false)}
-          onPlay={() => setPlaying(true)}
+          onPause={(event) => {
+            setPlaying(false)
+            mirror(false, event.currentTarget.currentTime)
+          }}
+          onPlay={(event) => {
+            setPlaying(true)
+            mirror(true, event.currentTarget.currentTime)
+          }}
           onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
         />
       )}
@@ -126,7 +167,12 @@ function MediaRow({ media }: { media: MediaRef }) {
         value={position}
         onChange={(event) => {
           const node = element.current
-          if (node) node.currentTime = Number(event.target.value)
+          if (!node) return
+          const to = Number(event.target.value)
+          node.currentTime = to
+          // A scrub while playing moves the room's clock too. While paused it does not, because
+          // nothing is running for it to be wrong about.
+          if (!node.paused) mirror(true, to)
         }}
       />
 

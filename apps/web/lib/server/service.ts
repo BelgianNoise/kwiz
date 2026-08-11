@@ -15,6 +15,7 @@ import {
   type Notice,
 } from '@kwiz/domain'
 
+import { getPlayback } from './playback'
 import type { Runtime } from './runtime'
 import { frameId, type Frame, type Subscriber } from './transport'
 
@@ -157,7 +158,10 @@ export function buildView(
 
   switch (audience) {
     case 'MAIN_SCREEN':
-      return toMainScreenView(state, now, joinUrl)
+      // The master's transport state, for PRD 4 §6.1's equaliser and elapsed clock. A fact about a
+      // browser rather than about the game, so it is handed in — the second and only other field on
+      // any pushed view that is not folded from the log.
+      return toMainScreenView(state, now, joinUrl, getPlayback(gameId))
     case 'MASTER_CONTROL':
       // The socket count is a transport fact and cannot come from the log (PRD 3 §12), so it is
       // handed in here — the one thing on this view that is not a function of `GameState`.

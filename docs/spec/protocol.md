@@ -1107,6 +1107,8 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/questions/:qId/skip` | `{}` — legal from `PENDING` or `OPEN` (D46) |
 | `POST /api/games/:gameId/answers/submit-for-team` | `{ gameQuestionId, teamId, text?, selectedOptionId? }` — proxy submission; overwrites and resets the verdict (D47) |
 | `POST /api/games/:gameId/scoreboard` | `{ shown }` — leaderboard on the main screen |
+| `POST /api/games/:gameId/media/playback` | `{ mediaId, playing, positionMs }` — PRD 4 §6.1's audio presence. **The one master action that appends nothing**: the `<audio>` element is on the master's desk (PRD 3 §5.1) and where a track has got to is not a game fact, so there is no command in `packages/domain` and no event. It writes ephemeral per-game state and pushes the view; `seq` does not move. Sent on play, pause and scrub — **never on `timeupdate`**, since the room derives elapsed time from an absolute instant (D52) and needs telling when playback *changes*, not where it is. Added in slice 6 |
+| `POST /api/games/:gameId/finished-tab` | `{ tab: 'RESULT' \| 'POINTS' }` — PRD 4 §10.2's two tabs (D51). Legal **only** while `FINISHED`; refuses with `GAME_NOT_FINISHED`. Added in slice 6 |
 | `POST /api/games/:gameId/break` | `{ durationMs? }` — start or extend the interval. `409` while a question is `OPEN` |
 | `POST /api/games/:gameId/break/end` | `{}` — resume; master-driven only |
 | `POST /api/games/:gameId/picker` | `{ teamId }` — tie-break or override (D30) |
@@ -1133,15 +1135,18 @@ feature, not an error; a *second* submission is neither.
 > slice 4. **Deleting a game** was absent for the same reason — data model §10 describes the cascade
 > and PRD 2 §12.1 offers the menu item, but no action reached it. The count below moves 38 → 41.
 
-**That is 41 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
-actions (D50) arrived after that number was written, and the two team actions plus the game delete
-above arrived in slice 4. Counted here because "every action is zod-validated" is only checkable against a correct
-total.
+**That is 43 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+actions (D50) arrived after that number was written, the two team actions plus the game delete above
+arrived in slice 4, and slice 6 added `media/playback` and `finished-tab` for the two things PRD 4's
+screen needs a master to drive. Counted here because "every action is zod-validated" is only
+checkable against a correct total.
 
-`resync` is the one action with **no domain command**: both halves of it are outside
-`packages/domain`. The precondition that matters is whether `game_answer` or `game_buzz` rows exist
-and whether `sourceQuizId` still points anywhere, and the operation replaces the game-copy subtree —
-so `@kwiz/db` owns it end to end, in one transaction with its `GAME_RESYNCED` event.
+`resync` and `media/playback` are the two actions with **no domain command**, for opposite reasons.
+Both halves of `resync` are outside `packages/domain`: the precondition that matters is whether
+`game_answer` or `game_buzz` rows exist and whether `sourceQuizId` still points anywhere, and the
+operation replaces the game-copy subtree. `media/playback` has no command because it has **nothing
+to decide and nothing to append** — there is no game fact in a scrub bar. `@kwiz/db` owns `resync`
+end to end, in one transaction with its `GAME_RESYNCED` event.
 
 ### 7.3 `submit` — finality, idempotency and the multi-device case
 

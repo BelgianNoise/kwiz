@@ -235,7 +235,14 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
          * needs one."* Rare is not never, the authoring surface lets a master attach one, and
          * playback is master-triggered on every other question type (D27), so it is here too.
          */}
-        {turn.media.length > 0 ? <MediaControls media={turn.media} /> : null}
+        {turn.media.length > 0 ? (
+          <MediaControls
+            media={turn.media}
+            onPlayback={(mediaId, playing, positionMs) =>
+              run(() => api.setMediaPlayback(mediaId, playing, positionMs))
+            }
+          />
+        ) : null}
       </header>
 
       {/* Between turns the waiting team's name and clock take the same place, so the master's eye

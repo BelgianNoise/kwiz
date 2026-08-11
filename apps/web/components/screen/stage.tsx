@@ -3,8 +3,10 @@
 import type { MainScreenView, TeamPublic } from '@kwiz/domain'
 import { STAGE_TRANSITION_MS_MAX } from '@kwiz/domain'
 
+import { BoardStage } from '@/components/screen/board-stage'
 import { BreakStage } from '@/components/screen/break-stage'
 import { LeaderboardStage } from '@/components/screen/leaderboard-stage'
+import { QuestionStage } from '@/components/screen/question-stage'
 import { RoundIntroStage } from '@/components/screen/round-intro-stage'
 import { WaitingStage } from '@/components/screen/waiting-stage'
 
@@ -81,10 +83,14 @@ function StageBody({
     case 'BREAK':
       return <BreakStage stage={stage} teams={teams} code={view.code} />
 
-    // The remaining four stages are built in the pieces that follow; each is a `case` here so the
-    // switch stays exhaustive rather than falling through to a blank projector.
     case 'QUESTION':
+      return <QuestionStage question={stage.question} teams={teams} />
+
     case 'JEOPARDY_BOARD':
+      return <BoardStage stage={stage} teams={teams} />
+
+    // Built in the pieces that follow; `case`s so the switch stays exhaustive rather than falling
+    // through to a blank projector.
     case 'FINALE':
     case 'FINISHED':
       return null
