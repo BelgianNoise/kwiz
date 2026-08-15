@@ -90,6 +90,8 @@ export function QuestionDesk({
           detail={detail}
           answered={items.length}
           teams={view.teams.length}
+          api={api}
+          run={run}
         />
       ) : null}
 
@@ -123,10 +125,14 @@ function QuestionHeader({
   detail,
   answered,
   teams,
+  api,
+  run,
 }: {
   detail: MasterQuestionDetail
   answered: number
   teams: number
+  api: ControlApi
+  run: Run
 }) {
   const t = useTranslations('control.question')
   const remaining = useCountdown(detail.timer?.deadlineAt ?? null)
@@ -193,7 +199,14 @@ function QuestionHeader({
 
       {/* D27 — playback is controlled here and only here. The master has the scrub bar; the room
           has the speakers. */}
-      {detail.media.length > 0 ? <MediaControls media={detail.media} /> : null}
+      {detail.media.length > 0 ? (
+        <MediaControls
+          media={detail.media}
+          onPlayback={(mediaId, playing, positionMs) =>
+            run(() => api.setMediaPlayback(mediaId, playing, positionMs))
+          }
+        />
+      ) : null}
     </header>
   )
 }

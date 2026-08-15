@@ -331,7 +331,8 @@ client-supplied instant**, so a slow or fast browser cannot alter a team's fate.
 | --- | --- | --- |
 | `BREAK_STARTED` | `{ durationMs? }` | The interval (PRD 4 §11). Server computes an absolute `resumesAt = createdAt + durationMs` — same principle as question timers (D7), so a screen connecting mid-break shows the correct remaining time rather than restarting. **`durationMs` is optional**: omitted means an open-ended break, `resumesAt` is null, and the screens show "back shortly" with no clock. **Refused while a question is `OPEN`** — see below |
 | `BREAK_ENDED` | `{}` | Master resumes. **Never automatic** — the countdown reaching zero changes nothing on the server (consistent with D8). Re-sending `BREAK_STARTED` during a break is how a break is **extended**: it supersedes `resumesAt` |
-| `SCOREBOARD_TOGGLED` | `{ shown }` | Master pushes the leaderboard to the main screen mid-round (O4). Cleared automatically when the next question opens |
+| `SCOREBOARD_TOGGLED` | `{ shown }` | Master pushes the leaderboard to the main screen mid-round (O4). Cleared automatically when the next question opens. **On the way up it also captures the ranks it displays**, as the baseline PRD 4 §10's `▲2` arrows are measured against on the *next* showing — hiding it again captures nothing, because a dismissal is not a showing |
+| `FINISHED_TAB_SET` | `{ tab: 'RESULT' \| 'POINTS' }` | PRD 4 §10.2's two tabs (D51), switched from control because the projected surface has no controls. An event rather than ephemeral state for the same reason `SCOREBOARD_TOGGLED` is one: it changes the pushed view, so a projector that reconnected — or a second one opened halfway through the applause — has to come back to the tab the master left it on. `RESULT` is the default and needs no event. **Legal only while `FINISHED`**, which makes it the one master action that `GAME_NOT_LIVE` would refuse at exactly the moment it exists for; it has its own `GAME_NOT_FINISHED` (conventions §4). Added in slice 6 |
 | `PICKER_ASSIGNED` | `{ teamId, reason: 'RULE' \| 'TIE_BREAK' \| 'MASTER_OVERRIDE' }` | Needed because tie-breaks are master-arbitrated and overrides exist (D30) — those are decisions, not derivations |
 | `SCORE_ADJUSTED` | `{ adjustmentId, teamId, delta, reason?, announced }` | Any time, any amount (D15). `announced: false` suppresses the banner only (D25). **Carries its own row id**, minted by the caller — see the rule below |
 | `SCORE_ADJUSTMENT_REVOKED` | `{ adjustmentId }` | Undo of a mistaken adjustment (D41). Sets `revokedAt`; the row stays and the total excludes it. Revoking an already-revoked adjustment is a no-op |
@@ -381,6 +382,12 @@ how confidentiality is enforced (§6).
 type Timer = {
   deadlineAt: number      // absolute epoch ms — clients render a countdown against it
   pausedAt: number | null // set during buzzer adjudication (§4.4)
+  // The question's full span. PRD 4 §7's timer is "a depleting ring plus the number", and
+  // deadlineAt alone gives a client the number but not the proportion — it cannot know
+  // whether 18 seconds is most of the time or the last of it. Added in slice 6.
+  // Pauses extend deadlineAt and deliberately do NOT grow this: a ring whose total grew
+  // mid-question would visibly jump backwards on every deny loop.
+  durationMs: number
 }
 
 type TeamPublic = { id: string; name: string; colour: string; score: number }
@@ -407,19 +414,92 @@ type MediaRef = {
 type MainScreenView = {
   code: string
   joinUrl: string
+  quizName: string        // PRD 4 §4's title. Added in slice 6
+  // PRD 2 §16's `Mute all quiz sounds`, which silences PRD 4 §13's two sounds. On the view rather
+  // than read at page load, and that is the difference between the setting working and merely
+  // existing: §16's justification is that "hunting for OS volume mid-quiz is not acceptable", so a
+  // mute has to reach a projector nobody is going to reload. Passed into the filter. Added slice 6
+  soundMuted: boolean
+  // PRD 4 §14: "game abandoned → whatever was showing, held. No announcement." stageKind folds
+  // ABANDONED into FINISHED, which is right for control (its header says so) and wrong for the
+  // room, which would otherwise get a full winner-at-hero-scale announcement for a game the master
+  // had just pulled — the view is published before the streams close. The screen holds its last
+  // real view instead, and this is the flag that tells it to.
+  //
+  // Not a leak and not a contradiction of "no announcement": the room is never SHOWN this. It is
+  // the client being told to show less, which is the only way a stateless resolver can express a
+  // rule about what was on screen a moment ago. Added in slice 6's review round.
+  abandoned: boolean
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
-    | { kind: 'ROUND_INTRO'; title: string; roundNumber: number; totalRounds: number }
-    | { kind: 'LEADERBOARD'; standings: Standing[] }
+    | {
+        kind: 'ROUND_INTRO'
+        title: string
+        roundNumber: number
+        totalRounds: number
+        // PRD 4 §5's `10 questions · 100 points`. Added in slice 6 — the clause was there and
+        // nothing on the payload could render it.
+        //
+        // Safe where a *question* number is not (§6): announced before anything can be skipped,
+        // so it never has to explain a gap. A later skip (D46) makes the total a small
+        // overstatement, which is cheaper than a live count telling the room a question vanished.
+        questionCount: number
+        points: number
+      }
+    | {
+        kind: 'LEADERBOARD'
+        standings: Standing[]
+        provisional: Provisional | null    // §5.2.1
+        // The round just closed, for PRD 4 §10's `AFTER ROUND 2` heading — null when the
+        // master pushed the board mid-round, which reads `CURRENT SCORES` instead. Two
+        // different claims about the same numbers, and the heading is all that separates
+        // them, so which one is true is decided here rather than in a component.
+        afterRoundNumber: number | null
+      }
     | { kind: 'BREAK'; resumesAt: number | null; standings: Standing[] }
     | { kind: 'QUESTION'; question: MainScreenQuestion }
     | { kind: 'FINALE'; finale: FinaleView }
     | { kind: 'JEOPARDY_BOARD'; board: BoardView; currentPickerTeamId: string | null }
-    | { kind: 'FINISHED'; standings: Standing[] }
+    | {
+        kind: 'FINISHED'
+        standings: Standing[]              // the POINTS tab, and the whole screen without a finale
+        provisional: Provisional | null
+        finale: FinishedRow[] | null       // null selects the one-tab screen
+        tab: 'RESULT' | 'POINTS'           // D51, switched from control
+      }
 }
 
-type Standing = { teamId: string; rank: number; score: number; tied: boolean }  // D32
+type Standing = {
+  teamId: string
+  rank: number
+  score: number
+  tied: boolean           // D32
+  // Places gained since the previous leaderboard (PRD 4 §10) — positive is up, so 2 renders
+  // `▲2`. null means there is nothing honest to show: the first leaderboard of a game, or a
+  // team that joined after the last one and so was never in it. 0 is `—`, and a different
+  // statement from "we don't know".
+  //
+  // This needs a baseline, and a baseline is NOT derivable from scores — two teams can swap
+  // twice between showings and end where they started. So GameState captures the ranks each
+  // leaderboard displayed, on the three events that put one in front of the room:
+  // ROUND_CLOSED, SCOREBOARD_TOGGLED{shown:true} and GAME_FINISHED.
+  movement: number | null
+}
+
+// PRD 4 §10.2's FINISHED screen after a DSMTW_FINALE (D51) — one flat list, finalists first,
+// then a rule, then the teams that did not play the finale continuing the same numbering.
+// `finalist` is where the rule goes, and it is also what stops a non-finalist's position
+// reading as an elimination.
+type FinishedRow = {
+  rank: number            // shared within a tier, as D32 is everywhere else
+  teamId: string
+  finalist: boolean
+  eliminatedAt: number | null  // set for a finalist who went out; null for survivors
+  // A surviving finalist's remaining bank — "won with 41 seconds left" is the story. Read at
+  // finale.endedAt, not at now, or the winner's clock keeps counting down all evening.
+  secondsLeft: number | null
+}
 
 type BoardView = {
   categories: { id: string; name: string }[]
@@ -442,6 +522,11 @@ type FinaleView = {
     secondsAtTurnStart: number
     onTurn: boolean
     eliminated: boolean
+    // When they went out. PRD 4 §12.4's elimination moment is a *change* in this, so a screen
+    // that reconnects mid-round can tell an elimination it already announced from one it has
+    // not — a boolean cannot, and would replay the moment on every reconnect. PRD 3 §10.2's
+    // `out 21:03` needs it too. Added in slice 5 for MASTER_CONTROL, here in slice 6.
+    eliminatedAt: number | null
   }[]
 
   turnStartedAt: number | null      // null between turns - no clock is running
@@ -501,12 +586,58 @@ type MainScreenQuestion = {
 
   // ─── SCORED only. ───
   awarded?: { teamId: string; points: number }[]
+
+  // PRD 4 §6.1's audio presence. Present only when this question has audio AND the master's
+  // transport has touched it; absent means the equaliser is still and the clock reads zero,
+  // which is the honest state before anything has been played. Dropped when it names another
+  // question's media — a stale mirror would animate an equaliser over silence, the exact
+  // failure §6.1's stillness is a signal for.
+  playback?: MediaPlayback
+}
+
+// PRD 4 §6.1 — whether the master's transport is playing, so the room's equaliser can be
+// still when the sound is, and the elapsed clock can count up.
+//
+// The <audio> element lives on the master's desk (PRD 3 §5.1: "media playback is controlled
+// here, never on the main screen"), so this is a fact about a browser rather than a game
+// fact: not in the log, not replayable, and not derivable from GameState. It is therefore the
+// SECOND field on any pushed view that is passed INTO the filter rather than folded from the
+// log — MasterControlView.controlScreens is the first. Held as ephemeral per-game server
+// state, keyed by gameId, cleared when a question opens.
+//
+// Carried as an instant plus an offset rather than a position, so the screen derives elapsed
+// time client-side and the server never pushes a tick. That is D52's pattern, for D52's
+// reason.
+type MediaPlayback = {
+  mediaId: string
+  playingSince: number | null   // null while paused: the clock holds, the equaliser stops
+  positionMs: number
 }
 ```
 
+#### 5.2.1 The one piece of validation state the room may see
+
+```ts
+type Provisional = { questions: number }   // only ever > 0; null is the settled case
+```
+
 **Never present in `MainScreenView`, in any state:** `masterNotes`, `question_option.isCorrect`
-as a flag on options, `game_answer.isDraft`, or any pending-validation information. The
-room does not need to know the master hasn't finished judging.
+as a flag on options, `game_answer.isDraft`, or any pending-validation information **on a
+question**. The room does not need to know the master hasn't finished judging.
+
+**A *standing* is the one exception, added in slice 6.** PRD 4 §10 renders
+`scores provisional · 3 answers still being checked` on the leaderboard, and PRD 3 §6.2
+references that marker twice. Its reason does not contradict the prohibition above — the room
+must not be told a standing is **final** when it isn't — so the two are resolved by scope
+rather than by one overruling the other:
+
+- `LEADERBOARD` and `FINISHED` carry `provisional`, because they make a claim about totals.
+- `MainScreenQuestion` carries nothing about the master's queue, which is where the
+  prohibition was written and what it was written under.
+
+`null` rather than `{ questions: 0 }` when nothing is outstanding: a zero renders as
+*"0 answers still being checked"* the first time someone forgets to guard it, ten metres from
+a paying audience.
 
 ### 5.3 `PLAYER`
 
@@ -652,6 +783,14 @@ type MasterControlView = {
   // PRD 3 §10.6's survival ranking, rank groups best first (D51). Null until the finale ends.
   // The second tab — pre-finale points — is `teams`, unchanged: a finale scores in seconds.
   finaleRanking: string[][] | null
+
+  // Which of PRD 4 §10.2's two tabs the ROOM is on (D51). Added in slice 6.
+  //
+  // PRD 3 §10.6's ranking has the same two tabs "mirroring PRD 4's FINISHED stage", and mirroring
+  // only means something if they agree — so the desk's tabs are driven by this rather than by local
+  // state, and switching one switches the other. It also settles the two-control-screen case (§12)
+  // for free: a second desk shows the tab the room is on, not the one it happened to open with.
+  finishedTab: 'RESULT' | 'POINTS'
 
   // What a team joining now would have missed (PRD 2 §11.2, O5). `[+ Add team]` is required at
   // every status from master control as well as config, and the dialog's whole justification is
@@ -991,6 +1130,8 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/questions/:qId/skip` | `{}` — legal from `PENDING` or `OPEN` (D46) |
 | `POST /api/games/:gameId/answers/submit-for-team` | `{ gameQuestionId, teamId, text?, selectedOptionId? }` — proxy submission; overwrites and resets the verdict (D47) |
 | `POST /api/games/:gameId/scoreboard` | `{ shown }` — leaderboard on the main screen |
+| `POST /api/games/:gameId/media/playback` | `{ mediaId, playing, positionMs }` — PRD 4 §6.1's audio presence. **The one master action that appends nothing**: the `<audio>` element is on the master's desk (PRD 3 §5.1) and where a track has got to is not a game fact, so there is no command in `packages/domain` and no event. It writes ephemeral per-game state and pushes the view; `seq` does not move. Sent on play, pause and scrub — **never on `timeupdate`**, since the room derives elapsed time from an absolute instant (D52) and needs telling when playback *changes*, not where it is. Added in slice 6 |
+| `POST /api/games/:gameId/finished-tab` | `{ tab: 'RESULT' \| 'POINTS' }` — PRD 4 §10.2's two tabs (D51). Legal **only** while `FINISHED`; refuses with `GAME_NOT_FINISHED`. Added in slice 6 |
 | `POST /api/games/:gameId/break` | `{ durationMs? }` — start or extend the interval. `409` while a question is `OPEN` |
 | `POST /api/games/:gameId/break/end` | `{}` — resume; master-driven only |
 | `POST /api/games/:gameId/picker` | `{ teamId }` — tie-break or override (D30) |
@@ -1017,15 +1158,18 @@ feature, not an error; a *second* submission is neither.
 > slice 4. **Deleting a game** was absent for the same reason — data model §10 describes the cascade
 > and PRD 2 §12.1 offers the menu item, but no action reached it. The count below moves 38 → 41.
 
-**That is 41 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
-actions (D50) arrived after that number was written, and the two team actions plus the game delete
-above arrived in slice 4. Counted here because "every action is zod-validated" is only checkable against a correct
-total.
+**That is 43 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+actions (D50) arrived after that number was written, the two team actions plus the game delete above
+arrived in slice 4, and slice 6 added `media/playback` and `finished-tab` for the two things PRD 4's
+screen needs a master to drive. Counted here because "every action is zod-validated" is only
+checkable against a correct total.
 
-`resync` is the one action with **no domain command**: both halves of it are outside
-`packages/domain`. The precondition that matters is whether `game_answer` or `game_buzz` rows exist
-and whether `sourceQuizId` still points anywhere, and the operation replaces the game-copy subtree —
-so `@kwiz/db` owns it end to end, in one transaction with its `GAME_RESYNCED` event.
+`resync` and `media/playback` are the two actions with **no domain command**, for opposite reasons.
+Both halves of `resync` are outside `packages/domain`: the precondition that matters is whether
+`game_answer` or `game_buzz` rows exist and whether `sourceQuizId` still points anywhere, and the
+operation replaces the game-copy subtree. `media/playback` has no command because it has **nothing
+to decide and nothing to append** — there is no game fact in a scrub bar. `@kwiz/db` owns `resync`
+end to end, in one transaction with its `GAME_RESYNCED` event.
 
 ### 7.3 `submit` — finality, idempotency and the multi-device case
 

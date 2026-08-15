@@ -235,7 +235,14 @@ export function FinaleDesk({ view, api, run, turn }: ZoneProps & { turn: Turn })
          * needs one."* Rare is not never, the authoring surface lets a master attach one, and
          * playback is master-triggered on every other question type (D27), so it is here too.
          */}
-        {turn.media.length > 0 ? <MediaControls media={turn.media} /> : null}
+        {turn.media.length > 0 ? (
+          <MediaControls
+            media={turn.media}
+            onPlayback={(mediaId, playing, positionMs) =>
+              run(() => api.setMediaPlayback(mediaId, playing, positionMs))
+            }
+          />
+        ) : null}
       </header>
 
       {/* Between turns the waiting team's name and clock take the same place, so the master's eye
@@ -458,7 +465,19 @@ export function FinaleRanking({
       </h1>
 
       {ranking ? (
-        <Tabs defaultValue="survival">
+        /*
+         * PRD 4 §10.2 — **these tabs are the room's tabs.** That surface has no controls of its own
+         * (§2.3), so switching here switches there; PRD 3 §10.6 calls it *"mirroring PRD 4's `FINISHED`
+         * stage"*, and mirroring only means something if the two agree. Controlled by the pushed view
+         * rather than by local state, which also makes a second desk (§12) show the tab the room is on
+         * rather than the one it opened with.
+         */
+        <Tabs
+          value={view.finishedTab === 'POINTS' ? 'points' : 'survival'}
+          onValueChange={(next) =>
+            run(() => api.setFinishedTab(next === 'points' ? 'POINTS' : 'RESULT'))
+          }
+        >
           <TabsList>
             <TabsTrigger value="survival">{t('survivalTab')}</TabsTrigger>
             <TabsTrigger value="points">{t('pointsTab')}</TabsTrigger>

@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCountdown } from '@/lib/client/use-countdown'
+import { minuteSeconds } from '@/lib/format'
 
 /**
  * PRD 3 §11.2 — the interval.
@@ -114,10 +115,4 @@ export function BreakDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-/** conventions §8.2 — `m:ss` for a break countdown, which is minutes long. */
-export function minuteSeconds(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds))
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
 }

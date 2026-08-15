@@ -645,6 +645,17 @@ Available at all times from the right rail (D15), per team.
 mid-round (`SCOREBOARD_TOGGLED`). It **clears automatically when the next question opens**,
 so the master cannot accidentally leave it up over a question.
 
+**It is deliberately legal over an *open* question, and the leaderboard wins.** The slice-6
+review round read the sentence above as possibly forbidding that, since it does hide a
+question the room is still answering — so it is settled here rather than left ambiguous. A
+master who wants the standings up mid-question has a reason the software cannot know: a
+dispute, a stalled table, a moment they want to build. Nothing is lost by obeying them —
+the deadline is advisory (D8), the question stays open, phones still show it and answers
+still arrive — and the alternative is a refusal the master has to work around by ending the
+round early, which is the exact distortion this button exists to prevent. Contrast
+`[Start break]`, which **is** refused over an open question (protocol §4.5): a break walks
+the room away from a live deadline, and that genuinely loses answers.
+
 Between rounds the leaderboard appears without being asked for (PRD 1). This toggle exists
 for the master finishing a long stretch of questions who wants to show standings before
 pressing on — whose only alternative would be ending the round early, distorting the quiz's

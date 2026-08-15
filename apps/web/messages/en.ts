@@ -35,6 +35,7 @@ const errors: Record<ErrorCode, string> = {
   TEAM_LOCKED_OUT:
     'Your answer was incorrect, so you cannot buzz again on this question.',
   NOT_IN_SETUP: 'That can only be changed before the game starts.',
+  GAME_NOT_FINISHED: 'That can only be changed once the game has ended.',
   RESYNC_BLOCKED:
     'This game has already been played, so it cannot be refreshed from the quiz.',
   SOURCE_QUIZ_DELETED: 'The quiz this game came from no longer exists.',
@@ -352,6 +353,11 @@ const en = {
         SHORT_TIMER: 'only {seconds}s to answer',
         JEOPARDY_UNEVEN_COLUMNS: 'columns are uneven - the tallest has {tallest}',
         JEOPARDY_EMPTY_TILES: '{empty} empty tiles',
+        /** PRD 4 §9 — it has to fit a board column at 10 m, not just fit in this input. */
+        CATEGORY_NAME_TOO_LONG:
+          '"{name}" is too long for the board — about {max} characters fit',
+        /** PRD 4 §2.4 — below the legibility floor it stops shrinking and overflows instead. */
+        PROMPT_TOO_LONG: 'long for the screen at {length} characters',
         FINALE_RATE_SUSPICIOUS:
           'the top team would start with only {seconds}s - the rate may be inverted',
         FINALE_TOO_FEW_QUESTIONS:
@@ -766,6 +772,85 @@ const en = {
       /** Rendered on the phone, so it is player copy: short, and it answers "did it work?". */
       reached: 'You reached the quiz laptop.',
       reachedBody: 'This network works. Hand the phone back to the quiz master.',
+    },
+  },
+
+  /**
+   * PRD 4 — the projected screen.
+   *
+   * **Full EN/NL parity is required here** (D28): this and the player device are the two surfaces an
+   * audience reads, and Dutch runs 20–30% longer while being this screen's layout baseline
+   * (PRD 1 §9.2). Every string below is short on purpose — at §2.1's sizes there is room for very
+   * little, and a sentence that fits in English and wraps to three lines in Dutch breaks the stage.
+   */
+  screen: {
+    /** §4.1 — the one click that arms audio and fullscreen. Addressed to the master, not the room. */
+    arming: {
+      click: 'Click anywhere to start',
+      explain: 'This enables sound and fullscreen for the quiz.',
+    },
+    waiting: {
+      scanOrGoTo: 'Scan, or go to',
+      andEnter: 'and enter',
+      /** §4.1's verification, so a muted projector is found while the room is still filling. */
+      soundReady: 'sound ready',
+      soundFailed: 'Sound could not start. Click the screen once more.',
+    },
+    round: {
+      number: 'ROUND {number}',
+      shape: '{questions} questions · {points} points',
+    },
+    leaderboard: {
+      afterRound: 'After round {number}',
+      currentScores: 'Current scores',
+      provisional: 'scores provisional · {questions} answers still being checked',
+      /** Read out only by a screen reader — the room sees the arrow (§10). */
+      movementUp: 'up {places}',
+      movementDown: 'down {places}',
+      movementHeld: 'no change',
+    },
+    break: {
+      backIn: 'Back in',
+      /** §11 — no duration given, so no clock rather than an invented number. */
+      backShortly: 'Back shortly',
+      /** §11 — zero holds, and the master resumes when the room is actually back. */
+      startingSoon: 'Starting soon',
+    },
+    question: {
+      /** §7 — at zero the timer holds and says this; the question is still open (D8). */
+      timeUp: 'Time',
+      /** §7 — paused while the master adjudicates a buzz (D35). Screen readers only; the room sees ⏸. */
+      paused: 'paused',
+      /** §8.3 — hero scale on a denial, loud enough to be caught peripherally. */
+      buzzersOpen: 'Buzzers open',
+    },
+    board: {
+      /** §9 — the only instruction the room needs, and it prevents the "whose turn?" pause. */
+      picks: '{team} pick',
+      /** No picker yet: the master is breaking a tie, so the room is told nothing rather than a name. */
+      choosing: 'Choosing who picks…',
+    },
+    /** §12 — the busiest this screen ever gets, so every string here is two words or fewer. */
+    finale: {
+      question: 'Q{number} / {total}',
+      /** §12.2's `← guessing` marker on the team whose clock is running. */
+      guessing: 'guessing',
+      /** §12.2 — between turns nothing ticks, and the room should see that it costs nobody. */
+      betweenTurns: 'Next team to go…',
+      /** §12.2 / §12.4 — eliminated teams stay listed, greyed, reading this. */
+      out: 'Out',
+    },
+    finished: {
+      /** §10.2 — `RESULT` decides the game; `POINTS` is kept because it is often a different story. */
+      tabResult: 'Result',
+      tabPoints: 'Points',
+      survived: 'survived',
+      /** "won with 41 seconds left" is the story (§10.2). */
+      survivedWith: 'survived · {seconds}s left',
+      /** conventions §8.2's `HH:mm` — a time of night, not a duration. */
+      outAt: 'out {at}',
+      /** §10.2 — labelled so nobody reads a non-finalist's position as an elimination. */
+      didNotPlay: 'did not play the finale',
     },
   },
 }

@@ -33,6 +33,12 @@ export const ERROR_CODES = [
   'TEAM_LOCKED_OUT',
   // ─── master actions ───
   'NOT_IN_SETUP',
+  /**
+   * The mirror of `NOT_IN_SETUP` at the other end of a game's life, and so far the only action that
+   * needs it: PRD 4 §10.2's `FINISHED` tabs (D51) exist only once the game has ended, so
+   * `GAME_NOT_LIVE` is the wrong refusal — `LIVE` is precisely the status this one rejects.
+   */
+  'GAME_NOT_FINISHED',
   'RESYNC_BLOCKED',
   'SOURCE_QUIZ_DELETED',
   'QUESTION_STILL_OPEN',

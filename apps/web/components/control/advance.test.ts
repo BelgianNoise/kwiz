@@ -5,8 +5,8 @@ import type {
 } from '@kwiz/domain'
 import { describe, expect, it } from 'vitest'
 
-// Relative, not `@/`: vitest resolves no path alias, which is why no test in this app uses one.
-import { control } from '../../lib/client/api'
+import { control } from '@/lib/client/api'
+
 import { advanceAction } from './advance'
 
 /**
@@ -57,6 +57,7 @@ const view = (over: Partial<MasterControlView>): MasterControlView => ({
   scoreboardShown: false,
   controlScreens: 1,
   finaleRanking: null,
+  finishedTab: 'RESULT',
   missed: null,
   pendingValidationCount: 0,
   ...over,

@@ -177,9 +177,71 @@
   }
 }
 
-/* §15 — motion is decorative here, so it goes away entirely when the viewer asks for that. */
+/*
+ * §14's reconnection pulse, and §7/§12.2's two urgency pulses.
+ *
+ * All three carry a message rather than decorating (§15), which is why they survive
+ * `prefers-reduced-motion` below where the equaliser does not: *"colour alone is insufficient at
+ * §2.2's contrast reality, so motion carries it."* A projector crushes a colour shift; it cannot
+ * crush something appearing and disappearing.
+ */
+@keyframes kwiz-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* §7 — the last five seconds, and §12.2's clock under fifteen. Scale as well as opacity, because at
+   10 m a size change is the more legible of the two. */
+@keyframes kwiz-urgent {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.06);
+  }
+}
+
+/* §12.1 — a marked keyword tile crossfading from its word shapes to the text. */
+@keyframes kwiz-resolve {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* §15 — *one* thing animates at a time and stage changes are directional. 250–400 ms: long enough to
+   be caught peripherally by someone looking at their phone, short enough not to delay the room. */
+@keyframes kwiz-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5cqh);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* §15 — decorative motion goes away entirely when the viewer asks for that; the pulses that carry a
+   message stay, because removing them would remove the message with them. §15's own rule for the
+   substitution is *"crossfades replace movement"*, which is what the stage transition becomes. */
 @media (prefers-reduced-motion: reduce) {
   [style*='kwiz-eq'] {
     animation: none !important;
+  }
+
+  [style*='kwiz-stage-in'],
+  [style*='kwiz-urgent'] {
+    animation-name: kwiz-resolve !important;
   }
 }

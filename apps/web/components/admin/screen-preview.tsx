@@ -64,7 +64,13 @@ export function ScreenPreview({
     timer:
       question.timerMs === null
         ? null
-        : { deadlineAt: Date.now() + question.timerMs, pausedAt: null },
+        : {
+            deadlineAt: Date.now() + question.timerMs,
+            pausedAt: null,
+            // Full, so the preview's ring is drawn at the start of the question — which is the
+            // moment the preview is answering a question about.
+            durationMs: question.timerMs,
+          },
     state: 'OPEN',
   }
 

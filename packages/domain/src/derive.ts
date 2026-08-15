@@ -59,6 +59,14 @@ export interface Timer {
   deadlineAt: number
   /** Set while a buzz is being adjudicated. */
   pausedAt: number | null
+  /**
+   * The question's full span, so a **depleting ring** can draw a fraction (PRD 4 §7).
+   *
+   * `deadlineAt` alone gives a client the number but not the proportion — it cannot know whether 18
+   * seconds is most of the time or the last of it. Pauses are already folded into `deadlineAt`, so
+   * this stays the authored duration and the ring's remaining arc shrinks monotonically.
+   */
+  durationMs: number
 }
 
 /**
@@ -94,6 +102,9 @@ export function timerFor(play: QuestionPlayState, now: number): Timer | null {
   return {
     deadlineAt: play.deadlineAt + pausedMs(play, now),
     pausedAt: buzz?.receivedAt ?? null,
+    // `openedAt` is never null when `deadlineAt` isn't — both are set by `QUESTION_OPENED` — so the
+    // fallback is for the type, not for a case that occurs.
+    durationMs: Math.max(0, play.deadlineAt - (play.openedAt ?? play.deadlineAt)),
   }
 }
 
@@ -105,6 +116,14 @@ export interface Standing {
   score: number
   /** True when another team shares this rank. */
   tied: boolean
+  /**
+   * Places gained since the previous leaderboard (PRD 4 §10) — positive is up, so `2` renders `▲2`.
+   *
+   * `null` means there is nothing honest to show: the first leaderboard of a game, or a team that
+   * joined after the last one (PRD 2 §11.2 allows that at any status) and so was never in it. A team
+   * that held its place is `0`, which is `—` and a different statement from "we don't know".
+   */
+  movement: number | null
 }
 
 /**
@@ -128,13 +147,27 @@ export function standings(state: GameState): Standing[] {
       rank = seen
       previousScore = team.score
     }
+    const was = state.previousLeaderboardRanks?.get(team.id)
     return {
       teamId: team.id,
       rank,
       score: team.score,
       tied: (counts.get(team.score) ?? 0) > 1,
+      // Rank counts *down* as a team does better, so the arrow is the baseline minus the rank.
+      movement: was === undefined ? null : was - rank,
     }
   })
+}
+
+/**
+ * The ranks a leaderboard is showing, for the reducer to keep as the next one's baseline.
+ *
+ * Built from `standings` rather than beside it so the two can never rank differently — the baseline
+ * being computed by a second implementation of D32's shared ranks is exactly the bug that would make
+ * every arrow off by one on a tie.
+ */
+export function rankSnapshot(state: GameState): Map<string, number> {
+  return new Map(standings(state).map((standing) => [standing.teamId, standing.rank]))
 }
 
 // ─── Jeopardy turn order (D30) ───

@@ -670,6 +670,19 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       return allow([{ type: 'SCOREBOARD_TOGGLED', payload: { shown: command.shown } }])
     }
 
+    /*
+     * PRD 4 §10.2's two tabs (D51). The one master action in the product that is legal **only** once
+     * the game is over — `requireLive` would refuse it at exactly the moment it exists for, and there
+     * is no `FINISHED` stage to switch a tab on before then.
+     */
+    case 'SET_FINISHED_TAB': {
+      if (state.status !== 'FINISHED') {
+        return deny('GAME_NOT_FINISHED', 'the two tabs exist once the game has ended')
+      }
+      if (state.finishedTab === command.tab) return NOTHING_TO_DO
+      return allow([{ type: 'FINISHED_TAB_SET', payload: { tab: command.tab } }])
+    }
+
     case 'START_BREAK': {
       const live = requireLive(state)
       if (live) return live

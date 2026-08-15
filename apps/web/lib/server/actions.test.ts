@@ -35,6 +35,16 @@ const SPEC_PATHS = [
   'questions/:questionId/skip',
   'answers/submit-for-team',
   'scoreboard',
+  /*
+   * Slice 6, both from PRD 4 and both consequences of §2.3 — the projected screen has no controls, so
+   * anything on it that a master drives has to be driven from theirs. §6.1's audio presence needs to
+   * know the transport is playing; §10.2's two tabs are switched from control.
+   *
+   * `media/playback` is the one master action that **appends nothing**: playback is not a game fact,
+   * so it has no command in `packages/domain` (see `playback.ts`).
+   */
+  'media/playback',
+  'finished-tab',
   'break',
   'break/end',
   'picker',
@@ -63,8 +73,8 @@ describe('the action catalogue', () => {
     const implemented = ROUTES.map((route) => route.pattern.join('/'))
 
     expect([...implemented].sort()).toEqual([...SPEC_PATHS].sort())
-    // 40 here plus `POST /api/games/join`, which is the 41 the spec lists.
-    expect(implemented).toHaveLength(40)
+    // 42 here plus `POST /api/games/join`, which is the 43 the spec lists.
+    expect(implemented).toHaveLength(42)
   })
 
   it('requires a device token on exactly the four player actions', () => {

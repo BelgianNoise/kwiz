@@ -116,6 +116,13 @@ sidebar. Each stage owns the whole safe area.
 space on every stage, permanently, to display something the room does not need. The join
 code is the only candidate, and it earns its place on just three stages (§4, §10, §11).
 
+**"Between rounds" means a round that has been *closed*.** `ROUND_CLOSED` deliberately leaves
+the round current — PRD 3 §2.1's timeline is still about it — so the resolver tracks the close
+separately. Without that, neither of the two stages the gap would otherwise fall to is right:
+the finished round's `ROUND_INTRO` (which the room has already seen) or `WAITING_FOR_PLAYERS`
+(which is for before the game starts). Noted here because it was a real bug in slice 6, not a
+hypothetical.
+
 ---
 
 ## 4. `WAITING_FOR_PLAYERS`

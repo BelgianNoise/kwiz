@@ -209,6 +209,16 @@ export interface BreakState {
   resumesAt: number | null
 }
 
+/**
+ * Which of the `FINISHED` screen's two tabs the room is on (D51, PRD 4 §10.2).
+ *
+ * `RESULT` decides the game — survival order out of the finale. `POINTS` is the pre-finale
+ * leaderboard, kept because the team that scored highest is often *not* the one that won. The tabs
+ * render on the projected screen but are switched from control, since that surface has no controls
+ * of its own (PRD 4 §2.3).
+ */
+export type FinishedTab = 'RESULT' | 'POINTS'
+
 export interface GameState {
   content: GameContent
   status: GameStatus
@@ -225,6 +235,17 @@ export interface GameState {
   currentRoundId: string | null
   currentQuestionId: string | null
 
+  /**
+   * Rounds the master has closed.
+   *
+   * `ROUND_CLOSED` deliberately leaves `currentRoundId` pointing at the closed round — the desk's
+   * timeline is still about it — so without this the room saw that round's *intro* again in the gap
+   * before the next one opened. PRD 4 §3 puts a leaderboard between rounds, and §4's waiting screen
+   * is for before the game starts, so neither of the two stages this would otherwise resolve to is
+   * the right one.
+   */
+  closedRoundIds: Set<string>
+
   /** Keyed by `gameQuestionId`. Every question has an entry, `PENDING` until opened. */
   questions: Map<string, QuestionPlayState>
 
@@ -236,6 +257,22 @@ export interface GameState {
   break: BreakState | null
   /** Master pushed the leaderboard mid-round; cleared when the next question opens (O4). */
   scoreboardShown: boolean
+
+  /**
+   * Ranks as of the last time the room was shown a leaderboard, and as of the time before that.
+   *
+   * PRD 4 §10's `▲2` is *"rank movement since the last leaderboard"*, which is the cheapest drama
+   * available and the thing that makes a leaderboard a moment rather than a table. It needs a
+   * baseline, and a baseline is not derivable from scores alone — two teams can swap twice between
+   * showings and end where they started. So each showing captures the ranks it displayed, and the
+   * *previous* capture is what the arrows are measured against. `null` on the first leaderboard of a
+   * game: nothing has moved yet, and inventing a `▲` would be a lie about a game that just started.
+   */
+  leaderboardRanks: Map<string, number> | null
+  previousLeaderboardRanks: Map<string, number> | null
+
+  /** PRD 4 §10.2's two tabs, switched from control (D51). */
+  finishedTab: FinishedTab
 
   /** Jeopardy (D30). `reason` is kept because tie-breaks and overrides are decisions. */
   picker: { teamId: string; reason: 'RULE' | 'TIE_BREAK' | 'MASTER_OVERRIDE' } | null

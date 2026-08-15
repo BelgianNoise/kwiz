@@ -30,6 +30,7 @@ const nl: Messages = {
     TEAM_LOCKED_OUT:
       'Je antwoord was fout, dus je kunt bij deze vraag niet opnieuw buzzen.',
     NOT_IN_SETUP: 'Dat kan alleen voordat de quiz begint.',
+    GAME_NOT_FINISHED: 'Dat kan pas nadat de quiz is afgelopen.',
     RESYNC_BLOCKED: 'Deze quiz is al gespeeld en kan niet meer worden bijgewerkt.',
     SOURCE_QUIZ_DELETED: 'De quiz waar dit spel uit komt bestaat niet meer.',
     COPY_INVALID: 'Deze kopie is niet geldig. Probeer het opnieuw of meld dit.',
@@ -316,6 +317,9 @@ const nl: Messages = {
         SHORT_TIMER: 'maar {seconds}s om te antwoorden',
         JEOPARDY_UNEVEN_COLUMNS: 'kolommen zijn ongelijk - de langste heeft {tallest}',
         JEOPARDY_EMPTY_TILES: '{empty} lege tegels',
+        CATEGORY_NAME_TOO_LONG:
+          '"{name}" is te lang voor het bord — ongeveer {max} tekens passen',
+        PROMPT_TOO_LONG: 'lang voor het scherm met {length} tekens',
         FINALE_RATE_SUSPICIOUS:
           'het beste team start met maar {seconds}s - de verhouding staat misschien omgekeerd',
         FINALE_TOO_FEW_QUESTIONS:
@@ -702,6 +706,64 @@ const nl: Messages = {
       cancel: 'Annuleren',
       reached: 'Je hebt de quizlaptop bereikt.',
       reachedBody: 'Dit netwerk werkt. Geef de telefoon terug aan de quizmaster.',
+    },
+  },
+
+  /**
+   * PRD 4. Dutch is this surface's **layout baseline** (PRD 1 §9.2), so these are kept as short as the
+   * English rather than as literal translations — `Terug over` for `Back in`, not `We zijn terug over`.
+   * A heading that wraps at §2.1's sizes costs a line the stage does not have.
+   */
+  screen: {
+    arming: {
+      click: 'Klik ergens om te starten',
+      explain: 'Dit zet geluid en volledig scherm aan voor de quiz.',
+    },
+    waiting: {
+      scanOrGoTo: 'Scan, of ga naar',
+      andEnter: 'en voer in',
+      soundReady: 'geluid klaar',
+      soundFailed: 'Geluid kon niet starten. Klik nog één keer op het scherm.',
+    },
+    round: {
+      number: 'RONDE {number}',
+      shape: '{questions} vragen · {points} punten',
+    },
+    leaderboard: {
+      afterRound: 'Na ronde {number}',
+      currentScores: 'Tussenstand',
+      provisional: 'voorlopige stand · {questions} antwoorden nog te controleren',
+      movementUp: '{places} omhoog',
+      movementDown: '{places} omlaag',
+      movementHeld: 'onveranderd',
+    },
+    break: {
+      backIn: 'Terug over',
+      backShortly: 'Zo terug',
+      startingSoon: 'Begint zo',
+    },
+    question: {
+      timeUp: 'Tijd',
+      paused: 'gepauzeerd',
+      buzzersOpen: 'Buzzers open',
+    },
+    board: {
+      picks: '{team} kiest',
+      choosing: 'Wie kiest wordt bepaald…',
+    },
+    finale: {
+      question: 'V{number} / {total}',
+      guessing: 'raadt',
+      betweenTurns: 'Volgende ploeg…',
+      out: 'Uit',
+    },
+    finished: {
+      tabResult: 'Uitslag',
+      tabPoints: 'Punten',
+      survived: 'overleefd',
+      survivedWith: 'overleefd · {seconds}s over',
+      outAt: 'uit {at}',
+      didNotPlay: 'speelde de finale niet',
     },
   },
 }

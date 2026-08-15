@@ -15,7 +15,9 @@ import {
   type Notice,
 } from '@kwiz/domain'
 
+import { getPlayback } from './playback'
 import type { Runtime } from './runtime'
+import { joinUrl as buildJoinUrl, readSettings } from './settings'
 import { frameId, type Frame, type Subscriber } from './transport'
 
 /**
@@ -153,11 +155,20 @@ export function buildView(
   teamId?: string,
 ): AudienceView {
   const { runtime, gameId, now } = context
-  const joinUrl = joinUrlFor(state.code)
+  const joinUrl = joinUrlFor(runtime, state.code)
 
   switch (audience) {
     case 'MAIN_SCREEN':
-      return toMainScreenView(state, now, joinUrl)
+      /*
+       * The two facts about this machine that PRD 4 needs and `GameState` cannot hold: the master's
+       * transport, for §6.1's equaliser and elapsed clock, and PRD 2 §16's mute, for §13's two sounds.
+       * Neither is in the log and neither is replayable, so both are handed in — the same shape
+       * `MasterControlView.controlScreens` established.
+       */
+      return toMainScreenView(state, now, joinUrl, {
+        playback: getPlayback(gameId),
+        soundMuted: readSettings(runtime.paths.dir).muteSounds,
+      })
     case 'MASTER_CONTROL':
       // The socket count is a transport fact and cannot come from the log (PRD 3 §12), so it is
       // handed in here — the one thing on this view that is not a function of `GameState`.
@@ -188,12 +199,18 @@ export function buildView(
 }
 
 /**
- * The join URL the room reads off the projector.
+ * The join URL the room reads off the projector, and the one its QR encodes.
  *
- * Relative, deliberately: the server does not know which of the laptop's addresses the phones can
- * reach, and guessing produces a QR code that resolves to nothing (PRD 1 §14's first risk). PRD 2's
- * first-run network picker is what turns this into an absolute URL, in slice 4.
+ * Delegates to `settings.joinUrl`, which is the single place that decides. **This used to return a
+ * bare `/play/CODE` unconditionally**, with a comment saying PRD 2's first-run network picker would
+ * turn it absolute in slice 4 — the picker landed, `settings.joinUrl` landed, and nothing came back
+ * to this line. It was invisible until slice 6 rendered a QR code from a pushed `joinUrl`: the admin
+ * game page used the real builder and showed the master a correct address while the projector would
+ * have encoded a relative path no phone camera can resolve. Exactly PRD 1 §14's first stated risk.
+ *
+ * Still relative when no address has been chosen, which is `settings.joinUrl`'s own rule and the right
+ * one: a guessed origin is a dead QR code that looks authoritative.
  */
-function joinUrlFor(code: string): string {
-  return `/play/${code}`
+function joinUrlFor(runtime: Runtime, code: string): string {
+  return buildJoinUrl(readSettings(runtime.paths.dir), runtime.config.PORT, code)
 }

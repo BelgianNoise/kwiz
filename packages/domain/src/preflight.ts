@@ -53,6 +53,24 @@ export const PREFLIGHT_CODES = [
   'SHORT_TIMER',
   'JEOPARDY_UNEVEN_COLUMNS',
   'JEOPARDY_EMPTY_TILES',
+  /**
+   * PRD 4 §9 — *"category names must fit without truncation… PRD 2 §10's pre-flight warns on category
+   * names that will not fit here."*
+   *
+   * **The clause existed and the check did not.** Slice 6 clipped an over-long name on the board and
+   * justified it by analogy to §2.4 — a content problem, caught at authoring time — which was only
+   * half true, because the authoring-time half was never built. The board is where a truncated
+   * category name is a question the room cannot answer, so this is the half that matters.
+   */
+  'CATEGORY_NAME_TOO_LONG',
+  /**
+   * PRD 4 §2.4 — *"text that would need to go smaller than [4vh] does not get smaller: it is a content
+   * problem, and PRD 2 §10's pre-flight warns about over-long prompts at authoring time instead."*
+   *
+   * Same story as the category names: `FittedText` stops at the floor and lets the prompt overflow,
+   * on the stated understanding that pre-flight had already objected. It had not.
+   */
+  'PROMPT_TOO_LONG',
   /** Under a minute for the top team almost certainly means the rate is inverted. */
   'FINALE_RATE_SUSPICIOUS',
   'FINALE_TOO_FEW_QUESTIONS',
@@ -197,6 +215,16 @@ function checkQuestion(
 
   if (question.prompt.trim() === '') error('EMPTY_PROMPT', where)
 
+  /*
+   * PRD 4 §2.4 — a prompt too long to be *fitted* stops at the `4vh` floor and overflows, on the
+   * stated understanding that this warning caught it first. A warning rather than an error: the
+   * budget is approximate, and a master who wants a long prompt on a `TEXT` question has more room
+   * than the band case this measures.
+   */
+  if (question.prompt.length > PROMPT_BUDGET) {
+    warn('PROMPT_TOO_LONG', { ...where, detail: { length: question.prompt.length } })
+  }
+
   for (const media of question.media) {
     if (broken.has(media.id)) error('ATTACHMENT_MISSING', { ...where })
   }
@@ -294,7 +322,45 @@ function checkBoard(round: RoundContent, warn: Reporters['warn']): void {
 
   const empty = perCategory.reduce((total, height) => total + (tallest - height), 0)
   if (empty > 0) warn('JEOPARDY_EMPTY_TILES', { roundId: round.id, detail: { empty } })
+
+  /*
+   * PRD 4 §9's fit, as arithmetic. *"At 5 categories on a 16:9 screen each column is ~18% of width,
+   * so authoring-side length matters."*
+   *
+   * A column is the safe area's width divided by the category count, a name gets two lines at §2.1's
+   * `4vh` floor, and a character is roughly `0.55em` — so the budget tightens as columns are added,
+   * which is the whole reason the warning has to know the count rather than a fixed length.
+   */
+  const budget = Math.floor(CATEGORY_NAME_BUDGET / round.categories.length)
+  for (const category of round.categories) {
+    if (category.name.length > budget) {
+      warn('CATEGORY_NAME_TOO_LONG', {
+        roundId: round.id,
+        detail: { name: category.name, max: budget },
+      })
+    }
+  }
 }
+
+/**
+ * Two lines of `4vh` text across a 16:9 safe area, in characters — `2 × (1728 / 24)`.
+ *
+ * Divided by the category count to get one column's budget. Approximate on purpose: the real fit
+ * depends on the typeface and where the words break, and a warning that is occasionally generous is
+ * better than one that cries wolf on a name that would have fitted.
+ */
+const CATEGORY_NAME_BUDGET = 144
+
+/**
+ * PRD 4 §2.4's floor, as arithmetic — the point at which a prompt can no longer be *fitted* and simply
+ * overflows.
+ *
+ * The tighter of the two layouts decides it: a prompt sharing the stage with media gets §6's 22cqh
+ * band, which is about four lines at the `4vh` floor. A `TEXT` prompt has far more room, but a master
+ * cannot know at authoring time whether they will add an image later, so the warning uses the case
+ * that breaks first.
+ */
+const PROMPT_BUDGET = 280
 
 function checkFinaleRate(
   quiz: QuizContent,

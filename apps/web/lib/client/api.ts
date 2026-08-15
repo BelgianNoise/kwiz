@@ -366,6 +366,18 @@ export function control(gameId: string) {
 
     // ─── pacing (§11.1, §11.2) ───
     showScoreboard: (shown: boolean) => post('scoreboard', { shown }),
+
+    /**
+     * PRD 4 §6.1 — tell the room's equaliser and elapsed clock what this desk's transport is doing.
+     *
+     * The `<audio>` element stays here (PRD 3 §5.1); only the *fact* that it is playing crosses over.
+     * Appends nothing: playback is not a game fact, so this is the one master call that moves no `seq`.
+     */
+    setMediaPlayback: (mediaId: string, playing: boolean, positionMs: number) =>
+      post('media/playback', { mediaId, playing, positionMs }),
+
+    /** PRD 4 §10.2 / D51 — the projected `FINISHED` screen's two tabs, switched from here. */
+    setFinishedTab: (tab: 'RESULT' | 'POINTS') => post('finished-tab', { tab }),
     /** Re-posting during a break is `[Extend break]`; omitting the duration is open-ended. */
     startBreak: (durationMs?: number) =>
       post('break', durationMs === undefined ? {} : { durationMs }),

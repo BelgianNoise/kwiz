@@ -302,6 +302,62 @@ describe('warnings — judgement calls, never blocks', () => {
     })
   })
 
+  /**
+   * PRD 4 §9 — *"category names must fit without truncation… PRD 2 §10's pre-flight warns on category
+   * names that will not fit here."* The clause existed and the check did not, until slice 6's review
+   * round: the board clipped an over-long name and justified it by a safety net nobody had built.
+   */
+  it('flags a category name too long for a board column, scaled by the column count', () => {
+    const tile = (id: string, categoryId: string) =>
+      q({ id, categoryId, answerMethod: 'BUZZER', acceptedAnswers: ['x'] })
+    // 30 characters. Comfortable across two columns; far too long once there are five, which is
+    // §9's own worked example — *"at 5 categories each column is ~18% of width."*
+    const name = 'Geography of the Low Countries'
+
+    const two = round({
+      type: 'JEOPARDY',
+      config: { valueLadder: [100] },
+      categories: [
+        { id: 'c0', position: 0, name },
+        { id: 'c1', position: 1, name: 'Film' },
+      ],
+      questions: [tile('t0', 'c0'), tile('t1', 'c1')],
+    })
+    expect(codes(preflight(quiz([two])))).not.toContain('CATEGORY_NAME_TOO_LONG')
+
+    const five = round({
+      type: 'JEOPARDY',
+      config: { valueLadder: [100] },
+      categories: [0, 1, 2, 3, 4].map((i) => ({
+        id: `c${i}`,
+        position: i,
+        name: i === 0 ? name : 'Film',
+      })),
+      questions: [0, 1, 2, 3, 4].map((i) => tile(`t${i}`, `c${i}`)),
+    })
+
+    const report = preflight(quiz([five]))
+    expect(codes(report)).toContain('CATEGORY_NAME_TOO_LONG')
+    // Five columns share the row's character budget, so each gets a fifth of it.
+    expect(
+      report.findings.find((f) => f.code === 'CATEGORY_NAME_TOO_LONG')?.detail,
+    ).toEqual({ name, max: 28 })
+  })
+
+  /**
+   * PRD 4 §2.4 — a prompt that would need to go below the `4vh` floor *"does not get smaller"*; it
+   * overflows, on the stated understanding that pre-flight objected at authoring time. It had not.
+   */
+  it('flags a prompt too long to be fitted on the projected screen', () => {
+    const wordy = round({ questions: [q({ prompt: 'A very long prompt. '.repeat(20) })] })
+    expect(codes(preflight(quiz([wordy])))).toContain('PROMPT_TOO_LONG')
+
+    const ordinary = round({
+      questions: [q({ prompt: 'Who released "Kid A" in 2000?' })],
+    })
+    expect(codes(preflight(quiz([ordinary])))).not.toContain('PROMPT_TOO_LONG')
+  })
+
   it('flags a rate that is almost certainly inverted', () => {
     // 10 points at 0.5 s/pt is five seconds for a team that answered everything correctly.
     const report = preflight(quiz([round(), finaleRound()]))

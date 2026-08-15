@@ -1,4 +1,5 @@
 import { gradeFreeText, gradeMultipleChoice, verdictAwardsPoints } from './answers'
+import { rankSnapshot } from './derive'
 import type { GameEvent } from './events/payload'
 import { nextQuestionState } from './question-state'
 import {
@@ -49,6 +50,7 @@ export function initialGameState(content: GameContent): GameState {
     devices: new Map(),
     currentRoundId: null,
     currentQuestionId: null,
+    closedRoundIds: new Set(),
     questions: new Map(allQuestions(content).map((q) => [q.id, emptyQuestion()])),
     adjustments: [],
     keywordMarks: new Map(),
@@ -63,9 +65,25 @@ export function initialGameState(content: GameContent): GameState {
     },
     break: null,
     scoreboardShown: false,
+    leaderboardRanks: null,
+    previousLeaderboardRanks: null,
+    finishedTab: 'RESULT',
     picker: null,
     seq: 0,
   }
+}
+
+/**
+ * The room is being shown a leaderboard, so the ranks it displays become the baseline the *next*
+ * one's `▲`/`▼` arrows are measured against (PRD 4 §10).
+ *
+ * Called from the three events that put one in front of the room: closing a round, the master
+ * pushing it mid-round, and the game ending. Capturing on display rather than on every score change
+ * is what makes the arrows say "since you last looked" instead of "since the last point was scored".
+ */
+function captureLeaderboard(state: GameState): void {
+  state.previousLeaderboardRanks = state.leaderboardRanks
+  state.leaderboardRanks = rankSnapshot(state)
 }
 
 export function reduce(content: GameContent, log: readonly LoggedEvent[]): GameState {
@@ -104,6 +122,8 @@ export function applyEvent(
     case 'GAME_FINISHED':
       state.status = 'FINISHED'
       state.finishedAt = createdAt
+      // §10.2's final standings are a leaderboard too, and the one people photograph.
+      captureLeaderboard(state)
       return
     case 'GAME_ABANDONED':
       state.status = 'ABANDONED'
@@ -143,10 +163,15 @@ export function applyEvent(
       state.currentRoundId = event.payload.gameRoundId
       state.currentQuestionId = null
       state.scoreboardShown = false
+      // Reopening a closed round is legal, and it is no longer closed.
+      state.closedRoundIds.delete(event.payload.gameRoundId)
       return
     case 'ROUND_CLOSED':
+      state.closedRoundIds.add(event.payload.gameRoundId)
       if (state.currentRoundId === event.payload.gameRoundId)
         state.currentQuestionId = null
+      // A closed round puts the room on `AFTER ROUND n` (PRD 4 §10), which is a leaderboard.
+      captureLeaderboard(state)
       return
 
     case 'QUESTION_OPENED': {
@@ -392,6 +417,11 @@ export function applyEvent(
       return
     case 'SCOREBOARD_TOGGLED':
       state.scoreboardShown = event.payload.shown
+      // Only on the way *up*: hiding it again is not a new showing to measure the next one against.
+      if (event.payload.shown) captureLeaderboard(state)
+      return
+    case 'FINISHED_TAB_SET':
+      state.finishedTab = event.payload.tab
       return
     case 'PICKER_ASSIGNED':
       state.picker = { teamId: event.payload.teamId, reason: event.payload.reason }
