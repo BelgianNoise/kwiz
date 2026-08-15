@@ -701,6 +701,18 @@ function execute(
           return fail('GAME_NOT_FOUND', `no game ${gameId}`)
         }
         runtime.registry.evict(gameId)
+        /*
+         * **Close every stream too**, the way abandoning does (§3.4).
+         *
+         * PRD 2 §12.1 allows deleting at any status, including `LIVE` — so this can be the game
+         * currently on the projector. Evicting the projection alone left the sockets open with
+         * nothing to push down them: no error, no close, so PRD 4 §14's *"game not found → a neutral
+         * `kwiz` mark"* never fired and the room kept the last frame indefinitely. Found by deleting
+         * a game with a screen watching, which is exactly how a master would find it.
+         *
+         * The client then reconnects, gets the 404 the deleted game now is, and shows the mark.
+         */
+        runtime.transport.closeAll(gameId)
         return ok()
       })
 

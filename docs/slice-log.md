@@ -117,13 +117,67 @@ Three judgement calls recorded rather than silently taken:
   from when *each screen* receives the mark. Two projectors would flash a few milliseconds apart, which
   nobody can perceive; a genuinely synchronised flash would need an instant on the payload, and that is
   a real cost for an imperceptible gain.
-- **No component tests.** `vitest` still resolves no `@/` alias (slice 5 raised this), so the parts of
-  this surface that are pure presentation are verified by driving the browser and by the domain tests
-  underneath them. `useEliminationMoment` and `usePenaltyFlash` are the two I would most want covered —
-  both turn on *change* detection, which is exactly the kind of logic a reload can hide.
+- **Component tests exist only where the logic could be made pure.** `vitest` now resolves `@/` (see
+  the review-round section below), and both finale decisions are covered — but their `useEffect`
+  wiring is not, and that is where **two of the round's bugs actually were**. A React renderer would
+  need `jsdom` and a testing library added to a closed dependency list; the browser found both in
+  minutes. Worth revisiting if a third one shows up there.
 - **§15's "only one thing animates at a time"** is honoured by construction rather than enforced. The
   stage transition, the penalty flash and the elimination moment cannot overlap in practice because each
   is triggered by a different event, but nothing checks that.
+
+### Then a review round found seven more, and driving them found two the review could not
+
+Same shape as slice 5: an independent pass, every claim checked against the code rather than taken on
+trust. **Thirteen of fourteen findings were real** and are fixed — the one that was not is instructive
+and is below.
+
+The two that mattered were exactly where this log had already predicted gaps would be, which is worth
+noticing: *"`useEliminationMoment` and `usePenaltyFlash` are the two I would most want covered"* was
+written before anyone knew one of them was broken.
+
+- **A deleted game froze the last frame forever.** `main-screen.tsx` had no `FAILED` branch at all, so
+  §14's neutral `kwiz` mark never appeared — and neither did the pulse, which only renders while
+  *reconnecting*. Deleting a game is legal at every status including `LIVE` (PRD 2 §12.1).
+- **`useEliminationMoment` used `.find()`.** When one keyword's penalty took several finalists to zero
+  at once — PRD 1 §8.8 defines that case, up to the degenerate one with no winner — only the first got
+  §12.4's moment, and the rest could never get one: the same update had already recorded their ids as
+  seen. They just greyed out of the strip.
+- **A resolved keyword never named the crediting team**, though `FinaleKeywordView.teamId` had carried
+  it since slice 2. §12.1's mock shows it; nothing rendered it.
+- **The arming screen was `3.33vh` and `1.85vh`** — below §2.1's absolute floor, on the first thing the
+  room ever sees. It sits outside `StageFrame` by construction, and the mechanical 4vh check queried
+  `[style*="container-type"]`, so **the check built to catch this could not see it**. It scans from
+  `document.body` now.
+- **§15's count-up numbers did not exist**, and `usePrefersReducedMotion` had been written, documented
+  with the two motions CSS cannot reach, and never called. Both are now wired, to each other.
+- **§4.1's sound-failure copy told the master to click again**, and the post-arming listener only
+  re-requested fullscreen. The instruction did nothing.
+- **`ABANDONED` announced a winner.** `stageKind` folds it into `FINISHED`, which is right for control,
+  and the view is published *before* the streams close — so the room got a winner at hero scale for a
+  game the master had just pulled. §14 says *"whatever was showing, held"*, and now it is.
+
+**Two more surfaced only by driving the fixes**, both invisible to a test and to a reading:
+
+1. **Sequential eliminations clobbered each other.** The `.find()` fix handled several teams in one
+   update; what actually happens is control posting two eliminations ~50 ms apart (PRD 3 §10.6), so
+   the second `setMoment` *replaced* the first after 50 ms. One name flashed, one team was never
+   announced. The moment now accumulates and the hold restarts.
+2. **The elimination moment could stick on screen forever.** Its timer lived in the effect's cleanup,
+   and `clocks` is a fresh array on every pushed view — so the very next view cancelled the timer with
+   nothing to re-arm it. It survived the first browser pass only because no view happened to arrive
+   during those 2.5 seconds. The timer is a ref now, cleared on unmount and nowhere else.
+
+**And one the review found the wrong reason for.** It said the Jeopardy clipping decision was
+undocumented; it was, at length. But checking that claim turned up something worse — the comment (and
+PRD 4 §9, and §2.4) all justify clipping by *"pre-flight warns at authoring time"*, and **neither
+pre-flight check existed**. `CATEGORY_NAME_TOO_LONG` and `PROMPT_TOO_LONG` are now real, the first
+scaled by column count from §9's own worked example.
+
+**Settled by the master rather than by me:** `SCOREBOARD_TOGGLED` over an open question is deliberately
+legal, and the leaderboard wins. PRD 3 §11.1 now says so and says why — nothing is lost by obeying the
+master, since the deadline is advisory and answers keep arriving, and the contrast with `[Start break]`
+(which *is* refused) is that a break walks the room away from a live deadline.
 
 ### Deliberately left out
 

@@ -308,3 +308,24 @@ says both are trivially skipped and are the whole point of the surface.
       per-connection.
 - [ ] **Walk every stage in `nl`.** Dutch is this surface's layout baseline (PRD 1 §9.2), and the
       round intro's `3 vragen · 40 punten` line and the finale's clock strip are where it shows first.
+
+#### Added by slice 6's review round
+
+Six behaviours whose absence looks like nothing being wrong, which is why they need rows of their own.
+
+- [ ] **Delete the game while the screen is watching it** (PRD 2 §12.1 allows it at any status). The
+      projector goes to §14's neutral `kwiz` mark within a few seconds. It froze on the last frame
+      forever until slice 6's review round — twice, for two different reasons: no `FAILED` branch on
+      the client, and `delete` never closing the streams the way `abandon` does.
+- [ ] **Abandon a game mid-question.** The room keeps **whatever was showing** (§14) — no winner, no
+      final standings, no announcement. A calm pulse is allowed; a `FINISHED` screen is not.
+- [ ] **Two finalists out at once.** Take two clocks to zero and eliminate both back to back, the way
+      control does when a penalty lands. **Both names appear in one `OUT` moment**, and the screen
+      returns to the turn afterwards. Watch it actually clear: the hold used to be cancelled by the
+      next pushed view and stay on screen indefinitely.
+- [ ] **A marked keyword names the team that found it** (§12.1), in their colour. A keyword *revealed
+      unguessed* gets the text and **no** marker — the absence is the point.
+- [ ] **A score change counts up rather than snapping** (§15), and lands on the right number even in a
+      tab the browser is not painting. The animation is the nicety; the number is not.
+- [ ] **Fail the sound arming** (block autoplay, or mute the OS device) and follow the on-screen
+      instruction: clicking again must actually retry it, not just re-request fullscreen.

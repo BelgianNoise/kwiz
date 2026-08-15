@@ -90,6 +90,7 @@ export function markedCount(keywords: readonly FinaleView['keywords'][number][])
  */
 export function useEliminationMoment(clocks: Clock[]): Clock[] {
   const seen = useRef<Set<string> | null>(null)
+  const holding = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [moment, setMoment] = useState<Clock[]>([])
 
   useEffect(() => {
@@ -100,18 +101,41 @@ export function useEliminationMoment(clocks: Clock[]): Clock[] {
     seen.current = out
 
     const fresh = newlyEliminated(previous, clocks)
-    if (fresh.length === 0) return undefined
+    if (fresh.length === 0) return
 
     /*
-     * One hold naming all of them rather than a queue of holds. Two 2.5-second interruptions back to
-     * back would take the room out of the round for five seconds at its tensest point, and D32's shape
-     * is already "a shared position is shown as shared" everywhere else — the `FINISHED` screen puts
-     * simultaneously eliminated teams on one rank, and §10.2's winner moment shares the line on a tie.
+     * **Accumulated, and the hold restarts.** One moment naming everyone who has just gone out, rather
+     * than a queue of 2.5-second interruptions — that would take the room out of the round for five
+     * seconds at its tensest point, and "a shared position is shown as shared" is already D32's shape
+     * everywhere else: the `FINISHED` screen puts simultaneously eliminated teams on one rank and
+     * §10.2's winner line is shared on a tie.
+     *
+     * Accumulating matters more than the simultaneous case the review found, because the **sequential**
+     * one is what actually happens: control detects two clocks at zero and posts two eliminations back
+     * to back (PRD 3 §10.6), so the room gets two pushes about 50 ms apart. Replacing rather than
+     * appending meant the first team's announcement was cut off after those 50 ms and the second
+     * silently took its place — one name flashing, one team never announced at all.
      */
-    setMoment(fresh)
-    const timer = setTimeout(() => setMoment([]), FINALE_ELIMINATION_HOLD_MS)
-    return () => clearTimeout(timer)
+    setMoment((current) => [...current, ...fresh])
+    if (holding.current) clearTimeout(holding.current)
+    holding.current = setTimeout(() => setMoment([]), FINALE_ELIMINATION_HOLD_MS)
   }, [clocks])
+
+  /*
+   * The hold is cleared on unmount and **nowhere else**, which is the whole reason it lives in a ref.
+   *
+   * `clocks` is a fresh array on every pushed view, so this effect re-runs constantly — and a timer
+   * owned by its cleanup would be cancelled by the very next view. With nothing to re-arm it (that
+   * view has no fresh eliminations), the moment would stay on screen **forever**, hiding the rest of
+   * the round behind a team's name. It survived the first browser pass only because no view happened
+   * to arrive during the 2.5 seconds.
+   */
+  useEffect(
+    () => () => {
+      if (holding.current) clearTimeout(holding.current)
+    },
+    [],
+  )
 
   return moment
 }
