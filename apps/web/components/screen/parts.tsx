@@ -4,6 +4,7 @@ import type { Standing, TeamPublic } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 
 import type { Teams } from '@/components/screen/stage'
+import { useCountUp } from '@/lib/client/use-count-up'
 
 /**
  * The handful of shapes more than one stage draws, at **this surface's** scale.
@@ -84,7 +85,15 @@ export function Standings({
   movement?: boolean
 }) {
   const twoColumns = standings.length > 10
-  // Dropping the arrows is the second rung of §10's ladder, so two columns implies it.
+  /*
+   * **§10's three rungs collapsed to two, deliberately.** The spec's ladder is *"two columns, then
+   * drop the movement indicator, then compress to rank/name/score"*; here the second rung fires with
+   * the first, and the third never does.
+   *
+   * The third rung only earns its place past roughly 30 teams, and PRD 1 §2.1's envelope stops at 20 —
+   * CLAUDE.md §9 names optimising beyond that envelope as something to compromise on freely. Recorded
+   * rather than left to be rediscovered, since a reader comparing this to §10 will notice.
+   */
   const showMovement = movement && !twoColumns
   const size = twoColumns ? 4.5 : 6
 
@@ -132,10 +141,23 @@ function Row({
       </span>
       <Dot colour={team?.colour ?? '#737373'} size={size * 0.55} />
       <span className="min-w-0 flex-1 truncate">{team?.name}</span>
-      <span className="shrink-0 font-semibold tabular-nums">{standing.score}</span>
+      {/* §15 — *"numbers count up rather than snapping."* `tabular-nums` matters more here than
+          anywhere: without it every digit change would shift the row's width while it counts. */}
+      <Score value={standing.score} />
       {showMovement ? <Movement places={standing.movement} size={size} /> : null}
     </li>
   )
+}
+
+/**
+ * §15 — *"a score changing from 290 to 340 should be seen changing."*
+ *
+ * The same job as the rest of §15's table: make a change noticeable to someone who was looking at
+ * their phone (§1.1). A snap is a change only the people already watching that row will register, and
+ * a leaderboard is exactly the moment nobody is watching a specific row yet.
+ */
+function Score({ value }: { value: number }) {
+  return <span className="shrink-0 font-semibold tabular-nums">{useCountUp(value)}</span>
 }
 
 /**

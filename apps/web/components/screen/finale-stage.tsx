@@ -1,19 +1,18 @@
 'use client'
 
 import type { FinaleView } from '@kwiz/domain'
-import {
-  FINALE_CLOCK_WARN_S,
-  FINALE_ELIMINATION_HOLD_MS,
-  FINALE_PENALTY_FLASH_MS,
-} from '@kwiz/domain'
+import { FINALE_CLOCK_WARN_S } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
-import { useEffect, useRef, useState } from 'react'
 
+import {
+  useEliminationMoment,
+  usePenaltyFlash,
+  type Clock,
+} from '@/components/screen/finale-moments'
 import { FittedText } from '@/components/screen/fitted-text'
 import { Dot } from '@/components/screen/parts'
+import type { Teams } from '@/components/screen/stage'
 import { useElapsed } from '@/lib/client/use-countdown'
-
-type Clock = FinaleView['clocks'][number]
 
 /**
  * PRD 4 §12 — the `FINALE` stage (D50).
@@ -21,7 +20,7 @@ type Clock = FinaleView['clocks'][number]
  * **The climax, and the busiest this screen ever gets:** five keyword tiles, a clock per finalist, and
  * whose turn it is — all at §2.1's size floor. Which is why almost nothing else is on it.
  */
-export function FinaleStage({ finale }: { finale: FinaleView }) {
+export function FinaleStage({ finale, teams }: { finale: FinaleView; teams: Teams }) {
   const t = useTranslations('screen.finale')
 
   // D52 — every clock is counted down here from `turnStartedAt`. The server pushes no ticks, so a
@@ -41,7 +40,7 @@ export function FinaleStage({ finale }: { finale: FinaleView }) {
   const eliminated = useEliminationMoment(finale.clocks)
   const penalty = usePenaltyFlash(finale.keywords, finale.penaltySeconds)
 
-  if (eliminated) return <EliminationMoment clock={eliminated} />
+  if (eliminated.length > 0) return <EliminationMoment clocks={eliminated} />
 
   return (
     <section className="flex h-full w-full flex-col bg-neutral-950 p-[5cqh] text-neutral-50">
@@ -61,7 +60,12 @@ export function FinaleStage({ finale }: { finale: FinaleView }) {
 
       <ol className="flex min-h-0 flex-1 flex-col justify-center gap-[2cqh] py-[2cqh]">
         {finale.keywords.map((keyword, index) => (
-          <Keyword key={keyword.id} keyword={keyword} position={index + 1} />
+          <Keyword
+            key={keyword.id}
+            keyword={keyword}
+            position={index + 1}
+            teams={teams}
+          />
         ))}
       </ol>
 
@@ -128,11 +132,15 @@ export function FinaleStage({ finale }: { finale: FinaleView }) {
 function Keyword({
   keyword,
   position,
+  teams,
 }: {
   keyword: FinaleView['keywords'][number]
   position: number
+  teams: Teams
 }) {
   const marked = keyword.text !== undefined
+  // `undefined` is unmarked; `null` is revealed-unguessed. Only a real id credits anybody.
+  const credited = keyword.teamId ? teams.get(keyword.teamId) : undefined
 
   return (
     <li className="flex items-center gap-[3cqh]">
@@ -141,14 +149,24 @@ function Keyword({
       </span>
 
       {marked ? (
-        // §12.1 — *"on marking, the tile crossfades from blocks to the text"*, with the crediting team
-        // beside it. A revealed-unguessed tile resolves the same way but with **no team**: the absence
-        // is the point, so it gets no marker rather than a placeholder one.
+        // §12.1 — *"on marking, the tile crossfades from blocks to the text with the crediting team's
+        // name and colour beside it."*
         <span
-          className="text-[6.5cqh] font-semibold"
+          className="flex min-w-0 flex-1 items-center gap-[3cqh]"
           style={{ animation: 'kwiz-resolve 400ms ease-out' }}
         >
-          {keyword.text}
+          <span className="text-[6.5cqh] font-semibold">{keyword.text}</span>
+          {/*
+            A revealed-unguessed tile resolves the same way but with **no team**: *"the absence is the
+            point, so they get no marker rather than a placeholder one."* So this is a `credited` test
+            rather than a `marked` one — nothing stands in for nobody.
+          */}
+          {credited ? (
+            <span className="flex shrink-0 items-center gap-[1.5cqh] text-[4.5cqh] text-neutral-400">
+              <Dot colour={credited.colour} size={2.8} />
+              {credited.name}
+            </span>
+          ) : null}
         </span>
       ) : (
         <span className="flex items-center gap-[2cqh]" aria-label="hidden keyword">
@@ -204,9 +222,16 @@ function ClockValue({
         {whole}
       </span>
       {flash === null ? null : (
+        /*
+         * Never below §2.1's absolute `4cqh` floor. It was `size * 0.55` — 3.03cqh beside a strip
+         * clock — which is the same mistake as the Jeopardy category names, in the same slice, for
+         * the same reason: "smaller than the thing beside it" is a *relative* instruction and the
+         * floor is an absolute one. §2.1 exempts nothing, and a `−20s` the back tables cannot read
+         * is a penalty they cannot follow.
+         */
         <span
           className="font-semibold text-orange-400 tabular-nums"
-          style={{ fontSize: `${size * 0.55}cqh` }}
+          style={{ fontSize: `${Math.max(4, size * 0.55)}cqh` }}
         >
           −{flash}s
         </span>
@@ -225,101 +250,31 @@ function ClockValue({
  * beats in a quiz, and elimination can happen **off-turn** — a penalty can take a waiting team to zero
  * — so without an announcement the room would just notice a row had greyed out.
  */
-function EliminationMoment({ clock }: { clock: Clock }) {
+function EliminationMoment({ clocks }: { clocks: Clock[] }) {
   const t = useTranslations('screen.finale')
+  // Several names at maximum scale do not fit, so a shared moment steps down rather than overflowing —
+  // the same trade §10.2's winner line makes for a tie, and §2.3 forbids clipping either way.
+  const size = clocks.length > 1 ? 10 : 16
 
   return (
     <section
       className="flex h-full w-full flex-col items-center justify-center gap-[3cqh] bg-neutral-950 text-neutral-50"
       style={{ animation: 'kwiz-resolve 300ms ease-out' }}
     >
-      <div className="flex items-center gap-[3cqh]">
-        <Dot colour={clock.colour} size={8} />
-        <span className="text-[16cqh] leading-none font-semibold uppercase">
-          {clock.name}
-        </span>
-      </div>
+      {clocks.map((clock) => (
+        <div key={clock.teamId} className="flex items-center gap-[3cqh]">
+          <Dot colour={clock.colour} size={size * 0.5} />
+          <span
+            className="leading-none font-semibold uppercase"
+            style={{ fontSize: `${size}cqh` }}
+          >
+            {clock.name}
+          </span>
+        </div>
+      ))}
       <p className="text-[10cqh] font-semibold tracking-[0.3em] text-orange-400 uppercase">
         {t('out')}
       </p>
     </section>
   )
-}
-
-/**
- * Which team just went out, for the length of §12.4's hold.
- *
- * Detected from `eliminatedAt` **changing**, not from `eliminated` being true — which is exactly why
- * that field went on the payload. A boolean cannot distinguish an elimination that just happened from
- * one this screen already announced, so a reconnect mid-round would replay the moment for a team that
- * went out ten minutes ago.
- *
- * `null` on the first view for the same reason: a screen that connects to a round already in progress
- * has missed those moments, and inventing them would be worse than letting them pass.
- */
-function useEliminationMoment(clocks: Clock[]): Clock | null {
-  const seen = useRef<Set<string> | null>(null)
-  const [moment, setMoment] = useState<Clock | null>(null)
-
-  useEffect(() => {
-    const out = new Set(
-      clocks.filter((clock) => clock.eliminatedAt !== null).map((clock) => clock.teamId),
-    )
-    const previous = seen.current
-    seen.current = out
-
-    if (previous === null) return undefined
-
-    const fresh = clocks.find(
-      (clock) => clock.eliminatedAt !== null && !previous.has(clock.teamId),
-    )
-    if (!fresh) return undefined
-
-    setMoment(fresh)
-    const timer = setTimeout(() => setMoment(null), FINALE_ELIMINATION_HOLD_MS)
-    return () => clearTimeout(timer)
-  }, [clocks])
-
-  return moment
-}
-
-/**
- * §12.3 — **the penalty moment.**
- *
- * *"When a keyword is marked, every other finalist loses time. That must be seen, or the room cannot
- * follow why a clock jumped: every other clock flashes and visibly subtracts — a brief `−20s` beside
- * each, then the new value. Counting down smoothly would hide the size of the hit; a jump with a label
- * shows it."*
- *
- * Triggered by the count of marked keywords growing, which is the same "changed, not true" reasoning as
- * the elimination moment: a reconnect holding three marked keywords must not flash three penalties.
- *
- * Returns the penalty in seconds while the flash is live. Eliminated teams don't flash — they have
- * stopped paying — and that is enforced at the call site, which never renders a clock for them.
- */
-function usePenaltyFlash(
-  keywords: FinaleView['keywords'],
-  penaltySeconds: number,
-): number | null {
-  const marked = keywords.filter((keyword) => keyword.text !== undefined).length
-  const seen = useRef<number | null>(null)
-  const [flash, setFlash] = useState<number | null>(null)
-
-  useEffect(() => {
-    const previous = seen.current
-    seen.current = marked
-    /*
-     * Only on the way **up**. An un-mark (§10.4) returns the penalty to everyone it was taken from, and
-     * a `−20s` beside a clock that just went *up* would say the opposite of what happened. The corrected
-     * numbers still arrive on the next view, so the room sees the reversal — just without a label
-     * claiming it was a charge.
-     */
-    if (previous === null || marked <= previous) return undefined
-
-    setFlash(penaltySeconds)
-    const timer = setTimeout(() => setFlash(null), FINALE_PENALTY_FLASH_MS)
-    return () => clearTimeout(timer)
-  }, [marked, penaltySeconds])
-
-  return flash
 }

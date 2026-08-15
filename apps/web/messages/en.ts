@@ -353,6 +353,11 @@ const en = {
         SHORT_TIMER: 'only {seconds}s to answer',
         JEOPARDY_UNEVEN_COLUMNS: 'columns are uneven - the tallest has {tallest}',
         JEOPARDY_EMPTY_TILES: '{empty} empty tiles',
+        /** PRD 4 §9 — it has to fit a board column at 10 m, not just fit in this input. */
+        CATEGORY_NAME_TOO_LONG:
+          '"{name}" is too long for the board — about {max} characters fit',
+        /** PRD 4 §2.4 — below the legibility floor it stops shrinking and overflows instead. */
+        PROMPT_TOO_LONG: 'long for the screen at {length} characters',
         FINALE_RATE_SUSPICIOUS:
           'the top team would start with only {seconds}s - the rate may be inverted',
         FINALE_TOO_FEW_QUESTIONS:

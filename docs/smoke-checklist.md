@@ -242,19 +242,27 @@ says both are trivially skipped and are the whole point of the surface.
       survive either. It must **always** reach an answer — there is no other way out of that screen,
       and awaiting `requestFullscreen()` hung it for a while in slice 6.
 - [ ] **Nothing on this screen is below `4vh`** (§2.1) — *"nothing is exempt, including timings and
-      captions."* The mechanical version, run on each stage, is worth more than a squint: measure
-      every text node's computed size against `43.2px` inside the 1080-tall stage. It caught Jeopardy
-      category names at `3.6cqh`.
+      captions."* The mechanical version, run on **each stage and on the arming screen**, is worth
+      more than a squint. It has caught three violations so far: Jeopardy category names at `3.6cqh`,
+      the finale's `−20s` penalty label at `3.03cqh`, and the arming screen's own copy at `1.85vh`.
+
+      **Scan from `document.body`, not from the stage.** The first version of this check queried
+      `[style*="container-type"]` — inside `StageFrame` only — so it structurally could not see the
+      arming screen, which §4.1 requires to render *before* that frame. The floor is `4%` of the
+      viewport height outside the frame and `4cqh` inside it; both are the same 43.2px at 1080, which
+      is why one threshold covers both.
       ```js
-      const f = document.querySelector('[style*="container-type"]')
+      const floor = window.innerHeight * 0.04
       const bad = []
-      f.querySelectorAll('*').forEach((el) => {
+      document.body.querySelectorAll('*').forEach((el) => {
+        // Skip the framework's inline payload — it is text nodes nobody reads.
+        if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(el.tagName)) return
         const t = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim())
         if (!t.length) return
         const px = parseFloat(getComputedStyle(el).fontSize)
-        if (px < 43.15) bad.push([el.textContent.slice(0, 30), px])
+        if (px < floor - 0.5) bad.push([el.textContent.slice(0, 30), Math.round(px * 10) / 10])
       })
-      bad
+      bad // the language switcher is chrome, not stage content — ignore its two entries
       ```
 - [ ] **§4's QR resolves to something a phone can reach.** Not a relative `/play/CODE` — that was a
       real bug until slice 6, invisible until something rendered a QR from the pushed `joinUrl`. If

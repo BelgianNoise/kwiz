@@ -46,12 +46,26 @@ export function Arming({ onArmed }: { onArmed: (sound: boolean) => void }) {
       type="button"
       onClick={arm}
       disabled={arming}
-      className="flex h-full min-h-screen w-full cursor-pointer flex-col items-center justify-center gap-6 bg-neutral-950 p-8 text-center text-neutral-50"
+      className="flex h-full min-h-screen w-full cursor-pointer flex-col items-center justify-center gap-[3vh] bg-neutral-950 p-[5vh] text-center text-neutral-50"
     >
-      <span className="text-4xl font-semibold">{t('click')}</span>
+      {/*
+       * **`vh`, and nothing below `4vh`** (§2.1) — *"nothing is exempt."*
+       *
+       * These were `text-4xl` and `text-xl` until the slice-6 review: 36px and 20px, which on a
+       * 1920×1080 projector is 3.33vh and 1.85vh. Below the floor, on the very first thing the room
+       * sees, every time the route opens.
+       *
+       * `vh` rather than the `cqh` every other file here uses, because this screen is deliberately
+       * *outside* `StageFrame` — §4.1 puts it before the waiting screen, and "click anywhere" has to
+       * mean the whole viewport rather than a letterboxed box inside it. With no container there is
+       * no `cqh`, and `vh` is the unit §2.1 states its floor in anyway.
+       */}
+      <span className="text-[7vh] leading-tight font-semibold">{t('click')}</span>
       {/* The only explanatory copy on this surface. It is addressed to the master, before the room
           has anything to look at. */}
-      <span className="max-w-xl text-xl text-neutral-400">{t('explain')}</span>
+      <span className="max-w-[60vw] text-[4.5vh] leading-tight text-neutral-400">
+        {t('explain')}
+      </span>
     </button>
   )
 }
@@ -88,8 +102,13 @@ export function DisconnectedPulse() {
     // and a screen reader both expect. Wordless for the room (§14), but not for a master who is
     // driving this screen from a keyboard.
     <output
-      // Inside the 5% safe area (§2.2), bottom-left — the one corner no stage puts content in.
-      className="pointer-events-none absolute bottom-[5cqh] left-[5cqh] size-[2cqh] rounded-full bg-neutral-500"
+      /*
+       * Inside the 5% safe area (§2.2), bottom-**right**. It was bottom-left until the slice-6 review
+       * pointed out that §10.1's adjustment banner anchors there for six seconds — a reconnect during
+       * one would have put a pulse under the banner or beside it. Right is free on every stage: §7's
+       * timer is top-right, and nothing else reaches that corner.
+       */
+      className="pointer-events-none absolute right-[5cqh] bottom-[5cqh] size-[2cqh] rounded-full bg-neutral-500"
       style={{ animation: 'kwiz-pulse 2s ease-in-out infinite' }}
       aria-label="reconnecting"
     />

@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react'
 
 import { playTimerExpiry } from '@/lib/client/screen-sound'
 import { useCountdown } from '@/lib/client/use-countdown'
+import { usePrefersReducedMotion } from '@/lib/client/use-screen-chrome'
 
 /**
  * PRD 4 §7 — the question timer.
@@ -32,8 +33,20 @@ export function Timer({ timer }: { timer: TimerView }) {
 
   useExpirySound(seconds, paused)
 
+  /*
+   * §15 — *"`prefers-reduced-motion` is honoured. Crossfades replace movement; **the timer ring
+   * becomes stepwise**."*
+   *
+   * One of the two motions on this surface CSS could not have accommodated, and the reason
+   * `usePrefersReducedMotion` exists: the ring is a `strokeDashoffset` recomputed four times a second
+   * from a client tick, not an animation a media query can switch off. Stepwise means the arc moves
+   * once per whole second rather than continuously — the information is identical, the drift is gone.
+   */
+  const reduced = usePrefersReducedMotion()
+  const left = reduced ? seconds : remaining
+
   const fraction =
-    timer.durationMs > 0 ? Math.min(1, remaining / (timer.durationMs / 1000)) : 0
+    timer.durationMs > 0 ? Math.min(1, left / (timer.durationMs / 1000)) : 0
 
   return (
     <div className="absolute top-[5cqh] right-[5cqh] size-[16cqh]">

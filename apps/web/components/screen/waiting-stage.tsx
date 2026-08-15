@@ -70,9 +70,12 @@ export function WaitingStage({
  * it, which pressures a table that is merely slow — and the master has the real figure on control.
  */
 function TeamList({ teams, joined }: { teams: TeamPublic[]; joined: Set<string> }) {
-  // §4's cap: names are at body size, so the list is limited by what fits. Past ~12 it becomes a
-  // grid, and past that the dots go and the names carry it alone.
-  const columns = teams.length > 12 ? 3 : teams.length > 6 ? 2 : 1
+  /*
+   * §4's ladder, exactly as written: *"beyond ~12 teams it becomes a two-column grid, then names only
+   * without dots."* Two rungs, not three — this had a `>12 → three columns` tier of its own invention
+   * until the slice-6 review, which is reasonable at the 20-team envelope and simply is not the spec.
+   */
+  const columns = teams.length > 12 ? 2 : 1
   const dots = teams.length <= 18
 
   return (

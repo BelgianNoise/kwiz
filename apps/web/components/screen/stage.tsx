@@ -92,7 +92,7 @@ function StageBody({
       return <BoardStage stage={stage} teams={teams} />
 
     case 'FINALE':
-      return <FinaleStage finale={stage.finale} />
+      return <FinaleStage finale={stage.finale} teams={teams} />
 
     case 'FINISHED':
       return <FinishedStage stage={stage} teams={teams} />

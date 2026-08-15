@@ -639,3 +639,41 @@ describe('a Jeopardy tile handing the stage back', () => {
     expect(stage.board.tiles[0]?.used).toBe(true)
   })
 })
+
+/**
+ * The two fields the slice-6 review found untested. Both are simple enough to look right by
+ * inspection, which is exactly the argument that lost: `soundMuted` is the difference between PRD 2
+ * §16's toggle working and merely existing, and §5's line is a number the room reads.
+ */
+describe('the fields that were correct but unasserted', () => {
+  it('states the round’s shape for §5’s "3 questions · 40 points"', () => {
+    const stage = toMainScreenView(run(LIVE), NOW).stage
+    if (stage.kind !== 'ROUND_INTRO') throw new Error(`got ${stage.kind}`)
+
+    // Two ten-point questions in round 1 of this fixture.
+    expect(stage.questionCount).toBe(2)
+    expect(stage.points).toBe(20)
+    expect(stage.roundNumber).toBe(1)
+  })
+
+  it('passes PRD 2 §16’s mute through, defaulting to unmuted', () => {
+    const state = run(LIVE)
+    expect(toMainScreenView(state, NOW).soundMuted).toBe(false)
+    expect(toMainScreenView(state, NOW, '', { soundMuted: true }).soundMuted).toBe(true)
+  })
+
+  /**
+   * §14 — *"game abandoned: whatever was showing, held. No announcement."* The screen holds its last
+   * real view rather than rendering the `FINISHED` stage `stageKind` folds `ABANDONED` into, and this
+   * flag is what tells it to. A finished game must **not** set it, or the winner never appears.
+   */
+  it('marks an abandoned game so the room’s screen can hold instead of announcing', () => {
+    const finished = run([...LIVE, { type: 'GAME_FINISHED', payload: {} }])
+    expect(toMainScreenView(finished, NOW).abandoned).toBe(false)
+
+    const abandoned = run([...LIVE, { type: 'GAME_ABANDONED', payload: {} }])
+    expect(toMainScreenView(abandoned, NOW).abandoned).toBe(true)
+    // The stage is still `FINISHED` — control needs that, and the room's screen is what holds.
+    expect(toMainScreenView(abandoned, NOW).stage.kind).toBe('FINISHED')
+  })
+})

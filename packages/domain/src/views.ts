@@ -273,7 +273,7 @@ function stageKind(state: GameState): StageKind {
    * this the room saw the finished round's intro again — `ROUND_CLOSED` leaves `currentRoundId`
    * pointing at it on purpose, because the desk's timeline is still about that round.
    */
-  if (round && state.closedRoundIds.has(round.id)) return 'LEADERBOARD'
+  if (closedRoundNumber(state) !== null) return 'LEADERBOARD'
   if (round?.type === 'JEOPARDY') return 'JEOPARDY_BOARD'
   if (round) return 'ROUND_INTRO'
   return 'WAITING'
@@ -361,6 +361,18 @@ export interface MainScreenView {
    * and `playback`, it is a fact about the machine rather than about the game, and is passed **in**.
    */
   soundMuted: boolean
+  /**
+   * §14 — *"game abandoned: whatever was showing, held. No announcement."*
+   *
+   * `stageKind` folds `ABANDONED` into `FINISHED`, which is right for control — its header says so —
+   * and wrong for the room, which would get a full winner announcement for a game the master had just
+   * pulled. The screen holds its last real view instead, and this is the flag that tells it to.
+   *
+   * **Not a leak, and not a contradiction of "no announcement":** the room is never *shown* this. It
+   * is the client being told to show *less*, which is the only way a stateless resolver can express a
+   * rule about what was on screen a moment ago.
+   */
+  abandoned: boolean
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
@@ -441,6 +453,7 @@ export function toMainScreenView(
     joinUrl,
     quizName: state.content.quizName,
     soundMuted: machine.soundMuted ?? false,
+    abandoned: state.status === 'ABANDONED',
     teams,
     stage: mainScreenStage(state, now, machine.playback ?? null),
   }
@@ -592,16 +605,28 @@ function mainScreenStage(
  * one is true is a fact about the game, so it does not belong in a component.
  */
 function leaderboardStage(state: GameState): MainScreenView['stage'] {
-  const index = state.content.rounds.findIndex((r) => r.id === state.currentRoundId)
-  const closed =
-    index >= 0 && state.closedRoundIds.has(state.content.rounds[index]?.id ?? '')
-
   return {
     kind: 'LEADERBOARD',
     standings: standings(state),
     provisional: provisionalOf(state),
-    afterRoundNumber: closed ? index + 1 : null,
+    afterRoundNumber: closedRoundNumber(state),
   }
+}
+
+/**
+ * The current round's 1-based number **if it has been closed**, and `null` otherwise.
+ *
+ * One fact, one function, two callers: `stageKind` asks it whether the gap between rounds is a
+ * leaderboard at all, and `leaderboardStage` asks it for §10's `AFTER ROUND n` heading. They derived
+ * it separately, through two different lookups, until the slice-6 review — no live bug, and two copies
+ * of one rule that agree only by coincidence. That is the shape slice 5's round-boundary dead end had
+ * before it became one.
+ */
+function closedRoundNumber(state: GameState): number | null {
+  const index = state.content.rounds.findIndex((r) => r.id === state.currentRoundId)
+  if (index < 0) return null
+  const round = state.content.rounds[index]
+  return round && state.closedRoundIds.has(round.id) ? index + 1 : null
 }
 
 function mainScreenQuestion(

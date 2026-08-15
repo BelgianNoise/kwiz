@@ -317,6 +317,9 @@ const nl: Messages = {
         SHORT_TIMER: 'maar {seconds}s om te antwoorden',
         JEOPARDY_UNEVEN_COLUMNS: 'kolommen zijn ongelijk - de langste heeft {tallest}',
         JEOPARDY_EMPTY_TILES: '{empty} lege tegels',
+        CATEGORY_NAME_TOO_LONG:
+          '"{name}" is te lang voor het bord — ongeveer {max} tekens passen',
+        PROMPT_TOO_LONG: 'lang voor het scherm met {length} tekens',
         FINALE_RATE_SUSPICIOUS:
           'het beste team start met maar {seconds}s - de verhouding staat misschien omgekeerd',
         FINALE_TOO_FEW_QUESTIONS:

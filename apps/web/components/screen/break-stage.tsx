@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { JoinCode, Standings } from '@/components/screen/parts'
 import type { Teams } from '@/components/screen/stage'
 import { useCountdown } from '@/lib/client/use-countdown'
+import { minuteSeconds } from '@/lib/format'
 
 type BreakView = Extract<MainScreenView['stage'], { kind: 'BREAK' }>
 
@@ -69,18 +70,4 @@ export function BreakStage({
       </div>
     </section>
   )
-}
-
-/**
- * `m:ss` — conventions §8.2's format for breaks and media, and **not** interchangeable with the
- * finale's whole seconds or an elimination's `HH:mm`.
- *
- * Duplicated from `components/control/break-desk` on purpose rather than imported: that module is the
- * master's surface, and this one is the room's. Sharing it would be the first thread of a dependency
- * between two surfaces whose type scales must stay independent (CLAUDE.md §7).
- */
-export function minuteSeconds(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds))
-  const minutes = Math.floor(whole / 60)
-  return `${minutes}:${String(whole % 60).padStart(2, '0')}`
 }

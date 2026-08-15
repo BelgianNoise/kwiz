@@ -420,6 +420,16 @@ type MainScreenView = {
   // existing: §16's justification is that "hunting for OS volume mid-quiz is not acceptable", so a
   // mute has to reach a projector nobody is going to reload. Passed into the filter. Added slice 6
   soundMuted: boolean
+  // PRD 4 §14: "game abandoned → whatever was showing, held. No announcement." stageKind folds
+  // ABANDONED into FINISHED, which is right for control (its header says so) and wrong for the
+  // room, which would otherwise get a full winner-at-hero-scale announcement for a game the master
+  // had just pulled — the view is published before the streams close. The screen holds its last
+  // real view instead, and this is the flag that tells it to.
+  //
+  // Not a leak and not a contradiction of "no announcement": the room is never SHOWN this. It is
+  // the client being told to show less, which is the only way a stateless resolver can express a
+  // rule about what was on screen a moment ago. Added in slice 6's review round.
+  abandoned: boolean
   teams: TeamPublic[]
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }

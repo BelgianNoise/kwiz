@@ -2,14 +2,14 @@
 
 import type { MainScreenView, Notice } from '@kwiz/domain'
 import { DISCONNECT_GRACE_MS } from '@kwiz/domain'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AdjustmentBanner } from '@/components/screen/adjustment-banner'
 import { Arming, DisconnectedPulse, KwizMark } from '@/components/screen/arming'
 import { Stage } from '@/components/screen/stage'
 import { StageFrame } from '@/components/screen/stage-frame'
-import { setSoundMuted } from '@/lib/client/screen-sound'
+import { armSound, setSoundMuted } from '@/lib/client/screen-sound'
 import { useLiveView } from '@/lib/client/use-live-view'
 import { usePointerActive } from '@/lib/client/use-screen-chrome'
 import { requestFullscreen } from '@/lib/client/use-screen-chrome'
@@ -43,6 +43,19 @@ export function MainScreen({ gameId }: { gameId: string }) {
   const pointerActive = usePointerActive()
 
   /*
+   * §14 — *"game abandoned: whatever was showing, held. No announcement — the master handles the
+   * room."*
+   *
+   * `stageKind` folds `ABANDONED` into `FINISHED`, which is right for control (its header says so)
+   * and wrong here: the server publishes that view **before** closing the streams, so the room got a
+   * full winner-at-hero-scale announcement for a game the master had just abandoned, and then the
+   * frozen remains of it. Holding the last real view is both what §14 asks for and the calmer thing.
+   */
+  const held = useRef<MainScreenView | null>(null)
+  if (view && !view.abandoned) held.current = view
+  const shown = view?.abandoned ? held.current : view
+
+  /*
    * PRD 2 §16's mute, mirrored on every view so toggling it in settings silences the projector without
    * anyone reloading it — which is the difference between the setting working and merely existing.
    */
@@ -62,7 +75,17 @@ export function MainScreen({ gameId }: { gameId: string }) {
    */
   useEffect(() => {
     if (sound === null) return undefined
-    const reArm = (): void => void requestFullscreen()
+    const reArm = (): void => {
+      void requestFullscreen()
+      /*
+       * §4.1's failure copy tells the master to *"click the screen once more"*, and until the slice-6
+       * review that instruction did nothing: this listener only re-requested fullscreen, `armSound`
+       * ran exactly once from `Arming`'s own handler, and the only real fix was reloading the route.
+       * A recovery instruction that does not recover is worse than none — §4.1's whole point is that
+       * a muted projector gets found while the room is still filling.
+       */
+      if (!sound) void armSound().then(setSound)
+    }
     window.addEventListener('click', reArm)
     return () => window.removeEventListener('click', reArm)
   }, [sound])
@@ -77,11 +100,24 @@ export function MainScreen({ gameId }: { gameId: string }) {
           blanking a projector mid-question is the one thing worse than a stale standing. Only the
           very first connect has nothing to show.
         */}
-        {view ? <Stage view={view} teams={teams} sound={sound} /> : <KwizMark />}
+        {shown && status !== 'FAILED' ? (
+          <Stage view={shown} teams={teams} sound={sound} />
+        ) : (
+          /*
+           * §14 — *"game not found / deleted: a neutral full-screen `kwiz` mark. No error text."*
+           *
+           * `FAILED` is a **refusal**, not a blip: the stream will not come back, so unlike
+           * `RECONNECTING` there is nothing for a held view to still be true about. Deleting a game is
+           * legal at every status including `LIVE` (PRD 2 §12.1), so this is reachable while the room
+           * is watching — and until the slice-6 review the projector simply froze on the last frame
+           * forever, with no mark and not even the pulse, which only renders while reconnecting.
+           */
+          <KwizMark />
+        )}
 
         {/* §10.1 — below whatever the stage is showing, never over it, and the same band on all eight. */}
-        {view ? (
-          <AdjustmentBanner notice={notice} teams={teams} stage={view.stage.kind} />
+        {shown ? (
+          <AdjustmentBanner notice={notice} teams={teams} stage={shown.stage.kind} />
         ) : null}
 
         {status === 'RECONNECTING' ? <GracedPulse /> : null}

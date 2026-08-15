@@ -15,9 +15,9 @@ import { Pause, Play } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 
-import { minuteSeconds } from '@/components/control/break-desk'
 import { useControlKeys } from '@/components/control/keys'
 import { Button } from '@/components/ui/button'
+import { minuteSeconds } from '@/lib/format'
 
 /**
  * PRD 3 §5.1 — **media playback is controlled here, never on the main screen.**
