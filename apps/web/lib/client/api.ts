@@ -21,14 +21,19 @@ import type { ImportPreview } from '@/lib/server/transfer'
  * to handle a thrown error *and* a typed refusal will handle one of them badly, and the one it gets
  * wrong will be the one that happens in a noisy room.
  */
-async function send<T>(path: string, body?: unknown): Promise<ActionResult<T>> {
+async function send<T>(
+  path: string,
+  body?: unknown,
+  /** `X-Kwiz-Device` on player actions (protocol §7.1), and nothing else uses it. */
+  extraHeaders?: Record<string, string>,
+): Promise<ActionResult<T>> {
   try {
     const response = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined
-        ? {}
+        ? { ...(extraHeaders ? { headers: extraHeaders } : {}) }
         : {
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', ...extraHeaders },
             body: JSON.stringify(body),
           }),
     })
@@ -436,4 +441,61 @@ async function transfer<T>(
       message: cause instanceof Error ? cause.message : 'the import failed',
     }
   }
+}
+
+/**
+ * PRD 5 — **the player half of protocol §7.1**, as one object bound to a game and a device.
+ *
+ * The mirror of `control(gameId)`, with one difference that matters: every call carries
+ * `X-Kwiz-Device`. That is identity, not authorisation (PRD 1 §4) — it tells the server *which team
+ * this is*, which is the only thing a player action needs that a master action does not.
+ *
+ * `join` is deliberately **not** here: it resolves a game by code rather than by id, and it is the one
+ * call a device makes *before* it has a token to bind (see `joinGame`).
+ */
+export function player(gameId: string, deviceToken: string) {
+  const post = (path: string, body: unknown = {}): Promise<ActionResult> =>
+    send(`/api/games/${gameId}/${path}`, body, { 'x-kwiz-device': deviceToken })
+
+  return {
+    /**
+     * D45 — the shared draft. Debounced by the caller (~500 ms) and flushed on blur, so this is a
+     * plain write: every one of the team's devices sees the result on the stream.
+     */
+    draft: (
+      gameQuestionId: string,
+      answer: { text?: string; selectedOptionId?: string },
+    ) => post('draft', { gameQuestionId, ...answer }),
+
+    /**
+     * D43 — final. A second submission of the **same** value is the retry path and a no-op; a
+     * different one is refused with `ALREADY_SUBMITTED` and the team's canonical answer attached, so
+     * the second device can show what its team actually said (protocol §7.3).
+     */
+    submit: (
+      gameQuestionId: string,
+      answer: { text?: string; selectedOptionId?: string },
+    ) => post('submit', { gameQuestionId, ...answer }),
+
+    /** §8 — the buzz. Repeated taps are harmless: the first counts and the rest are no-ops. */
+    buzz: (gameQuestionId: string) => post('buzz', { gameQuestionId }),
+
+    /** §2.4 — a player who tapped the wrong row. Their draft for the current question goes (P4). */
+    switchTeam: (toTeamId: string) => post('switch-team', { toTeamId }),
+  }
+}
+
+export type PlayerApi = ReturnType<typeof player>
+
+/**
+ * `POST /api/games/join` — the only action addressed by **code** rather than by game id, because a
+ * phone that has just scanned a QR knows nothing else (protocol §7.1).
+ *
+ * It is also the only one that returns data rather than pushing it: the fresh `deviceToken`.
+ */
+export function joinGame(
+  code: string,
+  teamId: string,
+): Promise<ActionResult<{ gameId: string; teamId: string; deviceToken: string }>> {
+  return send('/api/games/join', { code, teamId })
 }

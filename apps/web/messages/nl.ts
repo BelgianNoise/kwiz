@@ -714,6 +714,65 @@ const nl: Messages = {
    * English rather than as literal translations — `Terug over` for `Back in`, not `We zijn terug over`.
    * A heading that wraps at §2.1's sizes costs a line the stage does not have.
    */
+  player: {
+    join: {
+      whichTeam: 'Welke ploeg ben jij?',
+      alreadyHas: 'heeft al {count} telefoons',
+      joining: 'bezig…',
+      noTeams: 'De quizmaster heeft nog geen ploegen toegevoegd.',
+      noGame: 'Geen quiz met die code',
+      noGameBody:
+        'Misschien is hij afgelopen, of klopt de code net niet. Kijk op het grote scherm en probeer opnieuw.',
+      tryAgain: 'Probeer een andere code',
+    },
+    game: {
+      connecting: 'Verbinden…',
+      reconnecting: 'Opnieuw verbinden…',
+      youreIn: 'Je doet mee.',
+      watchTheScreen: 'Hou het grote scherm in de gaten.',
+      teamsReady: '{count, plural, one {# ploeg klaar} other {# ploegen klaar}}',
+      lookAtScreen: 'Kijk naar het grote scherm.',
+      yourAnswer: 'Jullie antwoord',
+      submit: 'Versturen',
+      sending: 'Versturen…',
+      lockedIn: 'Vastgezet ✓',
+      correctAnswer: 'Juiste antwoord',
+      checking: 'De quizmaster controleert dit antwoord.',
+      points: '{points} punten',
+      masterJudging: 'De quizmaster beoordeelt deze. Kijk naar het grote scherm.',
+      picks: '{team} kiest',
+      tellTheMaster: 'Zeg tegen de quizmaster welke jullie willen.',
+      backIn: 'Terug over',
+      backShortly: 'Zo terug',
+      finished: 'Eindstand',
+    },
+    buzzer: {
+      buzz: 'BUZZ',
+      buzzed: 'Gebuzzed',
+      youreIn: 'Jullie zijn aan zet!',
+      answerOutLoud: 'Antwoord hardop',
+      beatenToIt: 'Een andere ploeg was eerder',
+      wrongAnswer: 'Jullie antwoord was fout',
+      othersBuzzing: 'Andere ploegen buzzen nu',
+    },
+    finale: {
+      guessingNow: 'raadt nu',
+      betweenTurns: 'Volgende ploeg…',
+      youreUpNext: 'Jullie zijn zo aan de beurt.',
+      out: 'Uit',
+      notInFinale: 'Jullie plaats staat al vast — geniet van de finale.',
+    },
+    menu: {
+      label: 'Menu',
+      close: 'Sluiten',
+      language: 'Taal',
+      switchTeam: 'Van ploeg wisselen',
+      leave: 'Deze quiz verlaten',
+      leaveConfirm: 'Dit toestel verlaat de quiz. Je kunt opnieuw meedoen met de code.',
+      cancel: 'Annuleren',
+    },
+  },
+
   screen: {
     arming: {
       click: 'Klik ergens om te starten',
