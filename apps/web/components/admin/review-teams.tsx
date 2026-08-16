@@ -36,7 +36,14 @@ export function ReviewTeams({
               taken={teams.filter((other) => other.id !== team.id).map((o) => o.colour)}
               onPick={(colour) => onRecolour(team.id, colour)}
             />
-            <TeamName team={team} onRename={onRename} />
+            {/*
+              **Keyed by the name the server last confirmed.** The field holds local state so it can
+              be typed into, and local state initialises once — so without this a rename that was
+              refused, or that never left the browser, would sit in the box looking saved. Re-reading
+              after every write is what makes the key move; a rejected write leaves it where it was
+              and the box snaps back to the truth.
+            */}
+            <TeamName key={`${team.id}:${team.name}`} team={team} onRename={onRename} />
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t('rankAndScore', { rank: team.rank, score: team.score })}
             </span>
