@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 7 — The player device
 
-**Status:** complete · `pnpm check` green · **682 tests** · lint silent · `pnpm build` clean · join,
+**Status:** complete · `pnpm check` green · **692 tests** · lint silent · `pnpm build` clean · join,
 every stage, all four answer methods and both two-device rules driven at 375×812 with **two devices on
 one team**, and the whole surface walked again in `nl`
 
@@ -84,10 +84,43 @@ the spec, found what I had never looked at — which is the argument for doing b
 6. **The reconnecting band never went away after a game ended**, because ending a game closes every
    stream (protocol §3.4) and `EventSource` kept retrying under a screen that was already final.
 
+### And two more from the review round, both in the places neither pass had looked
+
+The self-audit found bugs in what it drove and then in what it read. The review found the two things
+**neither** reaches: a component the test config cannot import, and a recovery path that only exists
+across three navigations.
+
+1. **The buzzer was wrong for both audiences that are not the one device that won.**
+   `firstBuzzTeamId` was the chronologically first buzz on the question and nothing ever cleared it,
+   so once *any* team had buzzed, every other phone read *someone already has this* for the rest of
+   the question and never re-armed — silently excluded from D35's deny→reopen loop, which exists to
+   include them. Separately, the outcome message came from local tap state, so a device that tapped
+   and lost read *"You're in!"* while the second phone on the team that **won** read *"another team
+   got there first"*.
+
+   **The obvious fix would not have worked.** Filtering by `forceReopenedAt`, the way
+   `lockedOutTeamIds` does, does nothing here: an ordinary denial re-arms the buzzers without a
+   `BUZZERS_FORCE_REOPENED` event, so there is no instant to filter against. The question being asked
+   was wrong. `buzzHolderTeamId` asks who has the buzz **now**, and its `null` is what re-arms
+   everyone else.
+
+2. **A stale device token trapped the phone in a redirect loop** — see *what the next agent would
+   otherwise rediscover* below. Both halves were individually reasonable and only wrong together.
+
+Everything else the round raised was real and is fixed: `DO`/`BUZZER` reveals claiming a blank
+correct answer and a false *"nothing submitted"*; a switch to a full team closing the menu in
+silence; the buzzer at 45% of the viewport rather than §8's *"nearly the whole screen"* (65% now);
+the SSE retry loop merely hidden rather than stopped after a game ends; the submit button flickering
+back to *Submit* between backoff attempts; `protocol.md` §5.3 missing `abandoned`; §2.1 not stating
+the reverse-proxy access-log cost of the query-parameter token; and two finale-keyword sentinel
+assertions that only covered the room.
+
 ### Spec deviations
 
 None. protocol §2.1 changed, and PRD 5 §2.3 was updated to match, in the same change
-(agent-workflow §3.3).
+(agent-workflow §3.3). `firstBuzzTeamId` became `buzzHolderTeamId` in protocol §5.3, with the reason
+recorded beside it — a rename because the old name was the bug: it described a fact nobody needed
+and every reader mistook for the one they did.
 
 ### Raised, not resolved
 
@@ -164,9 +197,21 @@ master's hotspot alongside twenty others should not pay for it until it is wante
   phone showing `2nd` while the projector shows `3rd` is the kind of disagreement that reads as a bug
   in the scoring rather than in the rendering.
 - **Vitest cannot import a `.tsx` file** in this workspace's config, which is why every extracted
-  decision on this surface (`answer-moments.ts`, and slice 6's `finale-moments.ts`) is a plain `.ts`.
-  A test that imports a component file fails at transform with a JSX parse error, not at assertion —
-  it looks like a config bug and is not one.
+  decision on this surface (`answer-moments.ts`, `buzzer-face.ts`, and slice 6's `finale-moments.ts`)
+  is a plain `.ts`. A test that imports a component file fails at transform with a JSX parse error,
+  not at assertion — it looks like a config bug and is not one.
+- **That constraint is load-bearing, not incidental.** Both of this slice's worst bugs lived in the
+  one decision that had *not* been extracted. If a component branches on more than two facts, pull
+  the branch into a `.ts` beside it before writing the JSX — by the time it is wrong, the only thing
+  that can see it is a browser, and a browser only shows you the case you thought to try.
+- **Clearing a token and redirecting away from it must be the same call.** They were two files' jobs:
+  `player-game.tsx` redirected on `UNKNOWN_DEVICE` and left the token, and `team-picker.tsx` resumes
+  any device that has one (§2.3) — so a stale token bounced between them forever, with no picker ever
+  drawn. Each half is correct alone. The `?rejoin=1` meant to break the tie was read by nothing,
+  which is the tell: a query parameter nobody consumes is a comment, not a mechanism.
+- **`<details>` in the device menu is controlled.** A refusal re-renders the subtree and an
+  uncontrolled one collapses under it — hiding the list and the message explaining why the tap did
+  nothing, which is the silence the message exists to end.
 - **Driving two players from a script: `el.focus()` is a no-op if the element is already
   `document.activeElement`**, so React's `onFocus` never fires and the focused-field echo rule looks
   broken when it is not. `blur()` first, then `focus()`. This cost half an hour of chasing a bug that

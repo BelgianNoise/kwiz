@@ -350,9 +350,15 @@ one phone (agent-workflow §4.2). Do the last row in `nl`.
 - [ ] **Let a timer run to zero with the field empty.** Nothing is submitted, and the team can still
       answer afterwards (D8). With text entered, it auto-submits at zero instead. Both matter: the
       empty case burned a team's only answer until slice 7's browser pass caught it.
-- [ ] **Buzz from two devices on different teams.** Both get immediate local feedback that says
-      *buzzed* and **never** *first*; the server's answer arrives a moment later. Deny the first and
-      confirm the loser's buzzer re-enables visibly.
+- [ ] **Buzz with three teams and two devices on one of them** — not two teams, which is what this
+      row used to say and why the buzzer's worst bug walked straight past it. Every one of these is a
+      separate audience and the old code got two of them wrong:
+      - the device that tapped and **won** → *You're in! Answer out loud*
+      - the **other phone on that same team**, which never tapped → the same thing
+      - a device that tapped and **lost** → the winner **named**
+      - a team that **never buzzed** → the winner named, and then, after the master denies →
+        **its BUZZ button back, live**, which is the whole point of D35's loop
+- [ ] Local feedback says *buzzed* and **never** *first*; the server's answer arrives a moment later.
 - [ ] **The menu disappears entirely while buzzers are live** (§14) — not merely disabled. The whole
       screen is the buzzer at that moment.
 - [ ] **A `DO` question and the finale have no input control at all** — not a disabled one (§8.1,
@@ -376,3 +382,11 @@ one phone (agent-workflow §4.2). Do the last row in `nl`.
       winner, no error page, and no lingering *reconnecting* band.
 - [ ] **Reload `/play/:code/game` after the game has ended.** The plain "no quiz with that code"
       explanation, never a 404.
+- [ ] **Corrupt the device token in `localStorage` and reload the game page.** The picker renders with
+      a plain explanation and the stale token is gone (§2.3) — never a bounce between the game page
+      and the picker with neither ever settling.
+- [ ] **Try to switch to a full team.** The refusal is shown, the list stays open under it, and the
+      menu does not close (D20).
+- [ ] **Reveal a `BUZZER` and a `DO` question.** Neither claims the team submitted nothing, and
+      neither prints a "correct answer" heading over an empty line — the verdict and the points are
+      all these two can honestly report.
