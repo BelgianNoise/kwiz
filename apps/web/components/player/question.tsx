@@ -201,11 +201,24 @@ function Answer({
    * feature, not an error"* (D8), and the single most important consequence of the trust model here.
    */
   useEffect(() => {
-    if (expired && !submitted) {
+    /*
+     * **Only if there is something to submit.** O6 states the purpose exactly: *"if the timer expires
+     * with a selection but no Submit, §5.4 auto-submits it anyway"* — it exists to rescue an answer
+     * that was *entered* and not sent.
+     *
+     * Auto-submitting an empty one would be the opposite. D43 makes the first submission final, so a
+     * phone sitting on an expired question with nothing typed would burn the team's one answer on
+     * nothing — and D8 explicitly wants that team to still be able to answer late, which is the
+     * single most important consequence of the trust model on this surface (§5.4). Caught by leaving
+     * a question open past its timer with an empty field, which is what a team arguing about an
+     * answer actually does.
+     */
+    const entered = question.answerMethod === 'MULTIPLE_CHOICE' ? option : text.trim()
+    if (expired && !submitted && entered) {
       flushDraft()
       submit()
     }
-  }, [expired, submitted, submit, flushDraft])
+  }, [expired, submitted, submit, flushDraft, option, text, question.answerMethod])
 
   // §5.2 — after submitting, it is over. No edit affordance and no "change answer" link: ambiguity
   // here invites a team to argue about whether they can still change it.
