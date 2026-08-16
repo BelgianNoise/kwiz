@@ -1,14 +1,18 @@
 import { reduce, type GameContent, type GameEvent, type LoggedEvent } from '@kwiz/domain'
 import { and, eq } from 'drizzle-orm'
+import { v7 as uuidv7 } from 'uuid'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appendAndProject, readLog } from './append'
 import type { KwizDatabase } from './client'
+import { loadGameContent } from './content'
 import {
   gameAcceptedAnswer,
   gameAnswer,
   gameBuzz,
+  gameKeywordMark,
   gameQuestion,
+  gameQuestionKeyword,
   gameTeam,
 } from './schema'
 import { freshTestDatabase, seedGame, type SeededGame } from './test-support'
@@ -398,5 +402,116 @@ describe('the writer and the reducer agree', () => {
 
     expect(fromDatabase()).toEqual(fromDomain())
     expect(fromDatabase()[0]).toMatchObject({ verdict: 'AUTO_CORRECT', score: 10 })
+  })
+})
+
+/**
+ * The finale's keyword marks, which are the one projection with a **unique index that a revoked row
+ * keeps holding** — so "insert a new mark" and "the reducer overwrites its map entry" are not the
+ * same operation, and the difference only shows up after a revoke.
+ *
+ * This is PRD 3 §10.4's `Shift`+`n` used the way it is meant to be: un-mark, then credit the right
+ * team. It threw `UNIQUE constraint failed` mid-finale until slice 8 — a state the log could express
+ * and the projection could not, which is exactly what I15 forbids.
+ */
+describe('keyword marks stay in step with the reducer', () => {
+  let keywordId: string
+
+  beforeEach(() => {
+    keywordId = uuidv7()
+    database.db
+      .insert(gameQuestionKeyword)
+      .values({
+        id: keywordId,
+        gameId: seed.gameId,
+        gameQuestionId: seed.questionId,
+        position: 0,
+        text: 'i like cows',
+        wordLengths: [1, 4, 4],
+      })
+      .run()
+  })
+
+  const marksInDatabase = () =>
+    database.db
+      .select({
+        keyword: gameKeywordMark.gameKeywordId,
+        teamId: gameKeywordMark.teamId,
+        revoked: gameKeywordMark.revokedAt,
+      })
+      .from(gameKeywordMark)
+      .all()
+      .map((row) => ({ ...row, revoked: row.revoked !== null }))
+
+  const marksInDomain = () => {
+    const log = readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+      seq: entry.seq,
+      event: entry.event,
+      createdAt: entry.createdAt.getTime(),
+    }))
+    /*
+     * The **real** content loader here, not `contentFor`'s hand-written tree: the keyword only
+     * exists in the database, and a fixture that omitted it would let the reducer report no marks
+     * while the projection held three — a comparison that passes by agreeing about nothing.
+     */
+    const content = loadGameContent(database, seed.gameId)
+    if (!content) throw new Error('expected game content')
+    return [...reduce(content, log).keywordMarks.values()].map((mark) => ({
+      keyword: mark.gameKeywordId,
+      teamId: mark.teamId,
+      revoked: mark.revokedAt !== null,
+    }))
+  }
+
+  it('re-marks a revoked keyword to another team rather than failing', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORD_UNMARKED', payload: { gameKeywordId: keywordId } },
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamB },
+      },
+    ])
+
+    // Alive again, and credited to the team the master actually meant.
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: seed.teamB, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
+  })
+
+  it('reveals over a revoked mark rather than failing', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORD_UNMARKED', payload: { gameKeywordId: keywordId } },
+      { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: seed.questionId } },
+    ])
+
+    // Nobody found it (I21) — not "still credited to A", and not a crash.
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: null, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
+  })
+
+  it('leaves an ordinary mark alone when the question is revealed', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: seed.questionId } },
+    ])
+
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: seed.teamA, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
   })
 })

@@ -333,6 +333,18 @@ export function applyProjection(
     // ─── finale keywords ───
 
     case 'KEYWORD_MARKED':
+      /*
+       * **Upsert, because a revoked row still holds the unique index.**
+       *
+       * `MARK_KEYWORD` deliberately allows re-marking a keyword whose mark was revoked (decide.ts):
+       * the master pressed `Shift`+`n` and is now crediting the right team, which is PRD 3 §10.4's
+       * ordinary correction rather than an edge case. The reducer overwrites its map entry; a plain
+       * insert here threw `UNIQUE constraint failed` mid-finale instead — a projection that could
+       * not represent a state the log can, which is the divergence I15 exists to forbid.
+       *
+       * `revokedAt: null` is the load-bearing half: the row has to come back to life, not merely
+       * change hands, or the clock keeps ignoring a mark that is now real again.
+       */
       tx.insert(gameKeywordMark)
         .values({
           gameId,
@@ -340,6 +352,10 @@ export function applyProjection(
           gameKeywordId: event.payload.gameKeywordId,
           teamId: event.payload.teamId,
           markedAt: at,
+        })
+        .onConflictDoUpdate({
+          target: gameKeywordMark.gameKeywordId,
+          set: { teamId: event.payload.teamId, markedAt: at, revokedAt: null },
         })
         .run()
       return
@@ -376,6 +392,9 @@ export function applyProjection(
         )
 
       for (const { id } of unmarked) {
+        // Same upsert as `KEYWORD_MARKED`, and reachable by the same route: a keyword marked and
+        // then un-marked has no *live* mark, so the reveal covers it — over a revoked row that is
+        // still occupying the unique index.
         tx.insert(gameKeywordMark)
           .values({
             gameId,
@@ -383,6 +402,10 @@ export function applyProjection(
             gameKeywordId: id,
             teamId: null,
             markedAt: at,
+          })
+          .onConflictDoUpdate({
+            target: gameKeywordMark.gameKeywordId,
+            set: { teamId: null, markedAt: at, revokedAt: null },
           })
           .run()
       }
