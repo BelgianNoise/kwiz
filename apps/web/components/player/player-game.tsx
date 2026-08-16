@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { DeviceMenu } from '@/components/player/device-menu'
 import { PlayerStage } from '@/components/player/player-stage'
 import { useRouter } from '@/i18n/navigation'
-import { readDeviceToken } from '@/lib/client/device'
+import { clearDeviceToken, readDeviceToken } from '@/lib/client/device'
 import { useLiveView } from '@/lib/client/use-live-view'
 import { useWakeLock } from '@/lib/client/use-wake-lock'
 
@@ -40,21 +40,46 @@ export function PlayerGame({ gameId, code }: { gameId: string; code: string }) {
   }, [token, code, router])
 
   /*
+   * §12's battery row — *"no looping animations, no polling, no video. One SSE connection is
+   * cheap."*
+   *
+   * Ending a game closes every stream (protocol §3.4), so without this latch a phone left on the
+   * table after the quiz reopened a connection every few seconds, forever, against a game that was
+   * over. Latched rather than derived inline so it can only ever go one way: a finished game does not
+   * become unfinished, and the last view stays on screen because nothing tears it down.
+   */
+  const [over, setOver] = useState(false)
+
+  /*
    * protocol §2.1 — the token rides in the query string, because `EventSource` cannot set a header.
-   * `''` while the token is still being read keeps the hook's `path` stable rather than opening a
-   * stream that is guaranteed to 401.
+   * `''` means *do not stream*: while the token is still being read, and once the quiz is over.
    */
   const { view, status, error } = useLiveView<PlayerView>(
-    token ? `/api/live/${gameId}/play?device=${encodeURIComponent(token)}` : '',
+    token && !over ? `/api/live/${gameId}/play?device=${encodeURIComponent(token)}` : '',
   )
+
+  useEffect(() => {
+    if (view?.abandoned || view?.stage.kind === 'FINISHED') setOver(true)
+  }, [view])
 
   /*
    * §2.3 — *"if the token is unknown (game deleted, database reset, token cleared), the device is
    * returned to the team picker with a plain explanation rather than an error."*
+   *
+   * **The token is cleared here, in the same call as the redirect.** It used to redirect to
+   * `/play/:code?rejoin=1` and leave the token in place — and the picker's §2.3 resume check sends
+   * any device holding a token straight back here, so the two rules closed on each other: game page →
+   * 401 → picker → resume → game page → 401, forever, with no picker ever drawn and nothing ever
+   * explained. The `?rejoin=1` that was meant to break it was read by nothing.
+   *
+   * A stale token is not a fact worth carrying: the server has just said it does not know this
+   * device, so the only honest local state is *not joined*.
    */
   useEffect(() => {
-    if (error === 'UNKNOWN_DEVICE') router.replace(`/play/${code}?rejoin=1`)
-  }, [error, code, router])
+    if (error !== 'UNKNOWN_DEVICE') return
+    clearDeviceToken(gameId)
+    router.replace(`/play/${code}`)
+  }, [error, gameId, code, router])
 
   useWakeLock(view?.stage.kind)
 
@@ -79,16 +104,12 @@ export function PlayerGame({ gameId, code }: { gameId: string; code: string }) {
       <DeviceMenu view={view} gameId={gameId} code={code} token={token ?? ''} />
 
       {/*
-        Silent once the quiz is over. Ending a game closes every stream (protocol §3.4), so an
-        abandoned or finished game leaves `EventSource` retrying against nothing and every phone in
-        the room wearing a permanent *reconnecting* band under a screen that is already correct and
-        final. §12's indicator exists for a live game, where a drop could be mistaken for a scoring
-        problem; there is nothing left to lose here.
+        Silent once the quiz is over — the same latch that stops the stream, so the band and the
+        connection can never disagree. §12's indicator exists for a live game, where a drop could be
+        mistaken for a scoring problem; under a screen that is already final there is nothing left to
+        lose and nothing to reconnect to.
       */}
-      <Connection
-        status={status}
-        over={view.abandoned || view.stage.kind === 'FINISHED'}
-      />
+      <Connection status={status} over={over} />
     </main>
   )
 }

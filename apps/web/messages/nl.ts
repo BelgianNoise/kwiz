@@ -756,6 +756,7 @@ const nl: Messages = {
       buzzed: 'Gebuzzed',
       youreIn: 'Jullie zijn aan zet!',
       answerOutLoud: 'Antwoord hardop',
+      gotThereFirst: '{team} was eerder',
       beatenToIt: 'Een andere ploeg was eerder',
       wrongAnswer: 'Jullie antwoord was fout',
       othersBuzzing: 'Andere ploegen buzzen nu',

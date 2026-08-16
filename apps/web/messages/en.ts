@@ -849,6 +849,9 @@ const en = {
       buzzed: 'Buzzed',
       youreIn: "You're in!",
       answerOutLoud: 'Answer out loud',
+      /** §8's mockup names them: "who beat us" is the thing the table actually wants to know. */
+      gotThereFirst: '{team} got there first',
+      /** The fallback when the winner is not in `otherTeams` — a team added seconds ago (PRD 2 §11.2). */
       beatenToIt: 'Another team got there first',
       wrongAnswer: 'Your answer was wrong',
       othersBuzzing: 'Other teams are buzzing now',

@@ -374,20 +374,29 @@ describe('finale keyword text', () => {
     { type: 'QUESTION_OPENED', payload: { gameQuestionId: Q_FINALE } },
   ]
 
-  it('is absent — not empty, absent — while unmarked', () => {
+  /*
+   * **Both audiences, every assertion.** The room and a phone funnel through the same `finaleView`,
+   * so asserting only `MAIN_SCREEN` is correct-by-construction rather than proven — and PRD 5 §10.1
+   * puts these tiles on a phone a metre from four people's faces, which is where a leak would
+   * actually be read.
+   */
+  it('is absent — not empty, absent — while unmarked, to the room and to a phone', () => {
     seq = 0
     const state = reduce(content, log([...openFinale]))
-    const view: { stage: { finale?: { keywords: Record<string, unknown>[] } } } =
-      JSON.parse(serialise('MAIN_SCREEN', state))
 
-    const keyword = view.stage.finale?.keywords[0]
-    expect(keyword).toBeDefined()
-    expect(Object.keys(keyword ?? {})).not.toContain('text')
-    // The shape is what the room gets instead.
-    expect(keyword?.wordLengths).toEqual([3, 4])
+    for (const audience of ['MAIN_SCREEN', 'PLAYER_A'] as const) {
+      const view: { stage: { finale?: { keywords: Record<string, unknown>[] } } } =
+        JSON.parse(serialise(audience, state))
+
+      const keyword = view.stage.finale?.keywords[0]
+      expect(keyword, audience).toBeDefined()
+      expect(Object.keys(keyword ?? {}), audience).not.toContain('text')
+      // The shape is what both get instead.
+      expect(keyword?.wordLengths, audience).toEqual([3, 4])
+    }
   })
 
-  it('appears to the room once marked', () => {
+  it('appears to the room and to a phone once marked', () => {
     seq = 0
     const state = reduce(
       content,
@@ -398,6 +407,7 @@ describe('finale keyword text', () => {
       ]),
     )
     expect(serialise('MAIN_SCREEN', state)).toContain(SENTINELS.finaleKeyword)
+    expect(serialise('PLAYER_A', state)).toContain(SENTINELS.finaleKeyword)
   })
 
   /** A revoked mark must take the text back off the wire (D41 reversing more than a score). */

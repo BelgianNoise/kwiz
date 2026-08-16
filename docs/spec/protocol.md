@@ -89,6 +89,13 @@ to build — it is identity, not authorisation.
 > `Referer` — are about protecting a secret, and there is no secret here. Had this been authorisation,
 > the answer would have been the cookie.
 >
+> One cost is real and worth stating rather than waving past: a fronting reverse proxy's **default
+> access log records the request line**, so every team's token now lands in a log file where a header
+> would not have. It does not change the conclusion — the token is identity, the deployment is a
+> laptop on a pub's wifi, and PRD 1 §4 already concedes far more to anyone on that network — but it is
+> the one thing that would matter if this product ever grew an authorisation model, and it belongs in
+> the same paragraph as the decision rather than in a reviewer's notes.
+>
 > **`POST /api/games/:gameId/*` still uses `X-Kwiz-Device`** (§7.1). Only the stream had the problem,
 > so only the stream changed.
 
@@ -666,6 +673,11 @@ type PlayerView = {
   team: TeamPublic
   otherTeams: { id: string; name: string; colour: string; score: number }[]
   locale: 'en' | 'nl'                  // resolved per D29 / PRD 1 §9.4
+  // `stageKind` folds ABANDONED into FINISHED so a screen and a phone can never disagree about
+  // what is happening — right for control, whose header says so, and wrong for a phone, which
+  // would announce final standings for a game the master had just pulled. PRD 5 §15 O3 wants a
+  // bare message. The mirror of MainScreenView.abandoned, and there for the same reason.
+  abandoned: boolean
   stage:
     | { kind: 'WAITING'; teamCount: number }
     | { kind: 'BETWEEN_QUESTIONS' }
@@ -693,7 +705,13 @@ type PlayerQuestion = {
   // BUZZER only.
   buzzersLive?: boolean
   iAmLockedOut?: boolean               // drives the disabled-with-a-reason state (D35)
-  firstBuzzTeamId?: string | null      // who beat us — public, and part of the fun
+  // Who has the buzz **right now** — awaiting adjudication, or accepted. `null` while the
+  // buzzers are live, and that null is what re-arms every other team's button.
+  //
+  // Deliberately not "who buzzed first". D35's loop is buzz → deny → everyone else buzzes, and a
+  // denial does not clear the buzz log — so a first-buzz reading stayed pinned to one team for
+  // the rest of the question and every other phone read it as *someone already has this*.
+  buzzHolderTeamId?: string | null     // who beat us — public, and part of the fun
 
   // ─── REVEALED and later only. ───
   correctAnswer?: string

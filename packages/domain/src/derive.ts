@@ -46,10 +46,28 @@ export function isLockedOut(play: QuestionPlayState, teamId: string): boolean {
   return lockedOutTeamIds(play).includes(teamId)
 }
 
-/** The first buzz that was or is being adjudicated — "who beat us", which is part of the fun. */
-export function firstBuzzTeamId(play: QuestionPlayState): string | null {
-  const ordered = [...play.buzzes].sort((a, b) => a.receivedAt - b.receivedAt)
-  return ordered[0]?.teamId ?? null
+/**
+ * **The team that has the buzz right now** — awaiting adjudication, or accepted. `null` while the
+ * buzzers are live, which is the whole point.
+ *
+ * This was `firstBuzzTeamId`, the chronologically first buzz on the question, and that was wrong in
+ * the ordinary case rather than an exotic one. D35's loop is *buzz → deny → everyone else buzzes*,
+ * and a denial does not clear the buzz log — so once any team had ever buzzed, "first" stayed that
+ * team for the rest of the question. Every other team's phone read it as *someone already has this*
+ * and never re-armed, which silently excluded them from the mechanic that exists to include them.
+ *
+ * Filtering by `forceReopenedAt` the way `lockedOutTeamIds` does would **not** have fixed it: an
+ * ordinary denial re-arms the buzzers without a `BUZZERS_FORCE_REOPENED` event, so there is no
+ * instant to filter against. The fix is that the question being asked was wrong — a phone needs to
+ * know who holds the buzz *now*, not who held it first.
+ *
+ * At most one buzz can be `AWAITING` (I10) and at most one `ACCEPTED`, so this is unambiguous.
+ */
+export function buzzHolderTeamId(play: QuestionPlayState): string | null {
+  const held = play.buzzes.find(
+    (buzz) => buzz.outcome === 'AWAITING' || buzz.outcome === 'ACCEPTED',
+  )
+  return held?.teamId ?? null
 }
 
 // ─── timer (D7, D8, D35) ───

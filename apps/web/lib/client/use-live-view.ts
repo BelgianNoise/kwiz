@@ -50,6 +50,21 @@ export function useLiveView<V>(
   notice.current = onNotice
 
   useEffect(() => {
+    /*
+     * **An empty path means "do not stream", not "stream from here".** `new EventSource('')` resolves
+     * against the current document and opens a stream on the page itself — so both callers that pass
+     * `''` (a token still being read, and a game that has ended) were quietly opening a connection
+     * that could never carry a view.
+     *
+     * The second one is why this matters beyond tidiness: ending a game closes every stream
+     * (protocol §3.4), and without this the retry loop below kept reopening against nothing, on a
+     * phone showing a screen that was already final. §12's battery row asks for one connection and no
+     * polling; this is what makes the *no* half true.
+     *
+     * The last view stays on screen — it is still the truth, and it is the whole point of stopping.
+     */
+    if (!path) return undefined
+
     const source = new EventSource(path)
     let disposed = false
     let retry: ReturnType<typeof setTimeout> | undefined

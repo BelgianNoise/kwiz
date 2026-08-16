@@ -48,7 +48,7 @@ export function QuestionStage({
       {revealed ? (
         <Reveal question={question} myAnswer={stage.myAnswer} />
       ) : question.answerMethod === 'BUZZER' ? (
-        <Buzzer question={question} gameId={gameId} token={token} />
+        <Buzzer view={view} question={question} gameId={gameId} token={token} />
       ) : question.answerMethod === 'DO' ? (
         <DoQuestion question={question} />
       ) : (
@@ -325,13 +325,14 @@ function Answer({
       <button
         type="button"
         onClick={submit}
-        disabled={sender.state !== 'IDLE'}
+        disabled={sender.sending || sender.state === 'DONE'}
         // §5.1 — the only irreversible tap on the screen, and it says so by being the only button.
         className="bg-primary text-primary-foreground min-h-16 w-full rounded-xl text-xl font-semibold disabled:opacity-60"
       >
         {/* §12 — the button shows a *sending* state rather than success; success is the view coming
-            back with `submitted`. */}
-        {sender.state === 'IDLE' ? t('submit') : t('sending')}
+            back with `submitted`. `sending` rather than the raw state, so it does not flicker back to
+            "Submit" between a failed attempt and the next backoff tick. */}
+        {sender.sending ? t('sending') : t('submit')}
       </button>
 
       {sender.refusal && sender.refusal !== 'VALIDATION_ERROR' ? (
@@ -426,23 +427,36 @@ function Reveal({
    * space beside a verdict reads as an answer that went missing.
    */
   const said = myAnswer?.submitted ? (chosen?.text ?? myAnswer.text) : null
+  /*
+   * **`DO` and `BUZZER` have nothing textual to report, and saying so falsely is worse than saying
+   * nothing.** Neither writes an answer — the team performed a challenge (§8.1) or answered out
+   * loud (§8) — so the generic reveal rendered a *"Correct answer"* heading over an empty string and
+   * told a team that had just been awarded full points that it had submitted nothing.
+   *
+   * The verdict and the points below are everything these two methods can honestly say, and they are
+   * also the only thing the table is waiting for.
+   */
+  const spoken = question.answerMethod === 'DO' || question.answerMethod === 'BUZZER'
+  const answer = correctOption?.text ?? question.correctAnswer
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-muted-foreground text-lg">{t('correctAnswer')}</p>
-        <p className="text-3xl font-semibold break-words">
-          {correctOption?.text ?? question.correctAnswer}
-        </p>
-      </div>
+      {answer ? (
+        <div>
+          <p className="text-muted-foreground text-lg">{t('correctAnswer')}</p>
+          <p className="text-3xl font-semibold break-words">{answer}</p>
+        </div>
+      ) : null}
 
       {/* Never another team's answer — forbidden in every state (PRD 1 §7 invariant 3). */}
-      <div>
-        <p className="text-muted-foreground text-lg">{t('youSaid')}</p>
-        <p className="text-2xl break-words">
-          {said ?? <span className="text-muted-foreground">{t('noAnswer')}</span>}
-        </p>
-      </div>
+      {spoken ? null : (
+        <div>
+          <p className="text-muted-foreground text-lg">{t('youSaid')}</p>
+          <p className="text-2xl break-words">
+            {said ?? <span className="text-muted-foreground">{t('noAnswer')}</span>}
+          </p>
+        </div>
+      )}
 
       {question.myVerdict === undefined ? null : (
         <div className="border-border flex items-center gap-3 rounded-xl border p-4">

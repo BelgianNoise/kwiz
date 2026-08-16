@@ -5,7 +5,7 @@ import {
   currentFinaleTurn,
   finaleRemainingSeconds,
   finaleTurnOrder,
-  firstBuzzTeamId,
+  buzzHolderTeamId,
   buzzersLive,
   isLockedOut,
   lockedOutTeamIds,
@@ -727,7 +727,8 @@ export interface PlayerQuestion {
   options?: { id: string; text: string }[]
   buzzersLive?: boolean
   iAmLockedOut?: boolean
-  firstBuzzTeamId?: string | null
+  /** Who has the buzz **now** — `null` while the buzzers are live. See `buzzHolderTeamId`. */
+  buzzHolderTeamId?: string | null
   correctAnswer?: string
   correctOptionId?: string
   myVerdict?: 'CORRECT' | 'INCORRECT' | 'PENDING'
@@ -893,8 +894,9 @@ function playerQuestion(
     view.buzzersLive = buzzersLive(play)
     // Drives the disabled-with-a-reason state rather than a silent dead button (D35).
     view.iAmLockedOut = isLockedOut(play, teamId)
-    // Who beat us — public, and part of the fun.
-    view.firstBuzzTeamId = firstBuzzTeamId(play)
+    // Who beat us — public, and part of the fun. `null` re-arms every other team's button, which is
+    // what makes D35's deny→reopen loop visible on a phone.
+    view.buzzHolderTeamId = buzzHolderTeamId(play)
   }
 
   if (revealed) {

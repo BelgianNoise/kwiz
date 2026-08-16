@@ -1,6 +1,6 @@
 'use client'
 
-import type { PlayerView } from '@kwiz/domain'
+import type { ErrorCode, PlayerView } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
@@ -28,9 +28,12 @@ export function DeviceMenu({
   token: string
 }) {
   const t = useTranslations('player.menu')
+  const tError = useTranslations('errors')
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [refused, setRefused] = useState<ErrorCode | null>(null)
 
   /*
    * §14 — *"the menu is **not available** during buzzer questions while buzzers are live."*
@@ -83,7 +86,16 @@ export function DeviceMenu({
             in-progress answer to another is worse than losing it. Already-submitted answers stay with
             the team they were submitted for — a device moving does not move history.
           */}
-          <details className="border-border rounded-xl border">
+          {/*
+            **Controlled `open`**, because a refusal re-renders this subtree and an uncontrolled
+            `<details>` collapsed under it — hiding the list *and* the message explaining why the tap
+            did nothing, which is the same silence the refusal exists to end.
+          */}
+          <details
+            open={switching}
+            onToggle={(event) => setSwitching(event.currentTarget.open)}
+            className="border-border rounded-xl border"
+          >
             <summary className="flex min-h-14 items-center px-4 text-lg">
               {t('switchTeam')}
             </summary>
@@ -93,9 +105,25 @@ export function DeviceMenu({
                   <button
                     type="button"
                     onClick={() => {
+                      setRefused(null)
                       void player(gameId, token)
                         .switchTeam(team.id)
-                        .then(() => setOpen(false))
+                        .then((result) => {
+                          /*
+                           * **Only close on success.** Closing regardless meant a player tapping a
+                           * full team got a menu that shut, a team that had not changed, and no
+                           * reason anywhere — which is D20's rule (*"a full team is shown with its
+                           * reason, never hidden"*) inverted on the one screen that cannot show the
+                           * reason up front, because `otherTeams` carries no device count.
+                           *
+                           * The refusal is the only signal there is, so it is the one we show.
+                           */
+                          if (result.ok) {
+                            setOpen(false)
+                            return
+                          }
+                          setRefused(result.error)
+                        })
                     }}
                     className="border-border min-h-14 w-full rounded-lg border px-4 text-left text-lg"
                   >
@@ -104,6 +132,13 @@ export function DeviceMenu({
                 </li>
               ))}
             </ul>
+            {/* conventions §6.1 — `errors.<CODE>`, the one place a typed refusal becomes copy (D11).
+                Almost always `TEAM_FULL`, and phrased so a guest knows to pick another row. */}
+            {refused ? (
+              <p className="text-destructive px-3 pb-3 text-base" role="alert">
+                {tError(refused)}
+              </p>
+            ) : null}
           </details>
 
           <hr className="border-border my-2" />

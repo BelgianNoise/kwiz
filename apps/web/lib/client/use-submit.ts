@@ -25,8 +25,22 @@ const RETRY_CAP_MS = 5_000
 
 export type SubmitState = 'IDLE' | 'SENDING' | 'DONE'
 
+/**
+ * Whether the button should read *sending*.
+ *
+ * **A queued retry counts.** §12 says *"the button shows a sending state rather than success"*, and
+ * between a failed attempt and the next backoff tick the internal state is briefly `IDLE` — so the
+ * button flickered back to *Submit* while the phone was, in fact, still trying. Nothing was broken by
+ * it, but a team watching a submit button flicker on a dying connection reads it as *it did not go*,
+ * which is the exact belief §12 spends its whole table avoiding.
+ */
+const isSending = (state: SubmitState, retrying: boolean): boolean =>
+  state === 'SENDING' || (state === 'IDLE' && retrying)
+
 export interface Submitter {
   state: SubmitState
+  /** `state === 'SENDING'` **or** waiting out a backoff — what the button should actually read. */
+  sending: boolean
   /** A typed refusal that is **not** worth retrying — `ALREADY_SUBMITTED` above all (D43). */
   refusal: ErrorCode | null
   submit: () => void
@@ -116,5 +130,9 @@ export function useSubmit(
     attemptSend()
   }, [state, attemptSend])
 
-  return { state, refusal, submit }
+  // The same condition the retry effect above arms on, so the two cannot disagree about whether a
+  // retry is pending.
+  const retrying = enabled && refusal === 'VALIDATION_ERROR'
+
+  return { state, sending: isSending(state, retrying), refusal, submit }
 }
