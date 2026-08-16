@@ -792,6 +792,12 @@ const nl: Messages = {
       rank: '{rank, selectordinal, other {#e}}',
       abandoned: 'De quizmaster heeft deze quiz beëindigd.',
     },
+    finished: {
+      finalScores: 'Eindstand',
+      gameOver: 'Deze quiz is afgelopen. Bedankt voor het meespelen!',
+      backHome: 'Terug naar het begin',
+    },
+
     buzzer: {
       buzz: 'BUZZ',
       buzzed: 'Gebuzzed',

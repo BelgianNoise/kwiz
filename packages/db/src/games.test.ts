@@ -15,6 +15,7 @@ import { loadGameContent } from './content'
 import {
   deleteGame,
   findDeviceByToken,
+  findEndedGameByCode,
   findJoinableGameByCode,
   gameLoss,
   gameWinners,
@@ -63,6 +64,77 @@ describe('finding a game by its code', () => {
     // Codes are unique only among joinable games, so a finished one's code is free to recycle —
     // which also means it must stop resolving.
     expect(findJoinableGameByCode(database, code)).toBeUndefined()
+  })
+})
+
+/**
+ * PRD 5 §15 O3 — the morning-after bookmark. The pair only works if callers ask in the right order,
+ * so the ordering is what these pin: **joinable first, ended only as a fallback.**
+ */
+describe('finding an ended game by its code', () => {
+  let database: KwizDatabase
+
+  beforeEach(() => {
+    database = freshTestDatabase()
+  })
+
+  it('finds a finished game whose code the joinable lookup refuses', () => {
+    const seed = seedGame(database)
+    const code = database.db.select().from(game).all()[0]?.code
+    if (!code) throw new Error('expected a code')
+
+    appendAndProject(database, seed.gameId, [{ type: 'GAME_FINISHED', payload: {} }])
+
+    expect(findJoinableGameByCode(database, code)).toBeUndefined()
+    expect(findEndedGameByCode(database, code)?.id).toBe(seed.gameId)
+  })
+
+  it('normalises the code the same way, because it is typed off the same projector', () => {
+    const seed = seedGame(database)
+    const code = database.db.select().from(game).all()[0]?.code
+    if (!code) throw new Error('expected a code')
+    appendAndProject(database, seed.gameId, [{ type: 'GAME_FINISHED', payload: {} }])
+
+    expect(findEndedGameByCode(database, ` ${code.replace('1', 'l')} `)?.id).toBe(
+      seed.gameId,
+    )
+  })
+
+  it('does not find a game that is still joinable', () => {
+    const seed = seedGame(database)
+    const code = database.db.select().from(game).all()[0]?.code
+    if (!code) throw new Error('expected a code')
+
+    expect(findEndedGameByCode(database, code)).toBeUndefined()
+    expect(findJoinableGameByCode(database, code)?.id).toBe(seed.gameId)
+  })
+
+  /**
+   * The reason `findJoinableGameByCode` was restricted in the first place: a code freed by last
+   * night's game can be minted again tonight. Asking joinable-first is what keeps tonight's players
+   * out of last night's standings — and this asserts the fallback still finds last night's for
+   * someone whose bookmark is genuinely old.
+   */
+  it('finds the newest ended game when a code has been recycled', () => {
+    const old = seedGame(database)
+    const code = database.db.select().from(game).all()[0]?.code
+    if (!code) throw new Error('expected a code')
+    appendAndProject(database, old.gameId, [{ type: 'GAME_FINISHED', payload: {} }])
+
+    const reused = seedGame(database)
+    database.db.update(game).set({ code }).where(eq(game.id, reused.gameId)).run()
+    appendAndProject(database, reused.gameId, [{ type: 'GAME_FINISHED', payload: {} }])
+
+    expect(findEndedGameByCode(database, code)?.id).toBe(reused.gameId)
+  })
+
+  it('finds an abandoned game too — the caller decides what to show for one', () => {
+    const seed = seedGame(database)
+    const code = database.db.select().from(game).all()[0]?.code
+    if (!code) throw new Error('expected a code')
+
+    appendAndProject(database, seed.gameId, [{ type: 'GAME_ABANDONED', payload: {} }])
+    expect(findEndedGameByCode(database, code)?.status).toBe('ABANDONED')
   })
 })
 

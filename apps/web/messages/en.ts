@@ -893,6 +893,15 @@ const en = {
        */
       abandoned: 'The quizmaster ended this quiz.',
     },
+    /**
+     * PRD 5 §15 O3 — a finished game's code, opened the morning after. Static, no stream.
+     */
+    finished: {
+      finalScores: 'Final scores',
+      gameOver: 'This quiz has finished. Thanks for playing!',
+      backHome: 'Back to the start',
+    },
+
     buzzer: {
       buzz: 'BUZZ',
       /** §8 — local feedback says "buzzed", never "you were first". First is a server fact (D35). */
