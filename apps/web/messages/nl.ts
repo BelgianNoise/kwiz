@@ -733,6 +733,8 @@ const nl: Messages = {
       teamsReady: '{count, plural, one {# ploeg klaar} other {# ploegen klaar}}',
       lookAtScreen: 'Kijk naar het grote scherm.',
       yourAnswer: 'Jullie antwoord',
+      youSaid: 'Jullie zeiden',
+      noAnswer: 'Niets ingestuurd',
       submit: 'Versturen',
       sending: 'Versturen…',
       lockedIn: 'Vastgezet ✓',
@@ -745,6 +747,9 @@ const nl: Messages = {
       backIn: 'Terug over',
       backShortly: 'Zo terug',
       finished: 'Eindstand',
+      /** Dutch ordinals are `1e`, `2e`, `3e` — one form, unlike English's four. */
+      rank: '{rank, selectordinal, other {#e}}',
+      abandoned: 'De quizmaster heeft deze quiz beëindigd.',
     },
     buzzer: {
       buzz: 'BUZZ',

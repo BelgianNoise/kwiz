@@ -1,6 +1,8 @@
 'use client'
 
 import type { PlayerView, Standing } from '@kwiz/domain'
+import { rankAmong } from '@kwiz/domain'
+import { useTranslations } from 'next-intl'
 
 /**
  * The shapes more than one player stage draws, at **this** surface's scale.
@@ -69,6 +71,35 @@ export function PlayerStandings({
         )
       })}
     </ol>
+  )
+}
+
+/**
+ * §11's `Quizzly Bears   340   2nd` — **the team's own live rank**, derived rather than pushed.
+ *
+ * `rankAmong` is D32's rule, and it lives in `domain` beside `standings` with a test asserting the
+ * two agree: the phone and the projector disagreeing about a team's place would read as a bug, and
+ * two copies of a shared-rank rule is exactly how that happens.
+ */
+export const ownRank = (view: PlayerView): number =>
+  rankAmong(
+    view.team.score,
+    view.otherTeams.map((team) => team.score),
+  )
+
+/**
+ * §13 — an ordinal, in the viewer's language, because *"2nd"* and *"2e"* are not the same word and a
+ * bare number beside a score reads as a second score.
+ */
+export function OwnStanding({ view }: { view: PlayerView }) {
+  const t = useTranslations('player.game')
+  return (
+    <p className="text-muted-foreground flex items-center gap-3 pt-4 text-lg">
+      <Dot colour={view.team.colour} />
+      <span className="min-w-0 flex-1 truncate">{view.team.name}</span>
+      <span className="tabular-nums">{view.team.score}</span>
+      <span className="tabular-nums">{t('rank', { rank: ownRank(view) })}</span>
+    </p>
   )
 }
 

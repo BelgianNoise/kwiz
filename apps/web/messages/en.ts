@@ -812,6 +812,10 @@ const en = {
       /** §5.5 — audio and video never reach a phone (D27), so the phone says where to look. */
       lookAtScreen: 'Look at the big screen.',
       yourAnswer: 'Your answer',
+      /** §11 — at the reveal, beside the correct one. The "what did we put" moment. */
+      youSaid: 'You said',
+      /** §11 — the team answered nothing, which is different from having answered wrongly. */
+      noAnswer: 'Nothing submitted',
       submit: 'Submit',
       sending: 'Sending…',
       /** §5.2 — plain and final. No edit affordance anywhere near it. */
@@ -828,6 +832,16 @@ const en = {
       backIn: 'Back in',
       backShortly: 'Back shortly',
       finished: 'Final scores',
+      /**
+       * §11 — the team's own live rank beside its score. An ordinal rather than a bare number,
+       * because a second number next to a score reads as a second score.
+       */
+      rank: '{rank, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}',
+      /**
+       * §15 O3 — *"`ABANDONED` gets a bare message."* The master pulled the game; announcing
+       * standings for it would be a winner nobody won.
+       */
+      abandoned: 'The quizmaster ended this quiz.',
     },
     buzzer: {
       buzz: 'BUZZ',

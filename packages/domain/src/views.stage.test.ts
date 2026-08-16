@@ -259,3 +259,24 @@ describe('shared drafts (D45)', () => {
     expect(myAnswerOf(open, A, drafts('x'))?.text).toBe('x')
   })
 })
+
+/**
+ * PRD 5 §15 O3 — *"`ABANDONED` gets a bare message."*
+ *
+ * `stageKind` folds `ABANDONED` into `FINISHED` so a screen and a phone can never disagree about
+ * what is *happening*; the flag is what stops a phone announcing a winner for a game the master
+ * pulled. Same problem, same shape as the main screen's (PRD 4 §14).
+ */
+describe('an abandoned game', () => {
+  const finished = run([...SETUP, { type: 'GAME_FINISHED', payload: {} }])
+  const abandoned = run([...SETUP, { type: 'GAME_ABANDONED', payload: {} }])
+
+  it('is flagged to the player, and a finished one is not', () => {
+    expect(toPlayerView(abandoned, A, NOW).abandoned).toBe(true)
+    expect(toPlayerView(finished, A, NOW).abandoned).toBe(false)
+  })
+
+  it('still resolves to FINISHED, because the fold is what keeps the surfaces agreeing', () => {
+    expect(toPlayerView(abandoned, A, NOW).stage.kind).toBe('FINISHED')
+  })
+})

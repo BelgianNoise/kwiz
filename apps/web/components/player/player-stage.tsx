@@ -4,7 +4,7 @@ import type { PlayerView } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 
 import { FinaleStage } from '@/components/player/finale'
-import { Dot, PlayerStandings, TeamBadge } from '@/components/player/parts'
+import { Dot, ownRank, PlayerStandings, TeamBadge } from '@/components/player/parts'
 import { QuestionStage } from '@/components/player/question'
 import { useCountdown } from '@/lib/client/use-countdown'
 import { minuteSeconds } from '@/lib/format'
@@ -26,6 +26,17 @@ export function PlayerStage({
   token: string
 }) {
   const stage = view.stage
+
+  /*
+   * §15 O3 — *"`ABANDONED` gets a bare message."*
+   *
+   * Checked before the switch because `stageKind` folds `ABANDONED` into `FINISHED` (one resolver for
+   * both audiences, so a screen and a phone can never disagree about what is *happening*) — and here
+   * that would announce final standings for a game the master had just pulled. The room's answer to
+   * the same problem is to hold its last real view (PRD 4 §14); a phone in a pocket has no last view
+   * worth holding, so it gets the sentence.
+   */
+  if (view.abandoned) return <Abandoned />
 
   switch (stage.kind) {
     case 'WAITING':
@@ -72,6 +83,19 @@ function Waiting({ view, teamCount }: { view: PlayerView; teamCount: number }) {
   )
 }
 
+/**
+ * §15 O3 — the bare message an abandoned game gets. **Not an error page**, and not a standings
+ * screen: the master pulled the quiz and is handling the room out loud (PRD 4 §14).
+ */
+function Abandoned() {
+  const t = useTranslations('player.game')
+  return (
+    <section className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center p-6 text-center">
+      <p className="text-2xl font-medium">{t('abandoned')}</p>
+    </section>
+  )
+}
+
 /** §3 — a calm holding state between questions. The same job as `WAITING`, minus the welcome. */
 function BetweenQuestions({ view }: { view: PlayerView }) {
   const t = useTranslations('player.game')
@@ -79,7 +103,10 @@ function BetweenQuestions({ view }: { view: PlayerView }) {
     <section className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-4 p-6 text-center">
       <TeamBadge view={view} />
       <p className="text-muted-foreground text-lg">{t('watchTheScreen')}</p>
-      <p className="text-lg tabular-nums">{view.team.score}</p>
+      {/* protocol P2 / §11 — score *and* rank, the same pair the question screen shows. */}
+      <p className="text-lg tabular-nums">
+        {view.team.score} · {t('rank', { rank: ownRank(view) })}
+      </p>
     </section>
   )
 }

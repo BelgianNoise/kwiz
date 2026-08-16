@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { autoSubmitAt } from '@/components/player/answer-moments'
 import { Buzzer } from '@/components/player/buzzer'
+import { OwnStanding } from '@/components/player/parts'
 import { player } from '@/lib/client/api'
 import { useCountdown } from '@/lib/client/use-countdown'
 import { useSubmit } from '@/lib/client/use-submit'
@@ -45,7 +46,7 @@ export function QuestionStage({
       <Media question={question} />
 
       {revealed ? (
-        <Reveal question={question} />
+        <Reveal question={question} myAnswer={stage.myAnswer} />
       ) : question.answerMethod === 'BUZZER' ? (
         <Buzzer question={question} gameId={gameId} token={token} />
       ) : question.answerMethod === 'DO' ? (
@@ -59,8 +60,14 @@ export function QuestionStage({
            * previous selection stays selected, and `useSubmit` stays `DONE` so the next Submit is a
            * no-op. The same rule `buzzer.tsx` states as "a new question is a new race" — here it is
            * cheaper and more complete to remount than to reset four things by hand.
+           *
+           * **The team is in the key for the same reason** (§2.4). A device switching team mid-
+           * question keeps this component mounted, and the old team's draft is deliberately left
+           * with the old team (protocol P4) — so without the remount the player would carry their
+           * previous team's typed answer across and submit it for the new one, which is the exact
+           * thing P4 calls *"worse than losing it"*.
            */
-          key={question.id}
+          key={`${question.id}:${view.team.id}`}
           question={question}
           myAnswer={stage.myAnswer}
           gameId={gameId}
@@ -68,7 +75,10 @@ export function QuestionStage({
         />
       )}
 
-      <Standing view={view} />
+      {/* protocol P2 / §11 — the team's live score and rank, present in every question state. */}
+      <div className="mt-auto">
+        <OwnStanding view={view} />
+      </div>
     </section>
   )
 }
@@ -325,7 +335,7 @@ function Answer({
       </button>
 
       {sender.refusal && sender.refusal !== 'VALIDATION_ERROR' ? (
-        <Refusal code={sender.refusal} question={question} />
+        <Refusal code={sender.refusal} />
       ) : null}
     </div>
   )
@@ -359,14 +369,17 @@ function Submitted({
  * A second device submitting a *different* value is refused, and this is where it switches to showing
  * the team's actual answer. It never silently discards what someone typed without telling them.
  */
-function Refusal({ code, question }: { code: ErrorCode; question: PlayerQuestion }) {
+function Refusal({ code }: { code: ErrorCode }) {
   const tError = useTranslations('errors')
+  /*
+   * Only the sentence. The canonical answer rides on the refusal's `detail` (protocol §7.3), but the
+   * next pushed view carries `myAnswer` as well — and that is what re-renders this whole screen as
+   * `Submitted`, showing the team's real answer at full size. Rendering `detail` here too would put
+   * the same string on screen twice, half a second apart.
+   */
   return (
     <p className="text-lg" role="alert">
       {tError(code)}
-      {/* The canonical answer rides on the refusal's `detail` (protocol §7.3); the next pushed view
-          carries `myAnswer` too, which is what actually re-renders this screen as `Submitted`. */}
-      {question.correctAnswer === undefined ? null : ''}
     </p>
   )
 }
@@ -392,11 +405,27 @@ function DoQuestion({ question }: { question: PlayerQuestion }) {
  * §11 — the reveal, showing the team's **own** outcome and never another team's answer, which is
  * forbidden in every state (PRD 1 §7 invariant 3).
  */
-function Reveal({ question }: { question: PlayerQuestion }) {
+function Reveal({
+  question,
+  myAnswer,
+}: {
+  question: PlayerQuestion
+  myAnswer: Stage['myAnswer']
+}) {
   const t = useTranslations('player.game')
   const correctOption = (question.options ?? []).find(
     (o) => o.id === question.correctOptionId,
   )
+  const chosen = (question.options ?? []).find((o) => o.id === myAnswer?.optionId)
+  /*
+   * §11's diagram puts *"You said"* directly under the correct answer, and that pairing is the whole
+   * point of the screen: the next thing that happens in the room is four people asking each other
+   * what they put. Showing only the right answer answers the question nobody at the table is asking.
+   *
+   * `submitted` rather than truthy text — a team that answered nothing gets told so, because a blank
+   * space beside a verdict reads as an answer that went missing.
+   */
+  const said = myAnswer?.submitted ? (chosen?.text ?? myAnswer.text) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -404,6 +433,14 @@ function Reveal({ question }: { question: PlayerQuestion }) {
         <p className="text-muted-foreground text-lg">{t('correctAnswer')}</p>
         <p className="text-3xl font-semibold break-words">
           {correctOption?.text ?? question.correctAnswer}
+        </p>
+      </div>
+
+      {/* Never another team's answer — forbidden in every state (PRD 1 §7 invariant 3). */}
+      <div>
+        <p className="text-muted-foreground text-lg">{t('youSaid')}</p>
+        <p className="text-2xl break-words">
+          {said ?? <span className="text-muted-foreground">{t('noAnswer')}</span>}
         </p>
       </div>
 
@@ -426,15 +463,6 @@ function Reveal({ question }: { question: PlayerQuestion }) {
         </div>
       )}
     </div>
-  )
-}
-
-/** protocol P2 — the team's live score and rank, present in every question state. */
-function Standing({ view }: { view: PlayerView }) {
-  return (
-    <p className="text-muted-foreground mt-auto pt-4 text-lg">
-      {view.team.name} · {view.team.score}
-    </p>
   )
 }
 

@@ -78,7 +78,17 @@ export function PlayerGame({ gameId, code }: { gameId: string; code: string }) {
       */}
       <DeviceMenu view={view} gameId={gameId} code={code} token={token ?? ''} />
 
-      <Connection status={status} />
+      {/*
+        Silent once the quiz is over. Ending a game closes every stream (protocol §3.4), so an
+        abandoned or finished game leaves `EventSource` retrying against nothing and every phone in
+        the room wearing a permanent *reconnecting* band under a screen that is already correct and
+        final. §12's indicator exists for a live game, where a drop could be mistaken for a scoring
+        problem; there is nothing left to lose here.
+      */}
+      <Connection
+        status={status}
+        over={view.abandoned || view.stage.kind === 'FINISHED'}
+      />
     </main>
   )
 }
@@ -92,9 +102,9 @@ export function PlayerGame({ gameId, code }: { gameId: string; code: string }) {
  *
  * Deliberately not over the input (§12's table), and deliberately calm.
  */
-function Connection({ status }: { status: string }) {
+function Connection({ status, over }: { status: string; over: boolean }) {
   const t = useTranslations('player.game')
-  if (status === 'LIVE' || status === 'CONNECTING') return null
+  if (over || status === 'LIVE' || status === 'CONNECTING') return null
 
   return (
     <output className="bg-muted text-muted-foreground fixed inset-x-0 bottom-0 block p-2 text-center text-base">

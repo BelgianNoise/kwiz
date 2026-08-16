@@ -760,6 +760,18 @@ export interface PlayerView {
   team: TeamPublic
   otherTeams: TeamPublic[]
   locale: Locale
+  /**
+   * PRD 5 §15 O3 — *"`ABANDONED` gets a bare message."*
+   *
+   * The same problem the main screen has, for the same reason: `stageKind` folds `ABANDONED` into
+   * `FINISHED`, which is right for control — its header says so — and wrong for a phone, which would
+   * announce final standings for a game the master had just pulled. The room gets held-last-view
+   * (§14); a phone has no last view worth holding, so it gets the plain sentence instead.
+   *
+   * Not a leak: the standings are still in the payload, and they are public anyway. This is the
+   * client being told to show *less*.
+   */
+  abandoned: boolean
   stage:
     | { kind: 'WAITING'; teamCount: number }
     | { kind: 'BETWEEN_QUESTIONS' }
@@ -788,6 +800,7 @@ export function toPlayerView(
       .sort((a, b) => a.position - b.position)
       .map(teamPublic),
     locale: state.content.defaultPlayerLocale,
+    abandoned: state.status === 'ABANDONED',
     stage: playerStage(state, teamId, now, drafts),
   }
 }

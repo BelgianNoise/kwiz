@@ -127,6 +127,19 @@ export interface Standing {
 }
 
 /**
+ * D32's rank rule for **one** score among many: one more than the number of scores strictly ahead.
+ *
+ * `standings` below is the same rule expressed over a whole table, and the two are held together by
+ * a test rather than by a comment. This exists because PRD 5 §11 wants a phone to show its own rank
+ * in states that carry no standings array — the player payload has every team's score (protocol P2)
+ * and nothing else, which is exactly enough. Adding a `rank` field to the payload instead would be a
+ * second source of truth for something the scores already determine.
+ */
+export function rankAmong(score: number, scores: readonly number[]): number {
+  return 1 + scores.filter((other) => other > score).length
+}
+
+/**
  * Teams by score, highest first, with **ties sharing a rank** (D32) — so two teams on 40 are both
  * 2nd and the next is 4th. Position breaks the display order within a tie, never the rank itself.
  */
