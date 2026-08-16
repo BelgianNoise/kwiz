@@ -390,3 +390,34 @@ one phone (agent-workflow §4.2). Do the last row in `nl`.
 - [ ] **Reveal a `BUZZER` and a `DO` question.** Neither claims the team submitted nothing, and
       neither prints a "correct answer" heading over an empty line — the verdict and the points are
       all these two can honestly report.
+
+### After slice 8 — review, correction & the finished-game bookmark
+
+Needs a **played** game: answers on the board, at least one judgement, an adjustment, and a finale
+that ran. Most of this is meaningless against a `SETUP` game.
+
+- [ ] **Open `⋯ → Review & correct` on a live game and on a finished one.** Both work (§13 covers
+      both); the entry point is absent only while `SETUP`, when there is nothing to review.
+- [ ] **The grid reads side by side.** `Radio Head ✗` next to `radiohead ✓` is the whole point —
+      check a question where two teams answered differently, with the correct answer and its
+      accepted alternatives under the prompt.
+- [ ] **Click a cell.** The verdict flips, the cell is marked *corrected*, and the count appears at
+      both the round and the page level. Click again: `corrected 2×`, not back to zero.
+- [ ] **Watch the control desk while you do it**, on a live game and without reloading it. The
+      verdict and the score change there too (§13.1) — the review appends an event like any other
+      surface.
+- [ ] **A team that answered nothing** has an inert cell, not a button that would invent an answer
+      to accept.
+- [ ] **The finale section is read-only and says so.** Keywords show who got each, `— nobody` for a
+      revealed-unguessed one, and *not reached* where the round never got there — three states, not
+      two. Started/ended seconds are whole (D57); an elimination is `HH:mm`.
+- [ ] **Undo an adjustment.** The row stays, struck through with *undone*, and the team's score and
+      every rank recompute. A revoked row is never removed (D41).
+- [ ] **Rename a team and leave the field.** It saves, and the new name reaches every live surface.
+      Type a name and then let the save fail (stop the server): the box must not keep showing a name
+      the server never took.
+- [ ] **Open a finished game's code on a phone** (§15 O3). The final standings, with shared ranks —
+      not *"no quiz with that code"*, and not an error page. An **abandoned** game still gets the
+      plain sentence rather than a podium.
+- [ ] **Walk the review in `nl`**, and confirm the quiz's own content is still in the language it was
+      written in.

@@ -12,6 +12,115 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 8 — Review, correction & polish
+
+**Status:** complete · `pnpm check` green · **720 tests** · lint silent · `pnpm build` clean · driven
+against a really-played game — a verdict flipped twice while the control desk watched, an adjustment
+undone, a team renamed, the finale record read, and a finished game's code opened on a phone — then
+the whole surface again in `nl`
+
+### What was built
+
+PRD 2 §13 end to end: §13.1's questions × teams grid with click-to-toggle correction, §13.2's
+read-only finale record, §13.3's adjustment audit with `[Undo]`, §13.4's rename and recolour. Plus
+`GET /api/games/:id/review` (protocol §7.4), PRD 5 §15 O3's finished-game standings — slice 7's
+stated deferral — and build-order's two required tests.
+
+**Slice 8's other three bullets were already done.** Settings (§16) shipped complete in slice 4,
+including `Reclaim space` and the orphaned-attachment reconciliation with its own tests. Worth
+knowing before planning slice 9 against the build-order list rather than the code.
+
+### The one real decision
+
+**What counts as a correction.** §13.1 marks corrected cells and counts them per round *"because an
+auditable correction is the point"* — so it has to mean *the master changed their mind*, not *the
+master judged an answer*.
+
+`AnswerState` gains a `corrections` counter, and it compares through `verdictAwardsPoints` rather
+than by label. That distinction is the whole rule: `AUTO_CORRECT → ACCEPTED` is a master **confirming**
+the auto-grade, and counting it would make every ordinary validation look like a fix. `PENDING →
+anything` is excluded too — D22 leaves an unmatched free-text answer to a human deliberately, so the
+first judgement of one is the job.
+
+My first attempt compared verdict *strings*, which counted both of those. The verdict vocabulary has
+six values, not two, and that is why.
+
+### Two bugs found by building it
+
+1. **A revoked keyword mark blocked re-marking and revealing** — `packages/db`, not this slice's own
+   code. `game_keyword_mark` has a unique index on `game_keyword_id` and a **revoked row keeps
+   holding it**, so both `KEYWORD_MARKED` and `KEYWORDS_REVEALED` threw `UNIQUE constraint failed`.
+   The sequence is PRD 3 §10.4's `Shift`+`n` used exactly as intended: un-mark, then credit the right
+   team. `decide.ts` allows it on purpose — the guard is `existing.revokedAt === null`. A state the
+   log could express and the projection could not, which is what I15 forbids. Both are upserts now,
+   and `revokedAt: null` is the load-bearing half.
+
+   **Found by playing a whole evening in a test**, which is the argument for the fully-played
+   round-trip over the minimal one that already existed.
+
+2. **The team-name field could show a name that was never saved.** It holds local state so it can be
+   typed into, and local state initialises once. Keyed by the server's last confirmed name now.
+
+### Spec deviations
+
+None.
+
+### Raised, not resolved
+
+- **`SCOREBOARD_TOGGLED` still has no decision-log entry** (PRD 1 §5). The decision itself is fully
+  recorded in PRD 3 §11.1 with its reasoning and the contrast to `[Start break]`; the review round
+  that raised it wanted a D-number. Placement, not a gap — but it has now been carried across two
+  slices.
+- **The review re-reads the whole game after every correction.** Correct, and the only correct
+  option — one flipped verdict moves a score, which moves every rank, which moves the finale's
+  starting seconds. At PRD 1 §2.1's envelope (40 questions × 20 teams) it is imperceptible. If a
+  future quiz is far larger, this is the first thing to feel slow, and the fix is a narrower
+  response rather than local patching.
+- **No E2E test was added.** D49 and agent-workflow §4.4 put the suite in slice 9, and §4.4's
+  exception — *"write one only when the interaction between surfaces is the thing under test and you
+  found a bug no unit test could have caught"* — was not met: the keyword bug is covered by three
+  parity tests at the layer it lives in.
+
+### Deliberately left out
+
+Nothing from slice 8's list. The one thing PRD 2 §13.1 describes that is **not** implemented as
+written is a per-question *"3 corrections made"* badge — the count is shown per round and per game,
+which is where a master looks, and per question it would be noise on a grid that already marks every
+corrected cell.
+
+### Not verifiable here (agent-workflow §4.5)
+
+- **A genuinely large review.** Everything was driven at three teams and nine questions. The grid
+  scrolls in its own container, but 20 teams × 40 questions on a laptop screen is a different
+  reading experience and only a real quiz shows it.
+- **A finale with real clocks.** The finale that ran had every finalist starting at zero seconds,
+  so `145 → 41` — the number §13.2 exists to answer *"how close was it?"* with — was never actually
+  rendered from a game where time ran.
+
+### What the next agent would otherwise rediscover
+
+- **The review is a pure function over `GameState`, not a projection query.** The registry loads any
+  game by replaying its log, finished ones included (PRD 1 §6.4), so `toGameReview` needs no database
+  and its whole test is a literal event list. Adding a field means adding it there, not in a SQL read.
+- **It is deliberately not in `views.ts`.** That file holds the three leak-checked audience views; the
+  review is `CONFIG`, sees everything, and is not enumerated by the sentinel test. Keeping it
+  separate is what stops someone "helpfully" adding the review to that enumeration and then relaxing
+  a sentinel to make it pass.
+- **Keyword text is present in the review and nowhere else.** D53 keeps an unmarked keyword's text
+  off the wire for the room and the players; here the master wrote it and is reading their own
+  record. `reached` carries the "nobody found it" vs "never got there" distinction, not the absence
+  of text.
+- **`findEndedGameByCode` is a second function rather than a flag**, so joinable-first can never be
+  got backwards. A code freed by last night's game can be minted again tonight, and tonight's players
+  must not land in last night's standings.
+- **A stale `apps/web/tsconfig.tsbuildinfo` will lie to you about `next-intl` message keys.** Adding
+  `admin.review` type-checked immediately while `player.finished` reported *"not assignable"* from
+  the same run — incremental caching, not the code. Delete it before believing a message-key error.
+- **`document.hasFocus()` is `false` in the driven browser pane**, so `el.focus()` is a no-op and no
+  `blur` ever fires. An `onBlur` handler therefore never runs from a script, and the surface looks
+  broken when it is not. Dispatch `focusout` directly. This is the second slice to lose time to the
+  focus model — slice 7's note covers the already-active case, this one covers the whole document.
+
 ## Slice 7 — The player device
 
 **Status:** complete · `pnpm check` green · **692 tests** · lint silent · `pnpm build` clean · join,
