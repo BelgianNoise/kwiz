@@ -389,3 +389,88 @@ describe('the finale review (§13.2)', () => {
     expect(toGameReview(reduce(noFinale, []), NOW).finale).toBeNull()
   })
 })
+
+/**
+ * §13.2's `145 → 41`, which is the number the whole table asks about afterwards — *"how close was
+ * it?"* — and the one the browser pass could not produce, because every finalist in the game I drove
+ * started at zero seconds.
+ *
+ * Clocks are derived, never ticked (D52), so a literal event list with real timestamps is the honest
+ * way to test them: the arithmetic under test is *"starting − turns − penalties"*, and nothing here
+ * needs a clock to run.
+ */
+describe('finale clocks with time that actually ran (§13.2)', () => {
+  /** `run` spaces events a second apart, so a turn's length is (end − start) in whole seconds. */
+  const withScores: GameEvent[] = [
+    ...SETUP,
+    // 100 and 60 points. `secondsPerPoint: 2` **multiplies** — each point buys two seconds (D54) —
+    // so the banks start at 200 and 120.
+    {
+      type: 'SCORE_ADJUSTED',
+      payload: { adjustmentId: 'a1', teamId: A, delta: 100, announced: false },
+    },
+    {
+      type: 'SCORE_ADJUSTED',
+      payload: { adjustmentId: 'a2', teamId: B, delta: 60, announced: false },
+    },
+    { type: 'ROUND_OPENED', payload: { gameRoundId: 'r2' } },
+    { type: 'FINALE_CONFIGURED', payload: { secondsPerPoint: 2, penaltySeconds: 20 } },
+    { type: 'FINALISTS_SET', payload: { teamIds: [A, B] } },
+    { type: 'QUESTION_OPENED', payload: { gameQuestionId: F1 } },
+  ]
+
+  it('reports each finalist’s starting bank from their score at FINALISTS_SET (D55)', () => {
+    const finalists = toGameReview(run(withScores), NOW).finale?.finalists ?? []
+    expect(finalists.find((f) => f.teamId === A)?.startedSeconds).toBe(200)
+    expect(finalists.find((f) => f.teamId === B)?.startedSeconds).toBe(120)
+  })
+
+  it('charges a turn its own length, and charges the other team the penalty', () => {
+    // `run` stamps events a second apart, so A's turn spans the two events inside it.
+    const state = run([
+      ...withScores,
+      { type: 'TURN_STARTED', payload: { teamId: A } },
+      { type: 'KEYWORD_MARKED', payload: { gameKeywordId: K[0] ?? '', teamId: A } },
+      { type: 'TURN_ENDED', payload: { teamId: A, reason: 'PASSED' } },
+    ])
+
+    const finalists = toGameReview(state, NOW).finale?.finalists ?? []
+    // **Only the turn-taker is charged time, and only the others are charged the penalty.**
+    // A: 200 − 2 seconds on the clock, and nothing for its own keyword.
+    // B: 120 − 20 for a keyword it did not get, and nothing for a turn it did not take.
+    expect(finalists.find((f) => f.teamId === A)?.endedSeconds).toBe(198)
+    expect(finalists.find((f) => f.teamId === B)?.endedSeconds).toBe(100)
+  })
+
+  /**
+   * The reason the review reads clocks at `finale.endedAt` rather than at `now`: without it, a
+   * finished game's survivor would lose a second off their remaining bank every time the page was
+   * opened, and the record of the night would change while nobody played anything.
+   */
+  it('freezes a survivor’s remaining seconds once the round has ended', () => {
+    const ended = run([
+      ...withScores,
+      { type: 'TURN_STARTED', payload: { teamId: A } },
+      { type: 'TURN_ENDED', payload: { teamId: A, reason: 'PASSED' } },
+      { type: 'TEAM_ELIMINATED', payload: { teamId: B, at: 20_000 } },
+      { type: 'FINALE_ENDED', payload: { ranking: [[A], [B]] } },
+    ])
+
+    const early = toGameReview(ended, 100_000).finale?.finalists ?? []
+    const muchLater = toGameReview(ended, 9_000_000).finale?.finalists ?? []
+
+    expect(early.find((f) => f.teamId === A)?.endedSeconds).toBe(
+      muchLater.find((f) => f.teamId === A)?.endedSeconds,
+    )
+    expect(early.find((f) => f.teamId === A)?.survived).toBe(true)
+  })
+
+  it('names the survivor as the winner once the round is over', () => {
+    const ended = run([
+      ...withScores,
+      { type: 'TEAM_ELIMINATED', payload: { teamId: B, at: 20_000 } },
+      { type: 'FINALE_ENDED', payload: { ranking: [[A], [B]] } },
+    ])
+    expect(toGameReview(ended, NOW).finale?.wonByTeamId).toBe(A)
+  })
+})

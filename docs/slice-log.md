@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 8 — Review, correction & polish
 
-**Status:** complete · `pnpm check` green · **720 tests** · lint silent · `pnpm build` clean · driven
+**Status:** complete · `pnpm check` green · **724 tests** · lint silent · `pnpm build` clean · driven
 against a really-played game — a verdict flipped twice while the control desk watched, an adjustment
 undone, a team renamed, the finale record read, and a finished game's code opened on a phone — then
 the whole surface again in `nl`
@@ -63,14 +63,23 @@ six values, not two, and that is why.
 
 ### Spec deviations
 
-None.
+**`GET /api/games/:id/validation-queue` was removed from protocol §7.4 rather than implemented.**
+The table listed it — *"the full pending list, paginated"* — while the round-end sweep was still
+designed as one answer at a time. PRD 3 §6.2 then settled it the other way: the sweep shows one
+question's answers together, which is O(teams) and therefore **pushed** as
+`attention.VALIDATE_QUESTION`. The other thing a queue would have served — *what is still pending
+across the whole game?* — is now §13.1's grid. A third read with no caller is the speculative surface
+PRD 1 §11 warns against, and a promised endpoint that does not exist is worse than none, because the
+next agent builds a screen expecting it. The reasoning is recorded in the spec at the point of
+removal.
+
+**D59 added to the decision log**, carrying across the `SCOREBOARD_TOGGLED` decision the slice-6
+review round asked for: pushing the leaderboard over an open question is legal and the leaderboard
+wins, with the contrast to `[Start break]`, which is refused. The rationale already lived in PRD 3
+§11.1; it now has a number the rest of the repo can cite.
 
 ### Raised, not resolved
 
-- **`SCOREBOARD_TOGGLED` still has no decision-log entry** (PRD 1 §5). The decision itself is fully
-  recorded in PRD 3 §11.1 with its reasoning and the contrast to `[Start break]`; the review round
-  that raised it wanted a D-number. Placement, not a gap — but it has now been carried across two
-  slices.
 - **The review re-reads the whole game after every correction.** Correct, and the only correct
   option — one flipped verdict moves a score, which moves every rank, which moves the finale's
   starting seconds. At PRD 1 §2.1's envelope (40 questions × 20 teams) it is imperceptible. If a
@@ -93,9 +102,26 @@ corrected cell.
 - **A genuinely large review.** Everything was driven at three teams and nine questions. The grid
   scrolls in its own container, but 20 teams × 40 questions on a laptop screen is a different
   reading experience and only a real quiz shows it.
-- **A finale with real clocks.** The finale that ran had every finalist starting at zero seconds,
-  so `145 → 41` — the number §13.2 exists to answer *"how close was it?"* with — was never actually
-  rendered from a game where time ran.
+- **A finale with real clocks, *on screen*.** The finale I drove had every finalist starting at zero
+  seconds, so §13.2's `145 → 41` never rendered from a game where time ran. Closed at the level that
+  can be: four domain tests now assert the arithmetic with real timestamps — starting bank from score
+  at `FINALISTS_SET`, a turn charging its taker and the penalty charging everyone else, and a
+  survivor's remaining seconds **frozen at `finale.endedAt`** so a finished game's record does not
+  tick down each time the page is opened. What is still unverified is only how those numbers look.
+
+### The smoke checklist, honestly
+
+The slice-8 rows were driven in full. The other 120 were **not** re-run one by one — instead the
+three paths this slice could plausibly have broken were checked directly, which is where a
+regression would actually be:
+
+- **A cold server restart mid-review.** `corrections` is new state on `AnswerState`, and it is
+  *derived*, so the risk was it not surviving a replay. The process was killed and restarted; the
+  count came back as `corrected 2×` (D4, I15).
+- **All three join outcomes**, because §15 O3 added a fallback after `findJoinableGameByCode`: a live
+  game still reaches the picker with D20's *"already has 3 phones"* intact, a finished code reaches
+  the standings, and a nonsense code still reaches the plain explanation rather than a podium.
+- **The finale projection**, via the three new parity tests rather than by hand.
 
 ### What the next agent would otherwise rediscover
 

@@ -1257,9 +1257,19 @@ Per §1.1, anything O(questions × teams) is fetched, never pushed. All of these
 | --- | --- |
 | `GET /api/quizzes` · `/api/quizzes/:id` | Template tree for authoring |
 | `GET /api/games` | Game list for the dashboard — includes `quizRevision` vs template `revision` so the staleness indicator works (data model §7.1) |
-| `GET /api/games/:id/review` | Full played game: every question, every team's answer, every verdict |
-| `GET /api/games/:id/validation-queue` | The full pending list, paginated |
+| `GET /api/games/:id/review` | Full played game: every question, every team's answer, every verdict, the finale record and the adjustment audit (PRD 2 §13) |
 | `GET /api/attachment/:gameAttachmentId` | The file, with **HTTP range support** (D5) so audio and video can seek. The id is the *row's*, template or game copy — the same file on disk backs both (data model §8) |
+
+> **There is deliberately no `validation-queue` endpoint.** This table listed one — *"the full pending
+> list, paginated"* — while the round-end sweep was still designed as one answer at a time. PRD 3 §6.2
+> then settled it the other way: the sweep presents **one question's answers together**, which is
+> O(teams) and therefore pushed as `attention.VALIDATE_QUESTION` (§5.4) rather than fetched. The other
+> thing a queue would have served — *"what is still pending across the whole game?"* — is the review
+> grid, which shows every cell of every round at once (PRD 2 §13.1) and is the read above.
+>
+> Removed in slice 8 rather than implemented, because a third read with no caller is exactly the
+> speculative surface PRD 1 §11 warns against — and a promised endpoint that does not exist is worse
+> than no endpoint, since the next agent builds a screen expecting it.
 
 ### 7.5 Attachment upload
 

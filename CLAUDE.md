@@ -12,7 +12,7 @@ written. If you are implementing, start from §2.
 ## 1. Where the truth lives
 
 Read [`docs/prd/01-main.md`](docs/prd/01-main.md) first — its **decision log (PRD 1 §5)** is the
-single most useful page in the repo. 58 decisions, each with rationale and a "revisit if".
+single most useful page in the repo. 59 decisions, each with rationale and a "revisit if".
 Cite them as `D14`, `D35` etc.
 
 | Doc | Answers |
