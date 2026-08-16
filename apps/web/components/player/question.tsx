@@ -5,6 +5,7 @@ import { DRAFT_DEBOUNCE_MS, TIMER_WARN_PLAYER_S } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { autoSubmitAt } from '@/components/player/answer-moments'
 import { Buzzer } from '@/components/player/buzzer'
 import { player } from '@/lib/client/api'
 import { useCountdown } from '@/lib/client/use-countdown'
@@ -51,6 +52,15 @@ export function QuestionStage({
         <DoQuestion question={question} />
       ) : (
         <Answer
+          /*
+           * **A new question is a new answer, and every piece of local state has to go with it.**
+           * Without this key the component persists across questions: the previous question's typed
+           * text stays in the field (§5.3's restore effect only *overwrites*, it never clears), the
+           * previous selection stays selected, and `useSubmit` stays `DONE` so the next Submit is a
+           * no-op. The same rule `buzzer.tsx` states as "a new question is a new race" — here it is
+           * cheaper and more complete to remount than to reset four things by hand.
+           */
+          key={question.id}
           question={question}
           myAnswer={stage.myAnswer}
           gameId={gameId}
@@ -149,6 +159,8 @@ function Answer({
   const [text, setText] = useState(myAnswer?.text ?? '')
   const [option, setOption] = useState(myAnswer?.optionId ?? null)
   const focused = useRef(false)
+  /** §5.4's one shot at zero — see the effect below for why it must not re-arm. */
+  const autoSubmitted = useRef(false)
 
   /*
    * §5.3's **focused-field echo rule.** A field being typed into must not be overwritten by the
@@ -201,23 +213,38 @@ function Answer({
    * feature, not an error"* (D8), and the single most important consequence of the trust model here.
    */
   useEffect(() => {
-    /*
-     * **Only if there is something to submit.** O6 states the purpose exactly: *"if the timer expires
-     * with a selection but no Submit, §5.4 auto-submits it anyway"* — it exists to rescue an answer
-     * that was *entered* and not sent.
-     *
-     * Auto-submitting an empty one would be the opposite. D43 makes the first submission final, so a
-     * phone sitting on an expired question with nothing typed would burn the team's one answer on
-     * nothing — and D8 explicitly wants that team to still be able to answer late, which is the
-     * single most important consequence of the trust model on this surface (§5.4). Caught by leaving
-     * a question open past its timer with an empty field, which is what a team arguing about an
-     * answer actually does.
-     */
     const entered = question.answerMethod === 'MULTIPLE_CHOICE' ? option : text.trim()
-    if (expired && !submitted && entered) {
-      flushDraft()
-      submit()
-    }
+    const decision = autoSubmitAt({
+      expired,
+      submitted,
+      fired: autoSubmitted.current,
+      entered,
+    })
+    if (decision === 'WAIT') return
+    /*
+     * **It fires once, and the flag is set whether or not anything was actually sent.**
+     *
+     * Both halves are load-bearing, and both were found by leaving a question open past its timer —
+     * which is exactly what a table arguing about an answer does:
+     *
+     * - **Nothing entered means nothing submitted.** O6 states the purpose exactly — *"if the timer
+     *   expires with a selection but no Submit, §5.4 auto-submits it anyway"* — so it exists to
+     *   rescue an answer that was *entered* and not sent. D43 makes the first submission final, so
+     *   submitting an empty one would burn the team's single answer on nothing.
+     * - **And it must not re-arm.** Without the flag this effect re-runs on every keystroke, so a
+     *   team typing *after* zero would have their **first character** submitted and made final. That
+     *   is the precise opposite of D8, which is why *"a phone asleep at zero submits when it wakes"*
+     *   is called the single most important consequence of the trust model on this surface (§5.4).
+     *   After the one shot, submitting is the team's own tap — and the server still accepts it late.
+     *
+     * The asleep-at-zero phone still gets its one shot: this component is keyed by question id, so a
+     * fresh mount into an already-expired question starts with `text` initialised from the team's
+     * server-side draft and submits that.
+     */
+    autoSubmitted.current = true
+    if (decision === 'DISARM') return
+    flushDraft()
+    submit()
   }, [expired, submitted, submit, flushDraft, option, text, question.answerMethod])
 
   // §5.2 — after submitting, it is over. No edit affordance and no "change answer" link: ambiguity

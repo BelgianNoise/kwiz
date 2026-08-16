@@ -329,3 +329,39 @@ Six behaviours whose absence looks like nothing being wrong, which is why they n
       tab the browser is not painting. The animation is the nicety; the number is not.
 - [ ] **Fail the sound arming** (block autoplay, or mute the OS device) and follow the on-screen
       instruction: clicking again must actually retry it, not just re-request fullscreen.
+
+### After slice 7 — the player device
+
+At **~390×844**, and with **two tabs on one team** — most of this surface's rules are invisible with
+one phone (agent-workflow §4.2). Do the last row in `nl`.
+
+- [ ] **Join by code and by the QR's URL.** Both land on the picker. A full team is **shown with its
+      reason**, not hidden (D20). One tap joins, with no confirmation.
+- [ ] **Reopen `/play/:code`** — it resumes straight into the game, same team, nothing re-entered
+      (§2.3). Then clear the token from `⋮ → Leave this quiz` and confirm it returns to the picker.
+- [ ] **The free-text field carries `autocapitalize`/`autocorrect`/`spellcheck` off** (§6). Check the
+      attributes, not the appearance — this is the highest-value line in the slice and a desktop
+      browser cannot show you it working. Real iOS is slice 10's.
+- [ ] **Type on device A, watch it appear on device B** (D45), then focus B's field and type: B must
+      **not** be overwritten by A's echo while focused, and must snap to the server's value on blur.
+- [ ] **Submission finality with two devices** (D43): A submits `Radiohead`, B submits something
+      different. B is refused and switches to showing the team's actual answer — never silently
+      discarding what someone typed.
+- [ ] **Let a timer run to zero with the field empty.** Nothing is submitted, and the team can still
+      answer afterwards (D8). With text entered, it auto-submits at zero instead. Both matter: the
+      empty case burned a team's only answer until slice 7's browser pass caught it.
+- [ ] **Buzz from two devices on different teams.** Both get immediate local feedback that says
+      *buzzed* and **never** *first*; the server's answer arrives a moment later. Deny the first and
+      confirm the loser's buzzer re-enables visibly.
+- [ ] **The menu disappears entirely while buzzers are live** (§14) — not merely disabled. The whole
+      screen is the buzzer at that moment.
+- [ ] **A `DO` question and the finale have no input control at all** — not a disabled one (§8.1,
+      §10.1). A greyed field invites a team to try to type in it.
+- [ ] **The finale on a phone**: the team's own clock is the largest thing on screen, whole seconds
+      (D57), the same word shapes as the projector (D53), and *"You're up next"* when it is their turn
+      after this one. A non-finalist gets the spectator variant.
+- [ ] **Go offline mid-question**, keep typing, come back. The text is never cleared, the submit
+      retries until acknowledged, and the indicator says *reconnecting* — **never** anything about an
+      answer not being saved (§12).
+- [ ] **Kill the server mid-question.** The phone reconnects and resumes with typed text intact (D4).
+- [ ] **Walk it in `nl`.** Guest-facing surface, full parity required (D28).
