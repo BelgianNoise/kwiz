@@ -66,11 +66,31 @@ manipulating a query string, and every call site is greppable.
 | --- | --- | --- |
 | `GET /api/live/:gameId/screen` | `MAIN_SCREEN` | none |
 | `GET /api/live/:gameId/control` | `MASTER_CONTROL` | none |
-| `GET /api/live/:gameId/play` | `PLAYER(teamId)` | `X-Kwiz-Device` header carrying `deviceToken` |
+| `GET /api/live/:gameId/play` | `PLAYER(teamId)` | `?device=` query parameter carrying `deviceToken` |
 
 Per PRD 1 §4 there is no authentication: anyone reachable on the network can open
 `/control`. The `PLAYER` route needs the device token only to know **which team's** view
 to build — it is identity, not authorisation.
+
+> **Why the stream takes the token in the URL while every action takes it in a header.**
+>
+> `EventSource` cannot set a request header — there is no API for it — so a stream demanding
+> `X-Kwiz-Device` is unreachable from a browser. This was raised at the end of slice 5, again at the
+> end of slice 6, and settled in slice 7, which is the first slice that needs the route to work.
+>
+> The alternatives were a mirrored cookie (a second storage mechanism to keep in sync with the
+> `localStorage` PRD 5 §2.3 deliberately chose) and reading the stream with `fetch` instead (which
+> gives up the automatic reconnect and `Last-Event-ID` replay that D2 names as the reason SSE was
+> chosen at all — for the least reliable device in the product).
+>
+> A query parameter is only acceptable because of what this token is. It is **identity, not a
+> credential**: it grants nothing that being on the network does not already grant, and the network is
+> a pub's wifi with no authentication anywhere in the product. The usual objections — logs, history,
+> `Referer` — are about protecting a secret, and there is no secret here. Had this been authorisation,
+> the answer would have been the cookie.
+>
+> **`POST /api/games/:gameId/*` still uses `X-Kwiz-Device`** (§7.1). Only the stream had the problem,
+> so only the stream changed.
 
 **`CONFIG` is not an SSE audience.** The configuration pages are request/response and
 use REST (§7.4). They have no live requirement, and giving them a stream would mean a

@@ -92,7 +92,8 @@ Typed code →  landing page (PRD 2 §3) → /play/7KMQ2X →  team picker
 ### 2.3 Device identity
 
 On joining, the server returns a `deviceToken` which is stored in `localStorage` and sent
-as `X-Kwiz-Device` on every request (protocol §7.1).
+as `X-Kwiz-Device` on every action (protocol §7.1) — and as `?device=` on the SSE stream,
+which is the one request a browser cannot attach a header to (protocol §2.1).
 
 - **Reopening the URL resumes** — same team, same state, nothing to re-enter. This is what
   makes an accidental tab close, a browser crash or a phone restart a non-event.

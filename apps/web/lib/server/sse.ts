@@ -45,7 +45,22 @@ export async function openStream(
 
   let teamId: string | undefined
   if (audience === 'PLAYER') {
-    const token = request.headers.get('x-kwiz-device')
+    /*
+     * **The one place the device token travels in the URL, and it has to** (protocol §2.1).
+     *
+     * `EventSource` cannot set a request header — there is no API for it — so a stream that demanded
+     * `X-Kwiz-Device` was simply unreachable from a browser. Slices 5 and 6 both flagged this; slice 7
+     * is where it stops being theoretical, because this is the surface that needs the stream.
+     *
+     * Safe here specifically because of what the token *is*: identity, not authorisation (PRD 1 §4).
+     * It answers *which team is this?* and grants nothing that being on the LAN does not already give
+     * — anyone reachable on the network can already open `/control`. A query parameter would be the
+     * wrong choice for a credential; this is not one.
+     *
+     * Every **POST** still uses the header (§7.1). Only the stream had a problem, so only the stream
+     * changed.
+     */
+    const token = new URL(request.url).searchParams.get('device')
     const device = token ? findDeviceByToken(runtime.database, gameId, token) : undefined
     // 401-equivalent: the client clears storage and rejoins (§3.1). A token from another game lands
     // here too, which is the point of scoping the lookup.
