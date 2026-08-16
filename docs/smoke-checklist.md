@@ -365,3 +365,14 @@ one phone (agent-workflow §4.2). Do the last row in `nl`.
       answer not being saved (§12).
 - [ ] **Kill the server mid-question.** The phone reconnects and resumes with typed text intact (D4).
 - [ ] **Walk it in `nl`.** Guest-facing surface, full parity required (D28).
+- [ ] **Switch team mid-question**, with text already typed. The field is **empty** on the new team
+      (or shows that team's own draft) — never the old team's answer, which submitting would file
+      against the wrong team (protocol P4).
+- [ ] **At the reveal, the phone shows both** the correct answer and *"You said"* with the team's own
+      answer. A team that submitted nothing is told so. Never another team's answer, in any state.
+- [ ] **The team's rank sits beside its score** in every question state and between questions, and
+      **ties share it** — two teams level on points both read `1st`, and the next reads `3rd`.
+- [ ] **Abandon a live game from control.** Every phone gets one plain sentence — no standings, no
+      winner, no error page, and no lingering *reconnecting* band.
+- [ ] **Reload `/play/:code/game` after the game has ended.** The plain "no quiz with that code"
+      explanation, never a 404.

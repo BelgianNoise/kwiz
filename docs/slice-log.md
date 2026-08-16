@@ -14,7 +14,7 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ## Slice 7 — The player device
 
-**Status:** complete · `pnpm check` green · **675 tests** · lint silent · `pnpm build` clean · join,
+**Status:** complete · `pnpm check` green · **682 tests** · lint silent · `pnpm build` clean · join,
 every stage, all four answer methods and both two-device rules driven at 375×812 with **two devices on
 one team**, and the whole surface walked again in `nl`
 
@@ -62,6 +62,27 @@ leaving a question open past its timer with two phones on one team.
 
 The key is also what makes (2)'s one shot safe for a sleeping phone: a fresh mount into an
 already-expired question initialises the field from the team's server-side draft and submits that.
+
+### Six more, from reading PRD 5 end to end against the code
+
+The browser pass found bugs in what I had been *watching*. A second pass, section by section against
+the spec, found what I had never looked at — which is the argument for doing both:
+
+1. **Switching team mid-question carried the old team's typed answer across.** Same key bug as (3)
+   above, other axis: the device stays mounted, and §5.3's restore effect only overwrites, so the text
+   survived into the new team and would be submitted for it. The team id is in the key now. This is
+   the one that would have cost a real team a real question.
+2. **Reloading `/play/:code/game` on a code that no longer resolves gave Next's 404** — the one place
+   on this surface a pub guest could reach a raw error page. Reachable by O3's morning-after bookmark
+   and by any reload after the master ends the game. The sibling route had rendered `NoSuchGame` for
+   exactly this reason since it was written; only one half of the route had the rule.
+3. **An abandoned game announced final standings to every phone** instead of §15 O3's bare message.
+   `PlayerView.abandoned` now mirrors the main screen's flag.
+4. **The reveal dropped *"You said"***, which §11's diagram puts directly under the correct answer.
+5. **The team's rank was never rendered**, though §11 asks for it in every question state — and the
+   function's own doc comment claimed it did.
+6. **The reconnecting band never went away after a game ended**, because ending a game closes every
+   stream (protocol §3.4) and `EventSource` kept retrying under a screen that was already final.
 
 ### Spec deviations
 
@@ -138,6 +159,14 @@ master's hotspot alongside twenty others should not pay for it until it is wante
 - **Nothing in `components/player` imports from `components/screen` or `components/control`**, and the
   three `Dot`s are deliberately three components. Four surfaces, four type scales (CLAUDE.md §7);
   `lib/format.ts` is where genuinely neutral helpers go, and `minuteSeconds` is the only one so far.
+- **`rankAmong` in `domain` is D32's tie rule for one team, and `standings` is the same rule for a
+  table.** They are held together by a test that walks every shape of tie, not by a comment — the
+  phone showing `2nd` while the projector shows `3rd` is the kind of disagreement that reads as a bug
+  in the scoring rather than in the rendering.
+- **Vitest cannot import a `.tsx` file** in this workspace's config, which is why every extracted
+  decision on this surface (`answer-moments.ts`, and slice 6's `finale-moments.ts`) is a plain `.ts`.
+  A test that imports a component file fails at transform with a JSX parse error, not at assertion —
+  it looks like a config bug and is not one.
 - **Driving two players from a script: `el.focus()` is a no-op if the element is already
   `document.activeElement`**, so React's `onFocus` never fires and the focused-field echo rule looks
   broken when it is not. `blur()` first, then `focus()`. This cost half an hour of chasing a bug that
