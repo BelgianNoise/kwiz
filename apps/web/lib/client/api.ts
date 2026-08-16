@@ -1,6 +1,7 @@
 import type {
   ActionResult,
   AnswerMethod,
+  GameReview,
   Locale,
   PreflightReport,
   QuizContent,
@@ -98,6 +99,15 @@ export const api = {
       `/api/quizzes/${quizId}/preflight${teams === undefined ? '' : `?teams=${teams}`}`,
     ),
   games: (): Promise<ActionResult<GameListEntry[]>> => send('/api/games'),
+  /**
+   * PRD 2 §13's whole surface in one read (protocol §7.4).
+   *
+   * Deliberately **not** on the stream: it is O(questions × teams) (D39), and it is re-fetched after
+   * a correction rather than patched locally — the server's fold is the only thing that knows what a
+   * verdict flip did to a score.
+   */
+  review: (gameId: string): Promise<ActionResult<GameReview>> =>
+    send(`/api/games/${gameId}/review`),
 
   // ─── quizzes ───
 

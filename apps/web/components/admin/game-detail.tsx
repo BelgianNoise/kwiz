@@ -178,6 +178,18 @@ export function GameDetail({
             <ExternalLink className="size-4" />
           </a>
         </Button>
+
+        {/*
+          PRD 2 §13 — *"two views on a finished (or live) game, both under §12 once the game has
+          started."* Not a new tab: unlike the two above, this is the same person at the same laptop
+          rather than a second display, and reviewing mid-game is a legitimate reason to leave the
+          control desk for a moment.
+        */}
+        {game.status === 'SETUP' ? null : (
+          <Button asChild variant="secondary">
+            <Link href={`/admin/games/${game.id}/review`}>{t('review')}</Link>
+          </Button>
+        )}
       </div>
 
       {/*

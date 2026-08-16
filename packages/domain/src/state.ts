@@ -127,6 +127,18 @@ export interface AnswerState {
   verdict: AnswerVerdict
   pointsAwarded: number
   validatedAt: number | null
+  /**
+   * How many times a **settled** verdict was changed (PRD 2 §13.1).
+   *
+   * The review grid marks corrected cells and counts them per round, *"visible, not hidden, because
+   * an auditable correction is the point."* Only a flip counts: the first judgement of a `PENDING`
+   * free-text answer is the master doing their job, not changing their mind — whereas turning an
+   * auto-`ACCEPTED` into a `DENIED`, or back, is exactly the thing they want to be able to see.
+   *
+   * Derived by counting, not stored: `ANSWER_VALIDATED` supersedes rather than accumulating, so
+   * nothing else in the state remembers that a decision was ever different.
+   */
+  corrections: number
   /** Whether the master has pushed this answer to the room (D40). */
   spotlit: boolean
 }

@@ -430,6 +430,56 @@ const en = {
       deleteBody:
         'This game, its {teams} teams and all its answers go. The quiz itself is kept.',
       exportGame: 'Export this game',
+      review: 'Review & correct',
+    },
+
+    /** PRD 2 §13 — post-game review and correction. */
+    review: {
+      loading: 'Loading the game…',
+      noGame: 'No game with that id.',
+      backToGame: 'Back to the game',
+      /** §13.1 — the grid is per round, because a round is the unit a master reviews. */
+      roundHeading: 'Round {position} · {title}',
+      question: 'Question',
+      emptyRound: 'This round has no questions.',
+      correctAnswer: 'Correct answer: {answer}',
+      alsoAccepted: 'also accepted: {answers}',
+      noAnswer: 'no answer',
+      /** §13.1 — visible, not hidden, because an auditable correction is the point. */
+      correctionCount:
+        '{count, plural, one {# correction made} other {# corrections made}}',
+      corrected: '{count, plural, one {corrected} other {corrected #×}}',
+      toggleHint: 'Click to change this verdict',
+      /** D26 — the server committed a stored draft; the team never pressed Submit. */
+      fromDraft: 'from a draft',
+      /** D47 — the master answered for a table whose phone had died. */
+      byMaster: 'entered by you',
+
+      /** §13.2 — read-only, and it says so rather than leaving a master hunting for an edit. */
+      finaleHeading: 'Finale',
+      finaleReadOnly:
+        'The finale is a record, not a draft: a clock that ran is a fact. A mis-mark has to be fixed during the round, because only then can the seconds it charged be returned.',
+      wonBy: 'won by {team}',
+      nobody: '— nobody',
+      notReached: 'not reached',
+      finalist: 'Finalist',
+      started: 'Started',
+      ended: 'Ended',
+      out: 'Out',
+      survived: 'survived',
+      didNotPlay: 'did not play',
+
+      /** §13.3 — the audit. */
+      adjustmentsHeading: 'Score adjustments',
+      noAdjustments: 'No score adjustments were made.',
+      notAnnounced: 'not announced',
+      undo: 'Undo',
+      undone: 'undone',
+
+      /** §13.4 — renaming works at any time; teams are never deleted (data model §11). */
+      teamsHeading: 'Teams',
+      teamName: 'Team name',
+      rankAndScore: '#{rank} · {score}',
     },
 
     /** PRD 2 §16 — "small and boring on purpose". */
