@@ -329,3 +329,64 @@ Six behaviours whose absence looks like nothing being wrong, which is why they n
       tab the browser is not painting. The animation is the nicety; the number is not.
 - [ ] **Fail the sound arming** (block autoplay, or mute the OS device) and follow the on-screen
       instruction: clicking again must actually retry it, not just re-request fullscreen.
+
+### After slice 7 — the player device
+
+At **~390×844**, and with **two tabs on one team** — most of this surface's rules are invisible with
+one phone (agent-workflow §4.2). Do the last row in `nl`.
+
+- [ ] **Join by code and by the QR's URL.** Both land on the picker. A full team is **shown with its
+      reason**, not hidden (D20). One tap joins, with no confirmation.
+- [ ] **Reopen `/play/:code`** — it resumes straight into the game, same team, nothing re-entered
+      (§2.3). Then clear the token from `⋮ → Leave this quiz` and confirm it returns to the picker.
+- [ ] **The free-text field carries `autocapitalize`/`autocorrect`/`spellcheck` off** (§6). Check the
+      attributes, not the appearance — this is the highest-value line in the slice and a desktop
+      browser cannot show you it working. Real iOS is slice 10's.
+- [ ] **Type on device A, watch it appear on device B** (D45), then focus B's field and type: B must
+      **not** be overwritten by A's echo while focused, and must snap to the server's value on blur.
+- [ ] **Submission finality with two devices** (D43): A submits `Radiohead`, B submits something
+      different. B is refused and switches to showing the team's actual answer — never silently
+      discarding what someone typed.
+- [ ] **Let a timer run to zero with the field empty.** Nothing is submitted, and the team can still
+      answer afterwards (D8). With text entered, it auto-submits at zero instead. Both matter: the
+      empty case burned a team's only answer until slice 7's browser pass caught it.
+- [ ] **Buzz with three teams and two devices on one of them** — not two teams, which is what this
+      row used to say and why the buzzer's worst bug walked straight past it. Every one of these is a
+      separate audience and the old code got two of them wrong:
+      - the device that tapped and **won** → *You're in! Answer out loud*
+      - the **other phone on that same team**, which never tapped → the same thing
+      - a device that tapped and **lost** → the winner **named**
+      - a team that **never buzzed** → the winner named, and then, after the master denies →
+        **its BUZZ button back, live**, which is the whole point of D35's loop
+- [ ] Local feedback says *buzzed* and **never** *first*; the server's answer arrives a moment later.
+- [ ] **The menu disappears entirely while buzzers are live** (§14) — not merely disabled. The whole
+      screen is the buzzer at that moment.
+- [ ] **A `DO` question and the finale have no input control at all** — not a disabled one (§8.1,
+      §10.1). A greyed field invites a team to try to type in it.
+- [ ] **The finale on a phone**: the team's own clock is the largest thing on screen, whole seconds
+      (D57), the same word shapes as the projector (D53), and *"You're up next"* when it is their turn
+      after this one. A non-finalist gets the spectator variant.
+- [ ] **Go offline mid-question**, keep typing, come back. The text is never cleared, the submit
+      retries until acknowledged, and the indicator says *reconnecting* — **never** anything about an
+      answer not being saved (§12).
+- [ ] **Kill the server mid-question.** The phone reconnects and resumes with typed text intact (D4).
+- [ ] **Walk it in `nl`.** Guest-facing surface, full parity required (D28).
+- [ ] **Switch team mid-question**, with text already typed. The field is **empty** on the new team
+      (or shows that team's own draft) — never the old team's answer, which submitting would file
+      against the wrong team (protocol P4).
+- [ ] **At the reveal, the phone shows both** the correct answer and *"You said"* with the team's own
+      answer. A team that submitted nothing is told so. Never another team's answer, in any state.
+- [ ] **The team's rank sits beside its score** in every question state and between questions, and
+      **ties share it** — two teams level on points both read `1st`, and the next reads `3rd`.
+- [ ] **Abandon a live game from control.** Every phone gets one plain sentence — no standings, no
+      winner, no error page, and no lingering *reconnecting* band.
+- [ ] **Reload `/play/:code/game` after the game has ended.** The plain "no quiz with that code"
+      explanation, never a 404.
+- [ ] **Corrupt the device token in `localStorage` and reload the game page.** The picker renders with
+      a plain explanation and the stale token is gone (§2.3) — never a bounce between the game page
+      and the picker with neither ever settling.
+- [ ] **Try to switch to a full team.** The refusal is shown, the list stays open under it, and the
+      menu does not close (D20).
+- [ ] **Reveal a `BUZZER` and a `DO` question.** Neither claims the team submitted nothing, and
+      neither prints a "correct answer" heading over an empty line — the verdict and the points are
+      all these two can honestly report.

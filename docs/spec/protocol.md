@@ -66,11 +66,38 @@ manipulating a query string, and every call site is greppable.
 | --- | --- | --- |
 | `GET /api/live/:gameId/screen` | `MAIN_SCREEN` | none |
 | `GET /api/live/:gameId/control` | `MASTER_CONTROL` | none |
-| `GET /api/live/:gameId/play` | `PLAYER(teamId)` | `X-Kwiz-Device` header carrying `deviceToken` |
+| `GET /api/live/:gameId/play` | `PLAYER(teamId)` | `?device=` query parameter carrying `deviceToken` |
 
 Per PRD 1 §4 there is no authentication: anyone reachable on the network can open
 `/control`. The `PLAYER` route needs the device token only to know **which team's** view
 to build — it is identity, not authorisation.
+
+> **Why the stream takes the token in the URL while every action takes it in a header.**
+>
+> `EventSource` cannot set a request header — there is no API for it — so a stream demanding
+> `X-Kwiz-Device` is unreachable from a browser. This was raised at the end of slice 5, again at the
+> end of slice 6, and settled in slice 7, which is the first slice that needs the route to work.
+>
+> The alternatives were a mirrored cookie (a second storage mechanism to keep in sync with the
+> `localStorage` PRD 5 §2.3 deliberately chose) and reading the stream with `fetch` instead (which
+> gives up the automatic reconnect and `Last-Event-ID` replay that D2 names as the reason SSE was
+> chosen at all — for the least reliable device in the product).
+>
+> A query parameter is only acceptable because of what this token is. It is **identity, not a
+> credential**: it grants nothing that being on the network does not already grant, and the network is
+> a pub's wifi with no authentication anywhere in the product. The usual objections — logs, history,
+> `Referer` — are about protecting a secret, and there is no secret here. Had this been authorisation,
+> the answer would have been the cookie.
+>
+> One cost is real and worth stating rather than waving past: a fronting reverse proxy's **default
+> access log records the request line**, so every team's token now lands in a log file where a header
+> would not have. It does not change the conclusion — the token is identity, the deployment is a
+> laptop on a pub's wifi, and PRD 1 §4 already concedes far more to anyone on that network — but it is
+> the one thing that would matter if this product ever grew an authorisation model, and it belongs in
+> the same paragraph as the decision rather than in a reviewer's notes.
+>
+> **`POST /api/games/:gameId/*` still uses `X-Kwiz-Device`** (§7.1). Only the stream had the problem,
+> so only the stream changed.
 
 **`CONFIG` is not an SSE audience.** The configuration pages are request/response and
 use REST (§7.4). They have no live requirement, and giving them a stream would mean a
@@ -646,6 +673,11 @@ type PlayerView = {
   team: TeamPublic
   otherTeams: { id: string; name: string; colour: string; score: number }[]
   locale: 'en' | 'nl'                  // resolved per D29 / PRD 1 §9.4
+  // `stageKind` folds ABANDONED into FINISHED so a screen and a phone can never disagree about
+  // what is happening — right for control, whose header says so, and wrong for a phone, which
+  // would announce final standings for a game the master had just pulled. PRD 5 §15 O3 wants a
+  // bare message. The mirror of MainScreenView.abandoned, and there for the same reason.
+  abandoned: boolean
   stage:
     | { kind: 'WAITING'; teamCount: number }
     | { kind: 'BETWEEN_QUESTIONS' }
@@ -673,7 +705,13 @@ type PlayerQuestion = {
   // BUZZER only.
   buzzersLive?: boolean
   iAmLockedOut?: boolean               // drives the disabled-with-a-reason state (D35)
-  firstBuzzTeamId?: string | null      // who beat us — public, and part of the fun
+  // Who has the buzz **right now** — awaiting adjudication, or accepted. `null` while the
+  // buzzers are live, and that null is what re-arms every other team's button.
+  //
+  // Deliberately not "who buzzed first". D35's loop is buzz → deny → everyone else buzzes, and a
+  // denial does not clear the buzz log — so a first-buzz reading stayed pinned to one team for
+  // the rest of the question and every other phone read it as *someone already has this*.
+  buzzHolderTeamId?: string | null     // who beat us — public, and part of the fun
 
   // ─── REVEALED and later only. ───
   correctAnswer?: string

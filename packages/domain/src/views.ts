@@ -5,7 +5,7 @@ import {
   currentFinaleTurn,
   finaleRemainingSeconds,
   finaleTurnOrder,
-  firstBuzzTeamId,
+  buzzHolderTeamId,
   buzzersLive,
   isLockedOut,
   lockedOutTeamIds,
@@ -727,7 +727,8 @@ export interface PlayerQuestion {
   options?: { id: string; text: string }[]
   buzzersLive?: boolean
   iAmLockedOut?: boolean
-  firstBuzzTeamId?: string | null
+  /** Who has the buzz **now** — `null` while the buzzers are live. See `buzzHolderTeamId`. */
+  buzzHolderTeamId?: string | null
   correctAnswer?: string
   correctOptionId?: string
   myVerdict?: 'CORRECT' | 'INCORRECT' | 'PENDING'
@@ -760,6 +761,18 @@ export interface PlayerView {
   team: TeamPublic
   otherTeams: TeamPublic[]
   locale: Locale
+  /**
+   * PRD 5 §15 O3 — *"`ABANDONED` gets a bare message."*
+   *
+   * The same problem the main screen has, for the same reason: `stageKind` folds `ABANDONED` into
+   * `FINISHED`, which is right for control — its header says so — and wrong for a phone, which would
+   * announce final standings for a game the master had just pulled. The room gets held-last-view
+   * (§14); a phone has no last view worth holding, so it gets the plain sentence instead.
+   *
+   * Not a leak: the standings are still in the payload, and they are public anyway. This is the
+   * client being told to show *less*.
+   */
+  abandoned: boolean
   stage:
     | { kind: 'WAITING'; teamCount: number }
     | { kind: 'BETWEEN_QUESTIONS' }
@@ -788,6 +801,7 @@ export function toPlayerView(
       .sort((a, b) => a.position - b.position)
       .map(teamPublic),
     locale: state.content.defaultPlayerLocale,
+    abandoned: state.status === 'ABANDONED',
     stage: playerStage(state, teamId, now, drafts),
   }
 }
@@ -880,8 +894,9 @@ function playerQuestion(
     view.buzzersLive = buzzersLive(play)
     // Drives the disabled-with-a-reason state rather than a silent dead button (D35).
     view.iAmLockedOut = isLockedOut(play, teamId)
-    // Who beat us — public, and part of the fun.
-    view.firstBuzzTeamId = firstBuzzTeamId(play)
+    // Who beat us — public, and part of the fun. `null` re-arms every other team's button, which is
+    // what makes D35's deny→reopen loop visible on a phone.
+    view.buzzHolderTeamId = buzzHolderTeamId(play)
   }
 
   if (revealed) {

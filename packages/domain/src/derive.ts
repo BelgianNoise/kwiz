@@ -46,10 +46,28 @@ export function isLockedOut(play: QuestionPlayState, teamId: string): boolean {
   return lockedOutTeamIds(play).includes(teamId)
 }
 
-/** The first buzz that was or is being adjudicated — "who beat us", which is part of the fun. */
-export function firstBuzzTeamId(play: QuestionPlayState): string | null {
-  const ordered = [...play.buzzes].sort((a, b) => a.receivedAt - b.receivedAt)
-  return ordered[0]?.teamId ?? null
+/**
+ * **The team that has the buzz right now** — awaiting adjudication, or accepted. `null` while the
+ * buzzers are live, which is the whole point.
+ *
+ * This was `firstBuzzTeamId`, the chronologically first buzz on the question, and that was wrong in
+ * the ordinary case rather than an exotic one. D35's loop is *buzz → deny → everyone else buzzes*,
+ * and a denial does not clear the buzz log — so once any team had ever buzzed, "first" stayed that
+ * team for the rest of the question. Every other team's phone read it as *someone already has this*
+ * and never re-armed, which silently excluded them from the mechanic that exists to include them.
+ *
+ * Filtering by `forceReopenedAt` the way `lockedOutTeamIds` does would **not** have fixed it: an
+ * ordinary denial re-arms the buzzers without a `BUZZERS_FORCE_REOPENED` event, so there is no
+ * instant to filter against. The fix is that the question being asked was wrong — a phone needs to
+ * know who holds the buzz *now*, not who held it first.
+ *
+ * At most one buzz can be `AWAITING` (I10) and at most one `ACCEPTED`, so this is unambiguous.
+ */
+export function buzzHolderTeamId(play: QuestionPlayState): string | null {
+  const held = play.buzzes.find(
+    (buzz) => buzz.outcome === 'AWAITING' || buzz.outcome === 'ACCEPTED',
+  )
+  return held?.teamId ?? null
 }
 
 // ─── timer (D7, D8, D35) ───
@@ -124,6 +142,19 @@ export interface Standing {
    * that held its place is `0`, which is `—` and a different statement from "we don't know".
    */
   movement: number | null
+}
+
+/**
+ * D32's rank rule for **one** score among many: one more than the number of scores strictly ahead.
+ *
+ * `standings` below is the same rule expressed over a whole table, and the two are held together by
+ * a test rather than by a comment. This exists because PRD 5 §11 wants a phone to show its own rank
+ * in states that carry no standings array — the player payload has every team's score (protocol P2)
+ * and nothing else, which is exactly enough. Adding a `rank` field to the payload instead would be a
+ * second source of truth for something the scores already determine.
+ */
+export function rankAmong(score: number, scores: readonly number[]): number {
+  return 1 + scores.filter((other) => other > score).length
 }
 
 /**

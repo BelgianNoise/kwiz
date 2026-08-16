@@ -20,6 +20,7 @@ const view = (over: Partial<PlayerView> = {}): PlayerView => ({
   team: { id: 't1', name: 'Quizzly Bears', colour: '#EF4444', score: 0 },
   otherTeams: [],
   locale: 'en',
+  abandoned: false,
   stage: { kind: 'BETWEEN_QUESTIONS' },
   ...over,
 })

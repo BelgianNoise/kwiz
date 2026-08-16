@@ -12,6 +12,213 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 7 — The player device
+
+**Status:** complete · `pnpm check` green · **692 tests** · lint silent · `pnpm build` clean · join,
+every stage, all four answer methods and both two-device rules driven at 375×812 with **two devices on
+one team**, and the whole surface walked again in `nl`
+
+### What was built
+
+PRD 5 end to end: `/play/:code`'s picker, `/play/:code/game`, all seven stages, the four answer
+methods, D44's select-then-submit, D43's finality, D45's shared drafts with §5.3's focused-field echo
+rule, §5.4's auto-submit and retry, §8's near-fullscreen buzzer, §9's read-only board, §10.1's
+watch-only finale, §12.1's wake lock and §14's device menu. Full EN/NL parity (D28).
+
+**All four surfaces now exist.**
+
+### The blocker two slices had deferred
+
+**`EventSource` cannot set a request header**, and `/api/live/:gameId/play` demanded `X-Kwiz-Device` —
+so the route was unreachable from a browser. Raised at the end of slice 5, again at the end of slice 6,
+and settled here because slice 7 is the first that needs it.
+
+It now takes `?device=`, and protocol §2.1 records **why that is acceptable for this token and would
+not be generally**: it is identity, not a credential (PRD 1 §4). It grants nothing that being on the
+network already grants, and there is no authentication anywhere in the product. The usual objections —
+logs, history, `Referer` — are about protecting a secret, and there is none. Both alternatives are
+written down as rejected with their costs: a mirrored cookie means a second storage mechanism to
+reconcile with the `localStorage` §2.3 deliberately chose, and a `fetch`-based reader gives up the
+automatic reconnect and `Last-Event-ID` replay D2 names as the reason SSE was chosen — on the least
+reliable device in the product. **Every POST still uses the header.**
+
+### Three real bugs, all found by driving it rather than reading it
+
+All three were in §5.4's auto-submit at zero, and all three came from the same twenty minutes of
+leaving a question open past its timer with two phones on one team.
+
+1. **It submitted an empty answer.** D43 makes the first submission final, so a team that had typed
+   nothing when the timer expired could never answer at all. §5.4 read alone justifies it — *"at zero
+   the client submits whatever is currently entered"* — and **O6 is the sentence that settles it**:
+   *"if the timer expires with a selection but no Submit, §5.4 auto-submits it anyway."* The mechanism
+   exists to rescue an answer that was *entered* and not sent.
+2. **It re-armed.** The effect re-ran on every keystroke, so a team typing *after* zero had their
+   **first character** submitted and made final. That destroys the property §5.4 is proudest of — the
+   asleep-at-zero phone that wakes, submits late, and counts. It now fires once and disarms whether or
+   not anything was sent.
+3. **`<Answer>` was not keyed by question id.** It persisted across questions: the previous question's
+   text stayed in the field (§5.3's restore effect only *overwrites*, it never clears), the previous
+   option stayed selected, and `useSubmit` stayed `DONE` so the next Submit was a no-op.
+
+The key is also what makes (2)'s one shot safe for a sleeping phone: a fresh mount into an
+already-expired question initialises the field from the team's server-side draft and submits that.
+
+### Six more, from reading PRD 5 end to end against the code
+
+The browser pass found bugs in what I had been *watching*. A second pass, section by section against
+the spec, found what I had never looked at — which is the argument for doing both:
+
+1. **Switching team mid-question carried the old team's typed answer across.** Same key bug as (3)
+   above, other axis: the device stays mounted, and §5.3's restore effect only overwrites, so the text
+   survived into the new team and would be submitted for it. The team id is in the key now. This is
+   the one that would have cost a real team a real question.
+2. **Reloading `/play/:code/game` on a code that no longer resolves gave Next's 404** — the one place
+   on this surface a pub guest could reach a raw error page. Reachable by O3's morning-after bookmark
+   and by any reload after the master ends the game. The sibling route had rendered `NoSuchGame` for
+   exactly this reason since it was written; only one half of the route had the rule.
+3. **An abandoned game announced final standings to every phone** instead of §15 O3's bare message.
+   `PlayerView.abandoned` now mirrors the main screen's flag.
+4. **The reveal dropped *"You said"***, which §11's diagram puts directly under the correct answer.
+5. **The team's rank was never rendered**, though §11 asks for it in every question state — and the
+   function's own doc comment claimed it did.
+6. **The reconnecting band never went away after a game ended**, because ending a game closes every
+   stream (protocol §3.4) and `EventSource` kept retrying under a screen that was already final.
+
+### And two more from the review round, both in the places neither pass had looked
+
+The self-audit found bugs in what it drove and then in what it read. The review found the two things
+**neither** reaches: a component the test config cannot import, and a recovery path that only exists
+across three navigations.
+
+1. **The buzzer was wrong for both audiences that are not the one device that won.**
+   `firstBuzzTeamId` was the chronologically first buzz on the question and nothing ever cleared it,
+   so once *any* team had buzzed, every other phone read *someone already has this* for the rest of
+   the question and never re-armed — silently excluded from D35's deny→reopen loop, which exists to
+   include them. Separately, the outcome message came from local tap state, so a device that tapped
+   and lost read *"You're in!"* while the second phone on the team that **won** read *"another team
+   got there first"*.
+
+   **The obvious fix would not have worked.** Filtering by `forceReopenedAt`, the way
+   `lockedOutTeamIds` does, does nothing here: an ordinary denial re-arms the buzzers without a
+   `BUZZERS_FORCE_REOPENED` event, so there is no instant to filter against. The question being asked
+   was wrong. `buzzHolderTeamId` asks who has the buzz **now**, and its `null` is what re-arms
+   everyone else.
+
+2. **A stale device token trapped the phone in a redirect loop** — see *what the next agent would
+   otherwise rediscover* below. Both halves were individually reasonable and only wrong together.
+
+Everything else the round raised was real and is fixed: `DO`/`BUZZER` reveals claiming a blank
+correct answer and a false *"nothing submitted"*; a switch to a full team closing the menu in
+silence; the buzzer at 45% of the viewport rather than §8's *"nearly the whole screen"* (65% now);
+the SSE retry loop merely hidden rather than stopped after a game ends; the submit button flickering
+back to *Submit* between backoff attempts; `protocol.md` §5.3 missing `abandoned`; §2.1 not stating
+the reverse-proxy access-log cost of the query-parameter token; and two finale-keyword sentinel
+assertions that only covered the room.
+
+### Spec deviations
+
+None. protocol §2.1 changed, and PRD 5 §2.3 was updated to match, in the same change
+(agent-workflow §3.3). `firstBuzzTeamId` became `buzzHolderTeamId` in protocol §5.3, with the reason
+recorded beside it — a rename because the old name was the bug: it described a fact nobody needed
+and every reader mistook for the one they did.
+
+### Raised, not resolved
+
+- **Nothing exercises `KWIZ_MAX_DEVICES_PER_TEAM`.** The picker renders the full state from a live
+  count and D20's copy is there — a full team is *shown with its reason*, never hidden — but no run has
+  actually filled a team.
+- **`useSubmit`'s retry is verified by inspection only.** Its decision is small, but the *timer
+  ownership* is not, and that is where slice 6's `useEffect` bugs lived. The timer is in a ref for
+  exactly that reason: a fix applied from memory rather than from a failure here.
+- **Offline typing and mid-question reconnect were not driven.** §12's rules are written and the
+  retry path exists; the specific walk — go offline, keep typing, come back, watch it retry — is a
+  smoke-checklist row rather than something this slice observed.
+
+### Deliberately left out
+
+- **PRD 5 §15 O3's finished-game standings.** A finished game's code stops resolving (data model
+  §6.1), so a phone opening a bookmark the morning after gets the join page's plain explanation rather
+  than the standings O3 wants. Serving those needs a read that does not depend on a joinable game —
+  which is slice 8's review surface, and the honest interim answer is *"this code will not get you into
+  a game"* rather than a stub.
+- **Post-game review** (PRD 2 §13) stays slice 8's, as it has since slice 4.
+
+### Not verifiable here (agent-workflow §4.5)
+
+- **iOS autocorrect mangling answers** — the risk `autocapitalize/autocorrect/spellcheck="off"` exists
+  for, and build-order calls the highest-value line in this slice. All four attributes were asserted on
+  the live DOM, which is all a desktop browser can do; only a real iPhone proves the behaviour.
+- **`nosleep.js` actually preventing sleep** — needs a real phone left alone for its lock timeout.
+- **Haptics on buzz** — `navigator.vibrate` is Android-only and a no-op here.
+- **Twenty phones on one laptop hotspot** — behaves nothing like two tabs on loopback, and it is the
+  environment every reliability rule in §12 was written for.
+- **The buzzer's local-feedback window.** On loopback the server answers before the "buzzed" state can
+  be sampled, which is the *good* case — §8's local feedback exists for a slow network, and this
+  environment does not have one.
+
+### New dependency, flagged per agent-workflow §3.4
+
+**`nosleep.js`**, named by PRD 5 §12.1 rather than chosen: `navigator.wakeLock` requires a secure
+context and the LAN deployment is plain HTTP (PRD 1 §6.10), so it is `undefined` exactly where it
+matters. The library uses the native API where available and falls back to a muted looping video, whose
+browser quirks — `playsinline`, codec pairs, autoplay policies — are the sort of thing to inherit
+rather than rediscover. **Loaded on demand**, because it embeds a base64 video and a phone on the
+master's hotspot alongside twenty others should not pay for it until it is wanted.
+
+### What the next agent would otherwise rediscover
+
+- **Every timer on this surface lives in a ref, never in an effect's cleanup.** The component
+  re-renders on every pushed view, and a cleanup-owned timer is cancelled by the next unrelated frame.
+  That is slice 6's elimination-hold bug; here it would have been silent in the draft debounce and the
+  submit retry both.
+- **`lib/client/device.ts` keys the token by `gameId`, not globally.** A phone that played last week's
+  quiz and this week's holds two, and the one for the game being opened resumes. A single key would
+  make every new game a forced re-pick, or resume the wrong one.
+- **`player(gameId, token)` mirrors `control(gameId)`**, and `joinGame` is deliberately outside it: it
+  resolves a game by *code* and is the one call made before a token exists to bind.
+- **`ALREADY_SUBMITTED` is treated as arrival, not failure** (D43). Verified against the running
+  server: a *different* value is refused and the response carries `detail.answer` — the team's
+  canonical answer, so the second device can show what its team actually said — while the **same** value
+  returns `{ok: true}`, which is D8's retry path. Retrying the refusal forever, or showing it as an
+  error, are both wrong.
+- **The stage switch ends in `const unhandled: never = stage`**, same as the main screen's. A new stage
+  without a branch is a compile error rather than a blank phone — and blank is worse here, because
+  nobody is standing next to the phone that broke.
+- **The device menu is absent, not disabled, while buzzers are live** (§14). The trigger itself goes:
+  a menu affordance beside a near-fullscreen button is a target competing with it.
+- **An unmarked finale keyword has no text in the DOM at all** (D53) — five `aria-label="hidden
+  keyword"` spans whose bar widths come from `wordLengths`. Confirmed by inspecting the live page,
+  which is the check the sentinel test cannot make.
+- **Nothing in `components/player` imports from `components/screen` or `components/control`**, and the
+  three `Dot`s are deliberately three components. Four surfaces, four type scales (CLAUDE.md §7);
+  `lib/format.ts` is where genuinely neutral helpers go, and `minuteSeconds` is the only one so far.
+- **`rankAmong` in `domain` is D32's tie rule for one team, and `standings` is the same rule for a
+  table.** They are held together by a test that walks every shape of tie, not by a comment — the
+  phone showing `2nd` while the projector shows `3rd` is the kind of disagreement that reads as a bug
+  in the scoring rather than in the rendering.
+- **Vitest cannot import a `.tsx` file** in this workspace's config, which is why every extracted
+  decision on this surface (`answer-moments.ts`, `buzzer-face.ts`, and slice 6's `finale-moments.ts`)
+  is a plain `.ts`. A test that imports a component file fails at transform with a JSX parse error,
+  not at assertion — it looks like a config bug and is not one.
+- **That constraint is load-bearing, not incidental.** Both of this slice's worst bugs lived in the
+  one decision that had *not* been extracted. If a component branches on more than two facts, pull
+  the branch into a `.ts` beside it before writing the JSX — by the time it is wrong, the only thing
+  that can see it is a browser, and a browser only shows you the case you thought to try.
+- **Clearing a token and redirecting away from it must be the same call.** They were two files' jobs:
+  `player-game.tsx` redirected on `UNKNOWN_DEVICE` and left the token, and `team-picker.tsx` resumes
+  any device that has one (§2.3) — so a stale token bounced between them forever, with no picker ever
+  drawn. Each half is correct alone. The `?rejoin=1` meant to break the tie was read by nothing,
+  which is the tell: a query parameter nobody consumes is a comment, not a mechanism.
+- **`<details>` in the device menu is controlled.** A refusal re-renders the subtree and an
+  uncontrolled one collapses under it — hiding the list and the message explaining why the tap did
+  nothing, which is the silence the message exists to end.
+- **Driving two players from a script: `el.focus()` is a no-op if the element is already
+  `document.activeElement`**, so React's `onFocus` never fires and the focused-field echo rule looks
+  broken when it is not. `blur()` first, then `focus()`. This cost half an hour of chasing a bug that
+  did not exist.
+
+---
+
 ## Slice 6 — The main screen
 
 **Status:** complete · `pnpm check` green · **652 tests** · lint silent · every one of the eight stages

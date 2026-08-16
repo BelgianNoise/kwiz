@@ -783,6 +783,99 @@ const en = {
    * (PRD 1 §9.2). Every string below is short on purpose — at §2.1's sizes there is room for very
    * little, and a sentence that fits in English and wraps to three lines in Dutch breaks the stage.
    */
+  /**
+   * PRD 5 — the phone.
+   *
+   * **Full EN/NL parity is required** (D28): this and the main screen are the two guest-facing
+   * surfaces. Copy is short and plain because it is read at an angle, in a dim pub, by whoever is
+   * holding the phone — and because §1.1's player will not read instructions.
+   */
+  player: {
+    join: {
+      whichTeam: 'Which team are you?',
+      /** D20 — a full team is shown with its reason rather than hidden. */
+      alreadyHas: 'already has {count} phones',
+      joining: 'joining…',
+      noTeams: 'The quizmaster has not added any teams yet.',
+      noGame: 'No quiz with that code',
+      noGameBody:
+        'It may have finished, or the code may be slightly off. Check the big screen and try again.',
+      tryAgain: 'Try another code',
+    },
+    game: {
+      connecting: 'Connecting…',
+      /** §12 — never "your answer wasn't saved": a team that believes it lost points will argue. */
+      reconnecting: 'Reconnecting…',
+      youreIn: "You're in.",
+      watchTheScreen: 'Keep an eye on the big screen.',
+      teamsReady: '{count, plural, one {# team ready} other {# teams ready}}',
+      /** §5.5 — audio and video never reach a phone (D27), so the phone says where to look. */
+      lookAtScreen: 'Look at the big screen.',
+      yourAnswer: 'Your answer',
+      /** §11 — at the reveal, beside the correct one. The "what did we put" moment. */
+      youSaid: 'You said',
+      /** §11 — the team answered nothing, which is different from having answered wrongly. */
+      noAnswer: 'Nothing submitted',
+      submit: 'Submit',
+      sending: 'Sending…',
+      /** §5.2 — plain and final. No edit affordance anywhere near it. */
+      lockedIn: 'Locked in ✓',
+      correctAnswer: 'Correct answer',
+      /** §11 — a pending verdict says so; silence reads as a lost answer (D42). */
+      checking: 'The quizmaster is checking this one.',
+      points: '{points} points',
+      /** §8.1 — a DO question has no input control at all, not a disabled one. */
+      masterJudging: 'The quizmaster is judging this one. Look at the big screen.',
+      picks: '{team} pick',
+      /** §9 — said explicitly, because a grid on a touchscreen invites tapping. */
+      tellTheMaster: 'Tell the quizmaster which one you want.',
+      backIn: 'Back in',
+      backShortly: 'Back shortly',
+      finished: 'Final scores',
+      /**
+       * §11 — the team's own live rank beside its score. An ordinal rather than a bare number,
+       * because a second number next to a score reads as a second score.
+       */
+      rank: '{rank, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}',
+      /**
+       * §15 O3 — *"`ABANDONED` gets a bare message."* The master pulled the game; announcing
+       * standings for it would be a winner nobody won.
+       */
+      abandoned: 'The quizmaster ended this quiz.',
+    },
+    buzzer: {
+      buzz: 'BUZZ',
+      /** §8 — local feedback says "buzzed", never "you were first". First is a server fact (D35). */
+      buzzed: 'Buzzed',
+      youreIn: "You're in!",
+      answerOutLoud: 'Answer out loud',
+      /** §8's mockup names them: "who beat us" is the thing the table actually wants to know. */
+      gotThereFirst: '{team} got there first',
+      /** The fallback when the winner is not in `otherTeams` — a team added seconds ago (PRD 2 §11.2). */
+      beatenToIt: 'Another team got there first',
+      wrongAnswer: 'Your answer was wrong',
+      othersBuzzing: 'Other teams are buzzing now',
+    },
+    finale: {
+      guessingNow: 'guessing now',
+      betweenTurns: 'Next team to go…',
+      /** §10.1 — turn order is recomputed live, so telling them means the table is ready. */
+      youreUpNext: "You're up next.",
+      out: 'Out',
+      notInFinale: 'Your placing is already set — enjoy the finale.',
+    },
+    menu: {
+      label: 'Menu',
+      close: 'Close',
+      language: 'Language',
+      switchTeam: 'Switch team',
+      leave: 'Leave this quiz',
+      /** §14 — confirmed, because it genuinely severs this device's link. */
+      leaveConfirm: 'This device will leave the quiz. You can join again from the code.',
+      cancel: 'Cancel',
+    },
+  },
+
   screen: {
     /** §4.1 — the one click that arms audio and fullscreen. Addressed to the master, not the room. */
     arming: {

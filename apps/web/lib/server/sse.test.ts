@@ -83,6 +83,15 @@ async function firstFrames(response: Response, chunks = 2): Promise<string> {
 const request = (headers: Record<string, string> = {}): Request =>
   new Request('http://localhost/api/live/x/screen', { headers })
 
+/**
+ * A player's stream request. The device token rides in the **query string**, because `EventSource`
+ * cannot set a header and this is the one route a browser has to open that way (protocol §2.1).
+ */
+const playRequest = (device?: string): Request =>
+  new Request(
+    `http://localhost/api/live/x/play${device === undefined ? '' : `?device=${device}`}`,
+  )
+
 describe('opening a stream', () => {
   it('answers with the SSE headers protocol §2.2 requires', async () => {
     const response = await openStream(request(), seed.gameId, 'MAIN_SCREEN')
@@ -169,12 +178,11 @@ describe('refusing a stream', () => {
     })
     if (!joined.ok || !joined.data) throw new Error('expected a join')
 
-    const noToken: Record<string, string> = {}
     // Both refusals, checked the same way. Sequential because each opens a stream.
     // oxlint-disable-next-line no-await-in-loop
-    for (const headers of [noToken, { 'x-kwiz-device': 'invented' }]) {
+    for (const device of [undefined, 'invented']) {
       // oxlint-disable no-await-in-loop
-      const refused = await openStream(request(headers), seed.gameId, 'PLAYER')
+      const refused = await openStream(playRequest(device), seed.gameId, 'PLAYER')
       expect(refused.status).toBe(401)
       expect(await refused.json()).toMatchObject({ error: 'UNKNOWN_DEVICE' })
       // oxlint-enable no-await-in-loop
@@ -183,7 +191,7 @@ describe('refusing a stream', () => {
     // The token is real, but it belongs to the other game (D21).
     const other = seedGame(runtime.database, { withTeams: false })
     const wrongGame = await openStream(
-      request({ 'x-kwiz-device': joined.data.deviceToken }),
+      playRequest(joined.data.deviceToken),
       other.gameId,
       'PLAYER',
     )
@@ -191,7 +199,7 @@ describe('refusing a stream', () => {
 
     // …and with the right game it opens and carries that team's view.
     const accepted = await openStream(
-      request({ 'x-kwiz-device': joined.data.deviceToken }),
+      playRequest(joined.data.deviceToken),
       seed.gameId,
       'PLAYER',
     )
