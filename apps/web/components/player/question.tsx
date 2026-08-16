@@ -3,11 +3,12 @@
 import type { ErrorCode, PlayerQuestion, PlayerView } from '@kwiz/domain'
 import { DRAFT_DEBOUNCE_MS, TIMER_WARN_PLAYER_S } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Buzzer } from '@/components/player/buzzer'
 import { player } from '@/lib/client/api'
 import { useCountdown } from '@/lib/client/use-countdown'
+import { useSubmit } from '@/lib/client/use-submit'
 
 type Stage = Extract<PlayerView['stage'], { kind: 'QUESTION' }>
 
@@ -142,11 +143,11 @@ function Answer({
   const t = useTranslations('player.game')
   const api = player(gameId, token)
 
+  const remaining = useCountdown(question.timer?.deadlineAt ?? null)
+  const expired = remaining !== null && remaining <= 0
   const submitted = myAnswer?.submitted ?? false
   const [text, setText] = useState(myAnswer?.text ?? '')
   const [option, setOption] = useState(myAnswer?.optionId ?? null)
-  const [sending, setSending] = useState(false)
-  const [refused, setRefused] = useState<ErrorCode | null>(null)
   const focused = useRef(false)
 
   /*
@@ -168,22 +169,43 @@ function Answer({
   }, [myAnswer?.optionId])
 
   // D45 — pushed on a debounce while typing, and again immediately on blur (§6).
-  const pushDraft = useDebounced((value: string) => {
+  const [pushDraft, flushDraft] = useDebounced((value: string) => {
     void api.draft(question.id, { text: value })
   }, DRAFT_DEBOUNCE_MS)
 
-  const submit = (): void => {
-    setSending(true)
-    setRefused(null)
-    const answer =
-      question.answerMethod === 'MULTIPLE_CHOICE'
-        ? { selectedOptionId: option ?? '' }
-        : { text }
-    void api.submit(question.id, answer).then((result) => {
-      setSending(false)
-      if (!result.ok) setRefused(result.error)
-    })
-  }
+  /*
+   * §5.4 — *"the submit retries with backoff until acknowledged. There is no server-side deadline to
+   * commit the draft on the team's behalf, so this retry **is** the safety net."*
+   *
+   * The values are read through refs inside `useSubmit`'s `latest`, so a retry fired ten seconds later
+   * still sends what the team actually typed rather than a stale closure.
+   */
+  const sender = useSubmit(
+    () =>
+      api.submit(
+        question.id,
+        question.answerMethod === 'MULTIPLE_CHOICE'
+          ? { selectedOptionId: option ?? '' }
+          : { text },
+      ),
+    // D8 — only the master locking the question stops submissions, so a late one is still wanted.
+    question.state === 'OPEN',
+  )
+  const submit = sender.submit
+
+  /*
+   * §5.4 — **at zero the client submits whatever is entered**, flushing the pending draft debounce
+   * first: a debounce still in flight at zero would race the submit and could overwrite it.
+   *
+   * A phone asleep at zero submits when it wakes, and the server accepts it — *"late submission is a
+   * feature, not an error"* (D8), and the single most important consequence of the trust model here.
+   */
+  useEffect(() => {
+    if (expired && !submitted) {
+      flushDraft()
+      submit()
+    }
+  }, [expired, submitted, submit, flushDraft])
 
   // §5.2 — after submitting, it is over. No edit affordance and no "change answer" link: ambiguity
   // here invites a team to argue about whether they can still change it.
@@ -253,16 +275,18 @@ function Answer({
       <button
         type="button"
         onClick={submit}
-        disabled={sending}
+        disabled={sender.state !== 'IDLE'}
         // §5.1 — the only irreversible tap on the screen, and it says so by being the only button.
         className="bg-primary text-primary-foreground min-h-16 w-full rounded-xl text-xl font-semibold disabled:opacity-60"
       >
         {/* §12 — the button shows a *sending* state rather than success; success is the view coming
             back with `submitted`. */}
-        {sending ? t('sending') : t('submit')}
+        {sender.state === 'IDLE' ? t('submit') : t('sending')}
       </button>
 
-      {refused ? <Refusal code={refused} question={question} /> : null}
+      {sender.refusal && sender.refusal !== 'VALIDATION_ERROR' ? (
+        <Refusal code={sender.refusal} question={question} />
+      ) : null}
     </div>
   )
 }
@@ -381,8 +405,12 @@ function Standing({ view }: { view: PlayerView }) {
  * keystroke *and* on every pushed view, and a cleanup-owned timer would be cancelled by an unrelated
  * view arriving mid-word — which is exactly the bug slice 6 hit with the elimination hold.
  */
-function useDebounced<T>(run: (value: T) => void, ms: number): (value: T) => void {
+function useDebounced<T>(
+  run: (value: T) => void,
+  ms: number,
+): [(value: T) => void, () => void] {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pending = useRef<T | null>(null)
   const latest = useRef(run)
   latest.current = run
 
@@ -393,8 +421,26 @@ function useDebounced<T>(run: (value: T) => void, ms: number): (value: T) => voi
     [],
   )
 
-  return (value: T) => {
+  const push = useCallback(
+    (value: T) => {
+      pending.current = value
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => {
+        pending.current = null
+        latest.current(value)
+      }, ms)
+    },
+    [ms],
+  )
+
+  /** §5.4's flush: send whatever is waiting **now**, so the timer's submit cannot race it. */
+  const flush = useCallback(() => {
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => latest.current(value), ms)
-  }
+    if (pending.current !== null) {
+      latest.current(pending.current)
+      pending.current = null
+    }
+  }, [])
+
+  return [push, flush]
 }
