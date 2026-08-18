@@ -421,3 +421,7 @@ that ran. Most of this is meaningless against a `SETUP` game.
       plain sentence rather than a podium.
 - [ ] **Walk the review in `nl`**, and confirm the quiz's own content is still in the language it was
       written in.
+- [ ] **Abandon a live game, then open its code on a phone.** A sentence of its own — *"the
+      quizmaster ended this quiz"* — not the unknown-code page and not a podium. All three outcomes
+      (§15 O3) must read differently: finished → standings, abandoned → the sentence, unknown → check
+      the code.
