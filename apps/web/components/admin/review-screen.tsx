@@ -128,6 +128,7 @@ export function ReviewScreen({ gameId }: { gameId: string }) {
 
       <ReviewTeams
         teams={review.teams}
+        busy={busy}
         onRename={(teamId, name) =>
           void act(teamId, () => api.updateTeam(gameId, teamId, { name }))
         }

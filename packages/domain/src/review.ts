@@ -15,11 +15,18 @@ import type { AnswerMethod, AnswerVerdict, GameStatus, RoundType } from './vocab
  * precisely what §1.1 says must be fetched. The shape lives here anyway, because *what a correction
  * is* is a domain rule, not a rendering choice.
  *
- * **Audience `CONFIG`.** Unlike the three pushed views, nothing is filtered out: correct answers,
- * every team's answer, master notes. PRD 1 §7's invariants protect the room and the players from
- * each other — the master authored all of this and is looking at their own machine. That is why this
- * shape is deliberately *not* in `views.ts` beside the three that are leak-checked, and why the
- * sentinel test does not enumerate it.
+ * **Audience `CONFIG`, and nothing else may call it.** Unlike the three pushed views, nothing is
+ * filtered out: correct answers, every team's answer, master notes. PRD 1 §7's invariants protect the
+ * room and the players from each other — the master authored all of this and is looking at their own
+ * machine. That is why this shape is deliberately *not* in `views.ts` beside the three that are
+ * leak-checked, and why the sentinel test does not enumerate it.
+ *
+ * **The single caller is `GET /api/games/:id/review`.** A second one briefly existed — the public
+ * finished-game standings page (PRD 5 §15 O3) built this whole object and then read four fields off
+ * it. Nothing leaked, because the destructuring was narrow; that is exactly the problem. A shape
+ * this permissive must not be handed to an unauthenticated route on the understanding that the route
+ * will be careful, which is filtering-by-omission and what CLAUDE.md §2.3 rules out. That page calls
+ * `standings()` now. **If you need a subset of this somewhere public, build the subset.**
  */
 
 export interface ReviewTeam {

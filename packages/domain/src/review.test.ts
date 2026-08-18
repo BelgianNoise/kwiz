@@ -443,15 +443,23 @@ describe('finale clocks with time that actually ran (§13.2)', () => {
   })
 
   /**
-   * The reason the review reads clocks at `finale.endedAt` rather than at `now`: without it, a
-   * finished game's survivor would lose a second off their remaining bank every time the page was
-   * opened, and the record of the night would change while nobody played anything.
+   * The reason the review reads clocks at `finale.endedAt` rather than at `now`.
+   *
+   * **The survivor's last turn is deliberately left open**, because that is the only shape where the
+   * freeze does any work — and it is a real state, not a contrived one: `END_FINALE` emits
+   * `FINALE_ENDED` and nothing else (decide.ts), so nobody ever closes the winner's turn. Their
+   * clock was still running when the other team hit zero.
+   *
+   * A first version of this test closed the turn with `TURN_ENDED` first. It passed, and it could
+   * not have failed: once a turn has an `endedAt`, `finaleRemainingSeconds` never consults `now`, so
+   * comparing two `now` values proved nothing at all. Worth remembering before trusting any
+   * "same input, two clocks, same answer" test — check which branch the fixture actually reaches.
    */
-  it('freezes a survivor’s remaining seconds once the round has ended', () => {
+  it('freezes a survivor’s remaining seconds at the instant the round ended', () => {
     const ended = run([
       ...withScores,
+      // A is on turn and stays on turn: B runs out, the round ends under them.
       { type: 'TURN_STARTED', payload: { teamId: A } },
-      { type: 'TURN_ENDED', payload: { teamId: A, reason: 'PASSED' } },
       { type: 'TEAM_ELIMINATED', payload: { teamId: B, at: 20_000 } },
       { type: 'FINALE_ENDED', payload: { ranking: [[A], [B]] } },
     ])
@@ -459,10 +467,16 @@ describe('finale clocks with time that actually ran (§13.2)', () => {
     const early = toGameReview(ended, 100_000).finale?.finalists ?? []
     const muchLater = toGameReview(ended, 9_000_000).finale?.finalists ?? []
 
-    expect(early.find((f) => f.teamId === A)?.endedSeconds).toBe(
-      muchLater.find((f) => f.teamId === A)?.endedSeconds,
-    )
-    expect(early.find((f) => f.teamId === A)?.survived).toBe(true)
+    const a = early.find((f) => f.teamId === A)
+    expect(a?.survived).toBe(true)
+    expect(a?.endedSeconds).toBe(muchLater.find((f) => f.teamId === A)?.endedSeconds)
+
+    /*
+     * And it is frozen at the **right** instant, not merely at a stable one. `FINALE_ENDED` is the
+     * last of eleven events stamped a second apart, so the round ended 2s after A's turn started:
+     * 200 − 2. Without the freeze this would have been 200 minus however long the page had been open.
+     */
+    expect(a?.endedSeconds).toBe(198)
   })
 
   it('names the survivor as the winner once the round is over', () => {

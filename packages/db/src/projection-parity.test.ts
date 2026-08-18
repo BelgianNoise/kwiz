@@ -515,3 +515,80 @@ describe('keyword marks stay in step with the reducer', () => {
     expect(marksInDatabase()).toEqual(marksInDomain())
   })
 })
+
+/**
+ * `AnswerState.corrections` (PRD 2 §13.1) is the one piece of answer state with **no projection
+ * column** — it is folded in memory on every replay and never written down.
+ *
+ * So I15 does not apply to it and it cannot join the `Row` comparison above: there is no database
+ * side to compare against, and a domain-to-domain assertion would prove nothing. What *does* apply
+ * is D4 — a replay reproduces the state exactly — and that is worth pinning, because a derived
+ * counter is precisely the kind of thing that quietly resets when a server restarts and nobody
+ * notices until a master reopens a review the morning after.
+ */
+describe('the correction count survives a replay (D4)', () => {
+  it('rebuilds from the log rather than from anything stored', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'paris'), // AUTO_CORRECT
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: seed.questionId, teamId: seed.teamA, accepted: false },
+      },
+    ])
+
+    const rebuilt = reduce(
+      contentFor(seed),
+      readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+        seq: entry.seq,
+        event: entry.event,
+        createdAt: entry.createdAt.getTime(),
+      })),
+    )
+
+    // Overturning an auto-accept is a correction; the count is derived, so a fresh fold must find it.
+    expect(
+      rebuilt.questions.get(seed.questionId)?.answers.get(seed.teamA)?.corrections,
+    ).toBe(1)
+    // And nothing was persisted for it — the projection has no column to drift from.
+    expect(
+      Object.keys(database.db.select().from(gameAnswer).all()[0] ?? {}),
+    ).not.toContain('corrections')
+  })
+})
+
+/**
+ * `TEAM_ELIMINATED` writes `gameTeam.eliminatedAt`, and the **order** of those instants is what
+ * produces the finale's final ranking (D51) — so a drift here does not merely misreport a time, it
+ * reorders the podium. It had no parity test; the keyword marks above got one when their bug
+ * surfaced, and this is the same shape of small write in the same round.
+ */
+describe('elimination instants stay in step with the reducer', () => {
+  it('writes the computed instant, not the moment the event was appended', () => {
+    // `at` is the instant the clock hit zero, which is deliberately *not* `createdAt` (payload doc).
+    appendAndProject(database, seed.gameId, [
+      { type: 'TEAM_ELIMINATED', payload: { teamId: seed.teamA, at: 1_234_000 } },
+    ])
+
+    const row = database.db
+      .select({ id: gameTeam.id, eliminatedAt: gameTeam.eliminatedAt })
+      .from(gameTeam)
+      .where(eq(gameTeam.id, seed.teamA))
+      .get()
+
+    const rebuilt = reduce(
+      contentFor(seed),
+      readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+        seq: entry.seq,
+        event: entry.event,
+        createdAt: entry.createdAt.getTime(),
+      })),
+    )
+
+    expect(row?.eliminatedAt?.getTime()).toBe(1_234_000)
+    expect(row?.eliminatedAt?.getTime()).toBe(
+      rebuilt.teams.get(seed.teamA)?.eliminatedAt ?? null,
+    )
+    // The team that stayed in has none, in both halves.
+    expect(rebuilt.teams.get(seed.teamB)?.eliminatedAt).toBeNull()
+  })
+})

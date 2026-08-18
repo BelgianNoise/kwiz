@@ -11,6 +11,7 @@ import {
   game,
   importQuiz,
   listGames,
+  insertTemplateAttachment,
   loadGameContent,
   quiz as quizTable,
   readLog,
@@ -54,6 +55,13 @@ const sha256 = (bytes: Uint8Array): string =>
 
 const bytes = (size: number): Uint8Array => Uint8Array.from({ length: size }, () => 7)
 
+/** A tiny but *real* file: a valid PNG header, so nothing about this is a placeholder string. */
+const COW_PNG = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+  0x44, 0x52,
+])
+const COW_CHECKSUM = sha256(COW_PNG)
+
 function unwrap<T>(result: { ok: boolean; data?: T }): T {
   if (!result.ok || result.data === undefined) throw new Error('expected success')
   return result.data
@@ -80,6 +88,20 @@ function seedFullQuiz(database: KwizDatabase): string {
     { text: 'Blur', isCorrect: false },
     { text: 'Radiohead', isCorrect: true },
   ])
+
+  // A question with a real file attached, so the export has bytes to carry (protocol §8.1).
+  const media = unwrap(createQuestion(database, music)).questionId
+  updateQuestion(database, media, { prompt: 'Name this animal' })
+  setAcceptedAnswers(database, media, ['cow'])
+  insertTemplateAttachment(database, {
+    questionId: media,
+    kind: 'IMAGE',
+    mimeType: 'image/png',
+    originalName: 'cow.png',
+    ext: 'png',
+    sizeBytes: COW_PNG.length,
+    checksum: COW_CHECKSUM,
+  })
 
   const finaleRound = unwrap(
     createRound(database, quizId, { type: 'DSMTW_FINALE', title: 'Finale' }),
@@ -299,17 +321,40 @@ describe('a whole played evening survives the round trip', () => {
 
     const exported = collectQuizExport(source, quizId, { includeGames: true })
     if (!exported) throw new Error('expected an export')
+    // The quiz references one real file, and the export carries its bytes (protocol §8.1).
+    expect(exported.attachments).toEqual([
+      { checksum: COW_CHECKSUM, ext: 'png', sizeBytes: COW_PNG.length },
+    ])
 
     const zip = writeExport({
       quiz: exported.quiz,
       games: exported.games,
       includesGames: true,
-      attachments: [],
+      attachments: [
+        {
+          checksum: COW_CHECKSUM,
+          ext: 'png',
+          sizeBytes: COW_PNG.length,
+          bytes: COW_PNG,
+        },
+      ],
       exportedAt: new Date('2026-08-08T12:00:00.000Z'),
     })
 
     const read = readExport(zip.bytes, sha256)
     if (!read.ok || !read.data) throw new Error(read.ok ? 'no data' : read.message)
+
+    /*
+     * **The file arrived, byte for byte, and its checksum verified on the way in.**
+     *
+     * `readExport` only populates this map for attachments whose bytes are present *and* whose
+     * hash matches, so an entry here is content addressing doing its job end to end — the same
+     * property that lets three quizzes share one file on disk (data model §8). No test in this
+     * suite covered a *successful* media round trip before; the existing ones cover a damaged file
+     * and a deliberately unembedded one.
+     */
+    expect(read.data.missingAttachments).toEqual([])
+    expect([...(read.data.attachments.get(COW_CHECKSUM) ?? [])]).toEqual([...COW_PNG])
 
     importQuiz(target, {
       quiz: read.data.quiz,
@@ -350,11 +395,15 @@ describe('author → export → import → play → score', () => {
       quiz: exported.quiz,
       games: [],
       includesGames: false,
-      attachments: [],
+      // The quiz's media travels with it: a stick handed to another host is useless without it.
+      attachments: [
+        { checksum: COW_CHECKSUM, ext: 'png', sizeBytes: COW_PNG.length, bytes: COW_PNG },
+      ],
       exportedAt: new Date('2026-08-08T12:00:00.000Z'),
     })
     const read = readExport(zip.bytes, sha256)
     if (!read.ok || !read.data) throw new Error(read.ok ? 'no data' : read.message)
+    expect(read.data.attachments.get(COW_CHECKSUM)).toBeDefined()
 
     importQuiz(target, {
       quiz: read.data.quiz,
@@ -407,6 +456,14 @@ describe('author → export → import → play → score', () => {
     expect(cells[0]).toMatchObject({ verdict: 'AUTO_CORRECT', points: 10 })
     expect(cells[1]).toMatchObject({ verdict: 'PENDING', points: 0 })
     expect(review.teams.find((team) => team.name === 'Aardappel')?.score).toBe(10)
+
+    /*
+     * And the **media reference survived into the game copy**, which is the half a template-only
+     * export could still get wrong: the attachment row is the template's, the game copy points at
+     * its own row, and the same file on disk backs both (data model §8).
+     */
+    const mediaQuestion = content?.rounds[0]?.questions.find((q) => q.media.length > 0)
+    expect(mediaQuestion?.media[0]).toMatchObject({ kind: 'IMAGE' })
 
     // And the game is joinable on this machine under its own new code (data model §6.1).
     expect(findJoinableGameByCode(target, 'PLAY01')).toBeUndefined()

@@ -72,12 +72,6 @@ describe('finding a game by its code', () => {
  * so the ordering is what these pin: **joinable first, ended only as a fallback.**
  */
 describe('finding an ended game by its code', () => {
-  let database: KwizDatabase
-
-  beforeEach(() => {
-    database = freshTestDatabase()
-  })
-
   it('finds a finished game whose code the joinable lookup refuses', () => {
     const seed = seedGame(database)
     const code = database.db.select().from(game).all()[0]?.code

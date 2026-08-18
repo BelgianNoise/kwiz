@@ -1,7 +1,8 @@
 import { findEndedGameByCode, findJoinableGameByCode } from '@kwiz/db'
-import { toGameReview } from '@kwiz/domain'
+import { standings } from '@kwiz/domain'
 
 import { FinalStandings } from '@/components/player/final-standings'
+import { GameAbandoned } from '@/components/player/game-abandoned'
 import { NoSuchGame } from '@/components/player/no-such-game'
 import { TeamPicker } from '@/components/player/team-picker'
 import { getRuntime } from '@/lib/server/runtime'
@@ -31,41 +32,56 @@ export default async function JoinPage({
 
   if (!game) {
     /*
-     * §15 O3 — **the morning-after bookmark.** A finished game's code stops resolving (data model
-     * §6.1), and until slice 8 that was indistinguishable from a wrong one. It is not: someone
-     * reopening last night's link wants the standings, and *"no quiz with that code"* is both untrue
-     * and useless to them.
+     * §15 O3 — **the morning-after bookmark, and its three distinct answers.** A finished game's
+     * code stops resolving (data model §6.1), and until slice 8 all three collapsed into one.
      *
      * Checked **after** the joinable lookup, never merged into it, so a code recycled onto tonight's
      * game still resolves to tonight's game while it is live.
      */
     const ended = findEndedGameByCode(runtime.database, code)
-    const finished = ended?.status === 'FINISHED' ? runtime.registry.get(ended.id) : null
+    const state = ended ? runtime.registry.get(ended.id) : null
 
-    if (ended && finished) {
-      const review = toGameReview(finished, Date.now())
+    if (ended && state) {
+      /*
+       * O3 gives `ABANDONED` *"a bare message"* — and it has to be a **different** message from the
+       * unknown-code one below, not the same page reached by a different route. The code was right;
+       * telling someone it *"may be slightly off"* sends them to re-read a projector that is no
+       * longer showing anything. Announcing standings would be worse still: a winner nobody won,
+       * which is the same thing the live surface refuses (PRD 4 §14).
+       */
+      if (ended.status === 'ABANDONED') return <GameAbandoned />
+
+      /*
+       * `standings()` rather than `toGameReview`: this route is **public and unauthenticated**, and
+       * the review object is the `CONFIG` shape that deliberately carries every correct answer and
+       * every team's answer. Nothing leaked — the fields were narrowed immediately — but the safety
+       * of that rested on this call site's destructuring rather than on the shape it was handed,
+       * which is exactly the filter-by-omission CLAUDE.md §2.3 rules out. A public route should be
+       * given a public shape.
+       */
+      const ranked = standings(state)
       return (
         <FinalStandings
-          quizName={review.quizName}
-          standings={[...review.teams]
-            .sort((a, b) => a.rank - b.rank || a.position - b.position)
-            .map((team) => ({
-              teamId: team.id,
-              name: team.name,
-              colour: team.colour,
-              rank: team.rank,
-              score: team.score,
-            }))}
+          quizName={state.content.quizName}
+          standings={ranked.map((row) => {
+            const team = state.teams.get(row.teamId)
+            return {
+              teamId: row.teamId,
+              name: team?.name ?? '',
+              colour: team?.colour ?? '#737373',
+              rank: row.rank,
+              score: row.score,
+            }
+          })}
         />
       )
     }
 
     /*
-     * **Not a 404**, for an unknown code or an abandoned game alike. A wrong code is the single most
-     * likely thing to go wrong on this surface — someone squinting at a projector across a dark room
-     * — and Next's error page would tell a pub guest nothing they can act on. §2.1's whole
-     * normalisation exists to make this rare; when it happens anyway, the answer is "check the code"
-     * and a way back. An abandoned game gets the same plain sentence rather than a podium (O3).
+     * **Not a 404.** A wrong code is the single most likely thing to go wrong on this surface —
+     * someone squinting at a projector across a dark room — and Next's error page would tell a pub
+     * guest nothing they can act on. §2.1's whole normalisation exists to make this rare; when it
+     * happens anyway, the answer is "check the code" and a way back.
      */
     return <NoSuchGame code={code} />
   }

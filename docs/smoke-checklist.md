@@ -396,7 +396,7 @@ one phone (agent-workflow §4.2). Do the last row in `nl`.
 Needs a **played** game: answers on the board, at least one judgement, an adjustment, and a finale
 that ran. Most of this is meaningless against a `SETUP` game.
 
-- [ ] **Open `⋯ → Review & correct` on a live game and on a finished one.** Both work (§13 covers
+- [ ] **Open `Review & correct` on a live game and on a finished one** — the button beside the two launch buttons, not inside the `⋯` menu. Both work (§13 covers
       both); the entry point is absent only while `SETUP`, when there is nothing to review.
 - [ ] **The grid reads side by side.** `Radio Head ✗` next to `radiohead ✓` is the whole point —
       check a question where two teams answered differently, with the correct answer and its

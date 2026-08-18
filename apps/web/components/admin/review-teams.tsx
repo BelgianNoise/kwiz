@@ -18,10 +18,13 @@ export function ReviewTeams({
   teams,
   onRename,
   onRecolour,
+  busy,
 }: {
   teams: ReviewTeam[]
   onRename: (teamId: string, name: string) => void
   onRecolour: (teamId: string, colour: string) => void
+  /** The team id mid-write, like `ReviewGrid` and `ReviewAdjustments` — see `TeamName`. */
+  busy: string | null
 }) {
   const t = useTranslations('admin.review')
 
@@ -43,7 +46,12 @@ export function ReviewTeams({
               after every write is what makes the key move; a rejected write leaves it where it was
               and the box snaps back to the truth.
             */}
-            <TeamName key={`${team.id}:${team.name}`} team={team} onRename={onRename} />
+            <TeamName
+              key={`${team.id}:${team.name}`}
+              team={team}
+              onRename={onRename}
+              busy={busy === team.id}
+            />
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t('rankAndScore', { rank: team.rank, score: team.score })}
             </span>
@@ -61,9 +69,17 @@ export function ReviewTeams({
 function TeamName({
   team,
   onRename,
+  busy,
 }: {
   team: ReviewTeam
   onRename: (teamId: string, name: string) => void
+  /**
+   * Disabled while this team's write is in flight, matching `ReviewGrid` and `ReviewAdjustments`.
+   * A second edit landing before the first resolves would append two `TEAM_UPDATED` events for one
+   * intention — harmless to the log, but the re-read between them would move the remount key under
+   * a field someone is still typing in.
+   */
+  busy: boolean
 }) {
   const t = useTranslations('admin.review')
   const [name, setName] = useState(team.name)
@@ -71,6 +87,7 @@ function TeamName({
   return (
     <Input
       value={name}
+      disabled={busy}
       aria-label={t('teamName')}
       onChange={(event) => setName(event.target.value)}
       onBlur={() => {

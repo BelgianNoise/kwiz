@@ -361,11 +361,24 @@ export function applyProjection(
       return
 
     case 'KEYWORD_UNMARKED':
-      // Revoked, never deleted (D41) — and here the revocation must also reverse the penalty
-      // it charged every other team, which the derived clock handles by ignoring revoked marks.
+      /*
+       * Revoked, never deleted (D41) — and here the revocation must also reverse the penalty it
+       * charged every other team, which the derived clock handles by ignoring revoked marks.
+       *
+       * `revokedAt IS NULL` matches `SCORE_ADJUSTMENT_REVOKED`'s guard below, so a duplicate
+       * revocation is a no-op **at this layer** rather than one that silently moves the instant to
+       * the later event. `decide.ts` already refuses the second `UNMARK_KEYWORD`, so today this
+       * cannot be reached — but the two handlers implement one pattern, and a reader comparing them
+       * should not have to work out why only one of them defends itself.
+       */
       tx.update(gameKeywordMark)
         .set({ revokedAt: at })
-        .where(eq(gameKeywordMark.gameKeywordId, event.payload.gameKeywordId))
+        .where(
+          and(
+            eq(gameKeywordMark.gameKeywordId, event.payload.gameKeywordId),
+            isNull(gameKeywordMark.revokedAt),
+          ),
+        )
         .run()
       return
 
