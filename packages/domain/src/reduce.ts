@@ -231,6 +231,7 @@ export function applyEvent(
         pointsAwarded: 0,
         validatedAt: null,
         spotlit: false,
+        corrections: 0,
       }
       // Auto-grading may only ever be *right* (D22): a FREE_TEXT non-match lands on PENDING.
       if (verdictAwardsPoints(answer.verdict)) answer.pointsAwarded = question.points
@@ -248,7 +249,9 @@ export function applyEvent(
 
       // A repeated ANSWER_VALIDATED supersedes the earlier one — there is deliberately no
       // ANSWER_REVALIDATED, and the log still shows both decisions in order.
-      answer.verdict = event.payload.accepted ? 'ACCEPTED' : 'DENIED'
+      const settled = event.payload.accepted ? 'ACCEPTED' : 'DENIED'
+      if (isCorrection(answer.verdict, settled)) answer.corrections += 1
+      answer.verdict = settled
       answer.pointsAwarded = event.payload.accepted ? question.points : 0
       answer.validatedAt = createdAt
       // A skipped question awards nothing however it is judged afterwards (I8).
@@ -542,6 +545,25 @@ function autoVerdict(
   return 'PENDING'
 }
 
+/**
+ * PRD 2 §13.1's correction count: **did the master change their mind about a settled outcome?**
+ *
+ * Not a label comparison. `AUTO_CORRECT → ACCEPTED` is the master *confirming* the auto-grade, and
+ * counting it would make every ordinary validation look like a fix — so what is compared is whether
+ * the answer went from earning points to not, or back. That is what a reader of the grid means by
+ * *"did I mark that consistently?"*
+ *
+ * `PENDING` is excluded because nothing was settled: D22 leaves an unmatched free-text answer to a
+ * human deliberately, and the first judgement of one is the job rather than a change of mind.
+ */
+function isCorrection(
+  before: AnswerState['verdict'],
+  after: AnswerState['verdict'],
+): boolean {
+  if (before === 'PENDING') return false
+  return verdictAwardsPoints(before) !== verdictAwardsPoints(after)
+}
+
 /** `DO` questions reuse the answer map: a team's *outcome* is still per-question-per-team (§6.5). */
 function setOutcome(
   play: QuestionPlayState,
@@ -552,6 +574,9 @@ function setOutcome(
 ): void {
   const existing = play.answers.get(teamId)
   if (existing) {
+    // Same rule as `ANSWER_VALIDATED` — reachable here through `DO` re-scoring and a re-adjudicated
+    // buzz, both of which are the master changing their mind about a decision the room already saw.
+    if (isCorrection(existing.verdict, verdict)) existing.corrections += 1
     existing.verdict = verdict
     existing.pointsAwarded = pointsAwarded
     existing.validatedAt = at
@@ -568,6 +593,7 @@ function setOutcome(
     pointsAwarded,
     validatedAt: at,
     spotlit: false,
+    corrections: 0,
   })
 }
 

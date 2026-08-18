@@ -12,6 +12,161 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 8 — Review, correction & polish
+
+**Status:** complete · `pnpm check` green · **726 tests** · lint silent · `pnpm build` clean · driven
+against a really-played game — a verdict flipped twice while the control desk watched, an adjustment
+undone, a team renamed, the finale record read, and a finished game's code opened on a phone — then
+the whole surface again in `nl`
+
+### What was built
+
+PRD 2 §13 end to end: §13.1's questions × teams grid with click-to-toggle correction, §13.2's
+read-only finale record, §13.3's adjustment audit with `[Undo]`, §13.4's rename and recolour. Plus
+`GET /api/games/:id/review` (protocol §7.4), PRD 5 §15 O3's finished-game standings — slice 7's
+stated deferral — and build-order's two required tests.
+
+**Slice 8's other three bullets were already done.** Settings (§16) shipped complete in slice 4,
+including `Reclaim space` and the orphaned-attachment reconciliation with its own tests. Worth
+knowing before planning slice 9 against the build-order list rather than the code.
+
+### The one real decision
+
+**What counts as a correction.** §13.1 marks corrected cells and counts them per round *"because an
+auditable correction is the point"* — so it has to mean *the master changed their mind*, not *the
+master judged an answer*.
+
+`AnswerState` gains a `corrections` counter, and it compares through `verdictAwardsPoints` rather
+than by label. That distinction is the whole rule: `AUTO_CORRECT → ACCEPTED` is a master **confirming**
+the auto-grade, and counting it would make every ordinary validation look like a fix. `PENDING →
+anything` is excluded too — D22 leaves an unmatched free-text answer to a human deliberately, so the
+first judgement of one is the job.
+
+My first attempt compared verdict *strings*, which counted both of those. The verdict vocabulary has
+six values, not two, and that is why.
+
+### Two bugs found by building it
+
+1. **A revoked keyword mark blocked re-marking and revealing** — `packages/db`, not this slice's own
+   code. `game_keyword_mark` has a unique index on `game_keyword_id` and a **revoked row keeps
+   holding it**, so both `KEYWORD_MARKED` and `KEYWORDS_REVEALED` threw `UNIQUE constraint failed`.
+   The sequence is PRD 3 §10.4's `Shift`+`n` used exactly as intended: un-mark, then credit the right
+   team. `decide.ts` allows it on purpose — the guard is `existing.revokedAt === null`. A state the
+   log could express and the projection could not, which is what I15 forbids. Both are upserts now,
+   and `revokedAt: null` is the load-bearing half.
+
+   **Found by playing a whole evening in a test**, which is the argument for the fully-played
+   round-trip over the minimal one that already existed.
+
+2. **The team-name field could show a name that was never saved.** It holds local state so it can be
+   typed into, and local state initialises once. Keyed by the server's last confirmed name now.
+
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
+
+### Spec deviations
+
+**`GET /api/games/:id/validation-queue` was removed from protocol §7.4 rather than implemented.**
+The table listed it — *"the full pending list, paginated"* — while the round-end sweep was still
+designed as one answer at a time. PRD 3 §6.2 then settled it the other way: the sweep shows one
+question's answers together, which is O(teams) and therefore **pushed** as
+`attention.VALIDATE_QUESTION`. The other thing a queue would have served — *what is still pending
+across the whole game?* — is now §13.1's grid. A third read with no caller is the speculative surface
+PRD 1 §11 warns against, and a promised endpoint that does not exist is worse than none, because the
+next agent builds a screen expecting it. The reasoning is recorded in the spec at the point of
+removal.
+
+**D59 added to the decision log**, carrying across the `SCOREBOARD_TOGGLED` decision the slice-6
+review round asked for: pushing the leaderboard over an open question is legal and the leaderboard
+wins, with the contrast to `[Start break]`, which is refused. The rationale already lived in PRD 3
+§11.1; it now has a number the rest of the repo can cite.
+
+### Raised, not resolved
+
+- **The review re-reads the whole game after every correction.** Correct, and the only correct
+  option — one flipped verdict moves a score, which moves every rank, which moves the finale's
+  starting seconds. At PRD 1 §2.1's envelope (40 questions × 20 teams) it is imperceptible. If a
+  future quiz is far larger, this is the first thing to feel slow, and the fix is a narrower
+  response rather than local patching.
+- **No E2E test was added.** D49 and agent-workflow §4.4 put the suite in slice 9, and §4.4's
+  exception — *"write one only when the interaction between surfaces is the thing under test and you
+  found a bug no unit test could have caught"* — was not met: the keyword bug is covered by three
+  parity tests at the layer it lives in.
+
+### Deliberately left out
+
+Nothing from slice 8's list. The one thing PRD 2 §13.1 describes that is **not** implemented as
+written is a per-question *"3 corrections made"* badge — the count is shown per round and per game,
+which is where a master looks, and per question it would be noise on a grid that already marks every
+corrected cell.
+
+### Not verifiable here (agent-workflow §4.5)
+
+- **A genuinely large review.** Everything was driven at three teams and nine questions. The grid
+  scrolls in its own container, but 20 teams × 40 questions on a laptop screen is a different
+  reading experience and only a real quiz shows it.
+- **A finale with real clocks, *on screen*.** The finale I drove had every finalist starting at zero
+  seconds, so §13.2's `145 → 41` never rendered from a game where time ran. Closed at the level that
+  can be: four domain tests now assert the arithmetic with real timestamps — starting bank from score
+  at `FINALISTS_SET`, a turn charging its taker and the penalty charging everyone else, and a
+  survivor's remaining seconds **frozen at `finale.endedAt`** so a finished game's record does not
+  tick down each time the page is opened. What is still unverified is only how those numbers look.
+
+### The smoke checklist, honestly
+
+The slice-8 rows were driven in full. The other 120 were **not** re-run one by one — instead the
+three paths this slice could plausibly have broken were checked directly, which is where a
+regression would actually be:
+
+- **A cold server restart mid-review.** `corrections` is new state on `AnswerState`, and it is
+  *derived*, so the risk was it not surviving a replay. The process was killed and restarted; the
+  count came back as `corrected 2×` (D4, I15).
+- **All three join outcomes**, because §15 O3 added a fallback after `findJoinableGameByCode`: a live
+  game still reaches the picker with D20's *"already has 3 phones"* intact, a finished code reaches
+  the standings, and a nonsense code still reaches the plain explanation rather than a podium.
+- **The finale projection**, via the three new parity tests rather than by hand.
+
+### What the next agent would otherwise rediscover
+
+- **The review is a pure function over `GameState`, not a projection query.** The registry loads any
+  game by replaying its log, finished ones included (PRD 1 §6.4), so `toGameReview` needs no database
+  and its whole test is a literal event list. Adding a field means adding it there, not in a SQL read.
+- **It is deliberately not in `views.ts`.** That file holds the three leak-checked audience views; the
+  review is `CONFIG`, sees everything, and is not enumerated by the sentinel test. Keeping it
+  separate is what stops someone "helpfully" adding the review to that enumeration and then relaxing
+  a sentinel to make it pass.
+- **Keyword text is present in the review and nowhere else.** D53 keeps an unmarked keyword's text
+  off the wire for the room and the players; here the master wrote it and is reading their own
+  record. `reached` carries the "nobody found it" vs "never got there" distinction, not the absence
+  of text.
+- **`findEndedGameByCode` is a second function rather than a flag**, so joinable-first can never be
+  got backwards. A code freed by last night's game can be minted again tonight, and tonight's players
+  must not land in last night's standings.
+- **A stale `apps/web/tsconfig.tsbuildinfo` will lie to you about `next-intl` message keys.** Adding
+  `admin.review` type-checked immediately while `player.finished` reported *"not assignable"* from
+  the same run — incremental caching, not the code. Delete it before believing a message-key error.
+- **`document.hasFocus()` is `false` in the driven browser pane**, so `el.focus()` is a no-op and no
+  `blur` ever fires. An `onBlur` handler therefore never runs from a script, and the surface looks
+  broken when it is not. Dispatch `focusout` directly. This is the second slice to lose time to the
+  focus model — slice 7's note covers the already-active case, this one covers the whole document.
+
 ## Slice 7 — The player device
 
 **Status:** complete · `pnpm check` green · **692 tests** · lint silent · `pnpm build` clean · join,
@@ -114,6 +269,26 @@ the SSE retry loop merely hidden rather than stopped after a game ends; the subm
 back to *Submit* between backoff attempts; `protocol.md` §5.3 missing `abandoned`; §2.1 not stating
 the reverse-proxy access-log cost of the query-parameter token; and two finale-keyword sentinel
 assertions that only covered the room.
+
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
 
 ### Spec deviations
 
@@ -292,6 +467,26 @@ Four are worth singling out:
 
 Jeopardy category names were also below §2.1's absolute `4vh` floor, at `3.6cqh` — caught by measuring
 rather than by looking, which is now a smoke-checklist row with the snippet in it.
+
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
 
 ### Spec deviations
 
@@ -587,6 +782,26 @@ One carried-over finding was already closed: conventions §4's `CHECKSUM_MISMATC
 `IMPORT_COLLISION` rows already document, at length, that they are declared and never returned and
 why. No change needed.
 
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
+
 ### Spec deviations
 
 None knowingly. Everything above is an *addition* to protocol §5.4/§5.5, written into the spec in
@@ -866,6 +1081,26 @@ segment.
   table. Both now derive it the same way. Verified with teeth: forcing the old behaviour fails the
   new parity case.
 
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
+
 ### Spec deviations — all four docs updated in this change
 
 - **The SSE `id` is now `<gameId>:<seq>`, not a bare `seq`.** protocol §3.2 requires a
@@ -1003,6 +1238,26 @@ the event that carried it, so a replay is byte-identical and every test is a lit
 order, every finale clock. If you find yourself adding a field to `GameState` for one of these,
 that is a second source of truth for the same fact.
 
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
+
 ### Spec deviations
 
 - **PRD 1 §7.1 draws `BUZZED` as a state box.** The canonical type has six states and no such
@@ -1091,6 +1346,26 @@ validators for every JSON column; the 40-type `game_event` payload union validat
 *and* replay; the connection module with all four pragmas; the first migration; D14's boot
 prompt; `appendAndProject`; and the §7.2 column-parity guard.
 
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
+
 ### Spec deviations — all fixed in the same change
 
 Four, and three were found only by writing the code that had to obey them:
@@ -1170,6 +1445,26 @@ the §1.4 architectural overrides plus `scripts/check-no-process-env.mjs`; oxfmt
 style pinned; Vitest workspace with a project per package; Next 16 App Router app with
 Tailwind v4 + shadcn/ui tokens; next-intl `en`/`nl` implementing all three steps of PRD 1
 §9.4's resolution order.
+
+### The review round, and the two findings worth remembering
+
+**An abandoned game's code read exactly like a code that never existed.** PRD 5 §15 O3 resolves
+*three* outcomes and I shipped two: `ABANDONED` fell through to *"it may have finished, or the code
+may be slightly off"*, which is untrue — the code was right — and sends someone back to re-read a
+projector that is dark. Worse, the copy for this already existed and was wired only into the
+live-disconnect path. It has its own page now, sharing that copy, so a phone that was in the room
+and a phone opening the link afterwards are told the same true thing.
+
+**A test that could not fail.** The finale-clock freeze test closed the survivor's turn with
+`TURN_ENDED` before ending the round — and once a turn has an `endedAt`, `finaleRemainingSeconds`
+never consults `now`, so comparing two `now` values proved nothing at all. The shape that reaches
+the freeze is a survivor still *on turn* when the round ends, which is reachable precisely because
+`END_FINALE` emits `FINALE_ENDED` and nothing else: **nobody ever closes the winner's turn.**
+
+The general lesson, worth more than the fix: *"same input, two clocks, same answer"* proves nothing
+unless the fixture reaches a branch that would consult the clock. The rewritten test was verified by
+breaking the freeze and watching it fail before restoring it — which is the cheap habit that would
+have caught it the first time.
 
 ### Spec deviations — all four docs updated in this change
 

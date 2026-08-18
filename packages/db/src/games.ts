@@ -66,6 +66,40 @@ export function findJoinableGameByCode(
 }
 
 /**
+ * A **finished or abandoned** game by its join code — PRD 5 §15 O3's morning-after bookmark.
+ *
+ * The deliberate counterpart to `findJoinableGameByCode`, and it exists as a second function rather
+ * than a flag on the first so the priority can never be got backwards: a caller resolves *joinable*
+ * first and only falls back here. That ordering is what keeps a recycled code pointing at the live
+ * game while it is live, which is the reason the restriction was there to begin with.
+ *
+ * Newest first, because a code reused across three nights should show last night's, not the first.
+ */
+export function findEndedGameByCode(
+  database: KwizDatabase,
+  code: string,
+): GameRow | undefined {
+  return database.db
+    .select({
+      id: game.id,
+      status: game.status,
+      code: game.code,
+      quizName: game.quizName,
+      sourceQuizId: game.sourceQuizId,
+      quizRevision: game.quizRevision,
+    })
+    .from(game)
+    .where(
+      and(
+        eq(game.code, normaliseCode(code)),
+        inArray(game.status, ['FINISHED', 'ABANDONED'] satisfies GameStatus[]),
+      ),
+    )
+    .orderBy(desc(game.createdAt))
+    .get()
+}
+
+/**
  * A device by the token it presents. **Identity, not authorisation** (PRD 1 §4): the token says
  * which team's view to build, and there is nothing it grants that being on the network does not.
  *

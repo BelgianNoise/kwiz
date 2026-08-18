@@ -1,14 +1,18 @@
 import { reduce, type GameContent, type GameEvent, type LoggedEvent } from '@kwiz/domain'
 import { and, eq } from 'drizzle-orm'
+import { v7 as uuidv7 } from 'uuid'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appendAndProject, readLog } from './append'
 import type { KwizDatabase } from './client'
+import { loadGameContent } from './content'
 import {
   gameAcceptedAnswer,
   gameAnswer,
   gameBuzz,
+  gameKeywordMark,
   gameQuestion,
+  gameQuestionKeyword,
   gameTeam,
 } from './schema'
 import { freshTestDatabase, seedGame, type SeededGame } from './test-support'
@@ -398,5 +402,193 @@ describe('the writer and the reducer agree', () => {
 
     expect(fromDatabase()).toEqual(fromDomain())
     expect(fromDatabase()[0]).toMatchObject({ verdict: 'AUTO_CORRECT', score: 10 })
+  })
+})
+
+/**
+ * The finale's keyword marks, which are the one projection with a **unique index that a revoked row
+ * keeps holding** — so "insert a new mark" and "the reducer overwrites its map entry" are not the
+ * same operation, and the difference only shows up after a revoke.
+ *
+ * This is PRD 3 §10.4's `Shift`+`n` used the way it is meant to be: un-mark, then credit the right
+ * team. It threw `UNIQUE constraint failed` mid-finale until slice 8 — a state the log could express
+ * and the projection could not, which is exactly what I15 forbids.
+ */
+describe('keyword marks stay in step with the reducer', () => {
+  let keywordId: string
+
+  beforeEach(() => {
+    keywordId = uuidv7()
+    database.db
+      .insert(gameQuestionKeyword)
+      .values({
+        id: keywordId,
+        gameId: seed.gameId,
+        gameQuestionId: seed.questionId,
+        position: 0,
+        text: 'i like cows',
+        wordLengths: [1, 4, 4],
+      })
+      .run()
+  })
+
+  const marksInDatabase = () =>
+    database.db
+      .select({
+        keyword: gameKeywordMark.gameKeywordId,
+        teamId: gameKeywordMark.teamId,
+        revoked: gameKeywordMark.revokedAt,
+      })
+      .from(gameKeywordMark)
+      .all()
+      .map((row) => ({ ...row, revoked: row.revoked !== null }))
+
+  const marksInDomain = () => {
+    const log = readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+      seq: entry.seq,
+      event: entry.event,
+      createdAt: entry.createdAt.getTime(),
+    }))
+    /*
+     * The **real** content loader here, not `contentFor`'s hand-written tree: the keyword only
+     * exists in the database, and a fixture that omitted it would let the reducer report no marks
+     * while the projection held three — a comparison that passes by agreeing about nothing.
+     */
+    const content = loadGameContent(database, seed.gameId)
+    if (!content) throw new Error('expected game content')
+    return [...reduce(content, log).keywordMarks.values()].map((mark) => ({
+      keyword: mark.gameKeywordId,
+      teamId: mark.teamId,
+      revoked: mark.revokedAt !== null,
+    }))
+  }
+
+  it('re-marks a revoked keyword to another team rather than failing', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORD_UNMARKED', payload: { gameKeywordId: keywordId } },
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamB },
+      },
+    ])
+
+    // Alive again, and credited to the team the master actually meant.
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: seed.teamB, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
+  })
+
+  it('reveals over a revoked mark rather than failing', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORD_UNMARKED', payload: { gameKeywordId: keywordId } },
+      { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: seed.questionId } },
+    ])
+
+    // Nobody found it (I21) — not "still credited to A", and not a crash.
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: null, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
+  })
+
+  it('leaves an ordinary mark alone when the question is revealed', () => {
+    appendAndProject(database, seed.gameId, [
+      {
+        type: 'KEYWORD_MARKED',
+        payload: { gameKeywordId: keywordId, teamId: seed.teamA },
+      },
+      { type: 'KEYWORDS_REVEALED', payload: { gameQuestionId: seed.questionId } },
+    ])
+
+    expect(marksInDatabase()).toEqual([
+      { keyword: keywordId, teamId: seed.teamA, revoked: false },
+    ])
+    expect(marksInDatabase()).toEqual(marksInDomain())
+  })
+})
+
+/**
+ * `AnswerState.corrections` (PRD 2 §13.1) is the one piece of answer state with **no projection
+ * column** — it is folded in memory on every replay and never written down.
+ *
+ * So I15 does not apply to it and it cannot join the `Row` comparison above: there is no database
+ * side to compare against, and a domain-to-domain assertion would prove nothing. What *does* apply
+ * is D4 — a replay reproduces the state exactly — and that is worth pinning, because a derived
+ * counter is precisely the kind of thing that quietly resets when a server restarts and nobody
+ * notices until a master reopens a review the morning after.
+ */
+describe('the correction count survives a replay (D4)', () => {
+  it('rebuilds from the log rather than from anything stored', () => {
+    appendAndProject(database, seed.gameId, [
+      submit(seed.teamA, 'paris'), // AUTO_CORRECT
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: seed.questionId, teamId: seed.teamA, accepted: false },
+      },
+    ])
+
+    const rebuilt = reduce(
+      contentFor(seed),
+      readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+        seq: entry.seq,
+        event: entry.event,
+        createdAt: entry.createdAt.getTime(),
+      })),
+    )
+
+    // Overturning an auto-accept is a correction; the count is derived, so a fresh fold must find it.
+    expect(
+      rebuilt.questions.get(seed.questionId)?.answers.get(seed.teamA)?.corrections,
+    ).toBe(1)
+    // And nothing was persisted for it — the projection has no column to drift from.
+    expect(
+      Object.keys(database.db.select().from(gameAnswer).all()[0] ?? {}),
+    ).not.toContain('corrections')
+  })
+})
+
+/**
+ * `TEAM_ELIMINATED` writes `gameTeam.eliminatedAt`, and the **order** of those instants is what
+ * produces the finale's final ranking (D51) — so a drift here does not merely misreport a time, it
+ * reorders the podium. It had no parity test; the keyword marks above got one when their bug
+ * surfaced, and this is the same shape of small write in the same round.
+ */
+describe('elimination instants stay in step with the reducer', () => {
+  it('writes the computed instant, not the moment the event was appended', () => {
+    // `at` is the instant the clock hit zero, which is deliberately *not* `createdAt` (payload doc).
+    appendAndProject(database, seed.gameId, [
+      { type: 'TEAM_ELIMINATED', payload: { teamId: seed.teamA, at: 1_234_000 } },
+    ])
+
+    const row = database.db
+      .select({ id: gameTeam.id, eliminatedAt: gameTeam.eliminatedAt })
+      .from(gameTeam)
+      .where(eq(gameTeam.id, seed.teamA))
+      .get()
+
+    const rebuilt = reduce(
+      contentFor(seed),
+      readLog(database, seed.gameId).map((entry): LoggedEvent => ({
+        seq: entry.seq,
+        event: entry.event,
+        createdAt: entry.createdAt.getTime(),
+      })),
+    )
+
+    expect(row?.eliminatedAt?.getTime()).toBe(1_234_000)
+    expect(row?.eliminatedAt?.getTime()).toBe(
+      rebuilt.teams.get(seed.teamA)?.eliminatedAt ?? null,
+    )
+    // The team that stayed in has none, in both halves.
+    expect(rebuilt.teams.get(seed.teamB)?.eliminatedAt).toBeNull()
   })
 })

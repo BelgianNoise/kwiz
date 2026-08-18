@@ -383,6 +383,47 @@ const nl: Messages = {
       deleteBody:
         'Dit spel, zijn {teams} teams en alle antwoorden gaan weg. De quiz blijft.',
       exportGame: 'Deze game exporteren',
+      review: 'Nakijken & corrigeren',
+    },
+
+    review: {
+      loading: 'De game wordt geladen…',
+      noGame: 'Geen game met dat id.',
+      backToGame: 'Terug naar de game',
+      roundHeading: 'Ronde {position} · {title}',
+      question: 'Vraag',
+      emptyRound: 'Deze ronde heeft geen vragen.',
+      correctAnswer: 'Juiste antwoord: {answer}',
+      alsoAccepted: 'ook goed: {answers}',
+      noAnswer: 'geen antwoord',
+      correctionCount: '{count, plural, one {# correctie} other {# correcties}}',
+      corrected: '{count, plural, one {gecorrigeerd} other {#× gecorrigeerd}}',
+      toggleHint: 'Klik om dit oordeel te wijzigen',
+      fromDraft: 'uit een klad',
+      byMaster: 'door jou ingevoerd',
+
+      finaleHeading: 'Finale',
+      finaleReadOnly:
+        'De finale is een verslag, geen klad: een klok die liep is een feit. Een verkeerde markering moet tijdens de ronde rechtgezet worden, want alleen dan kunnen de seconden terug.',
+      wonBy: 'gewonnen door {team}',
+      nobody: '— niemand',
+      notReached: 'niet bereikt',
+      finalist: 'Finalist',
+      started: 'Begon met',
+      ended: 'Eindigde op',
+      out: 'Uit',
+      survived: 'bleef over',
+      didNotPlay: 'speelde niet mee',
+
+      adjustmentsHeading: 'Puntencorrecties',
+      noAdjustments: 'Er zijn geen puntencorrecties gedaan.',
+      notAnnounced: 'niet aangekondigd',
+      undo: 'Ongedaan maken',
+      undone: 'ongedaan gemaakt',
+
+      teamsHeading: 'Ploegen',
+      teamName: 'Ploegnaam',
+      rankAndScore: '#{rank} · {score}',
     },
 
     settings: {
@@ -751,6 +792,12 @@ const nl: Messages = {
       rank: '{rank, selectordinal, other {#e}}',
       abandoned: 'De quizmaster heeft deze quiz beëindigd.',
     },
+    finished: {
+      finalScores: 'Eindstand',
+      gameOver: 'Deze quiz is afgelopen. Bedankt voor het meespelen!',
+      backHome: 'Terug naar het begin',
+    },
+
     buzzer: {
       buzz: 'BUZZ',
       buzzed: 'Gebuzzed',

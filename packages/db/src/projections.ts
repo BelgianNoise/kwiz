@@ -333,6 +333,18 @@ export function applyProjection(
     // ─── finale keywords ───
 
     case 'KEYWORD_MARKED':
+      /*
+       * **Upsert, because a revoked row still holds the unique index.**
+       *
+       * `MARK_KEYWORD` deliberately allows re-marking a keyword whose mark was revoked (decide.ts):
+       * the master pressed `Shift`+`n` and is now crediting the right team, which is PRD 3 §10.4's
+       * ordinary correction rather than an edge case. The reducer overwrites its map entry; a plain
+       * insert here threw `UNIQUE constraint failed` mid-finale instead — a projection that could
+       * not represent a state the log can, which is the divergence I15 exists to forbid.
+       *
+       * `revokedAt: null` is the load-bearing half: the row has to come back to life, not merely
+       * change hands, or the clock keeps ignoring a mark that is now real again.
+       */
       tx.insert(gameKeywordMark)
         .values({
           gameId,
@@ -341,15 +353,32 @@ export function applyProjection(
           teamId: event.payload.teamId,
           markedAt: at,
         })
+        .onConflictDoUpdate({
+          target: gameKeywordMark.gameKeywordId,
+          set: { teamId: event.payload.teamId, markedAt: at, revokedAt: null },
+        })
         .run()
       return
 
     case 'KEYWORD_UNMARKED':
-      // Revoked, never deleted (D41) — and here the revocation must also reverse the penalty
-      // it charged every other team, which the derived clock handles by ignoring revoked marks.
+      /*
+       * Revoked, never deleted (D41) — and here the revocation must also reverse the penalty it
+       * charged every other team, which the derived clock handles by ignoring revoked marks.
+       *
+       * `revokedAt IS NULL` matches `SCORE_ADJUSTMENT_REVOKED`'s guard below, so a duplicate
+       * revocation is a no-op **at this layer** rather than one that silently moves the instant to
+       * the later event. `decide.ts` already refuses the second `UNMARK_KEYWORD`, so today this
+       * cannot be reached — but the two handlers implement one pattern, and a reader comparing them
+       * should not have to work out why only one of them defends itself.
+       */
       tx.update(gameKeywordMark)
         .set({ revokedAt: at })
-        .where(eq(gameKeywordMark.gameKeywordId, event.payload.gameKeywordId))
+        .where(
+          and(
+            eq(gameKeywordMark.gameKeywordId, event.payload.gameKeywordId),
+            isNull(gameKeywordMark.revokedAt),
+          ),
+        )
         .run()
       return
 
@@ -376,6 +405,9 @@ export function applyProjection(
         )
 
       for (const { id } of unmarked) {
+        // Same upsert as `KEYWORD_MARKED`, and reachable by the same route: a keyword marked and
+        // then un-marked has no *live* mark, so the reveal covers it — over a revoked row that is
+        // still occupying the unique index.
         tx.insert(gameKeywordMark)
           .values({
             gameId,
@@ -383,6 +415,10 @@ export function applyProjection(
             gameKeywordId: id,
             teamId: null,
             markedAt: at,
+          })
+          .onConflictDoUpdate({
+            target: gameKeywordMark.gameKeywordId,
+            set: { teamId: null, markedAt: at, revokedAt: null },
           })
           .run()
       }

@@ -109,6 +109,7 @@ export {
   findGame,
   gameLoss,
   gameWinners,
+  findEndedGameByCode,
   findJoinableGameByCode,
   generateUnusedCode,
   isStale,
