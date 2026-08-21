@@ -10,5 +10,10 @@
   // `pnpm typecheck` passed.
   //
   // Files under `apps/` and `packages/` resolve to their own tsconfig, not this one.
-  "include": ["vitest.config.ts", "scripts/**/*.ts"]
+  "include": [
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts"
+  ]
 }

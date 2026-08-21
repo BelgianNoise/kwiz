@@ -21,6 +21,9 @@
     "e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@kwiz/db": "workspace:*",
+    "@kwiz/domain": "workspace:*",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",

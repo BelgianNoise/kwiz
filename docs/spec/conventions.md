@@ -152,7 +152,7 @@ enforced mechanically rather than trusted, and should be:
 | --- | --- |
 | `packages/domain` is pure (CLAUDE.md §2.1) | `no-restricted-imports` above. A domain file importing Drizzle or Next now **fails lint** |
 | No `any` in `domain` or `db` | `no-explicit-any: error` in those overrides only |
-| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint` — locally and in CI (§1.6). `process.env` may appear only in `packages/config/src/**`. Cheap, and catches the one thing PRD 1 §6.8 forbids |
+| No `process.env` outside the config module | `scripts/check-no-process-env.mjs`, run as part of `pnpm lint` — locally and in CI (§1.6). `process.env` may appear only in `packages/config/src/**`, or in build/test tooling that never ships (`scripts/`, `playwright.config.ts`, `e2e/`) — the E2E harness launches a *throwaway* server process from the outside, which is a different job from the app's own boot-time config (PRD 1 §6.8). Cheap, and catches the one thing PRD 1 §6.8 forbids |
 
 If oxlint's `no-restricted-imports` proves insufficient, a ~20-line CI script asserting
 the same thing is an acceptable substitute. **Do not downgrade it to a comment.**
