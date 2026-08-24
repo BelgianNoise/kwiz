@@ -126,6 +126,33 @@ smoke-checklist rows say so explicitly.
 - `pnpm e2e` rebuilds the app every run (~90 s cold). While iterating, filter:
   `pnpm exec playwright test e2e/specs/<file> -g "<test name>" --workers=1`.
 
+### Review round — the two raised findings, resolved (post-merge)
+
+Both "raised, not resolved" items above were product decisions that had been deferred long
+enough to hurt, and both are now settled in code, spec, and tests:
+
+**A saved `DO` verdict completes the question.** `SET_DO_WINNERS` appends `QUESTION_SCORED`
+with `DO_WINNERS_SET` — one commit, because it resolves everyone including `[Nobody got it]`.
+`SET_DO_SCORES` appends it only when its payload gives **every** team an outcome; a partial
+save is still a real state and holds the desk. D24's empty-vs-zero distinction turned out to
+be exactly the completeness rule: *blank* means not judged yet, an entered `0` resolves. The
+state machine already carried `LOCKED → SCORED` for this case (PRD 1 §7.1); until now nothing
+emitted it. New specs: 15 drives `[Next question]` after each verdict instead of the timeline;
+16b pins partial-hold → complete-yields end to end.
+
+**Closed rounds are invisible to pacing.** `advanceSuggestion` answers a closed current round
+with `NEXT_ROUND`/`FINISH` before reading any play state; `OPEN_QUESTION` into a closed round
+is refused with the new typed error `ROUND_CLOSED` (conventions §4 + messages en/nl + http
+mapping); `MasterControlView.round` gains `closed`, and the client uses it to drop the board
+handback gates and the timeline's open link when the round has ended. New spec 20b drives the
+whole journey: play one question, end the round early with another pending, assert the desk
+offers `[Start the next round]` and *not* `[Next question]`, assert the direct POST is refused,
+then play round two normally. PRD 3 gained §9.2; protocol §4/§5.4/§7.2 updated in the same
+change.
+
+The third raised item — scenario 16's single historical flake under four workers — stands as
+documented: workers stay at two, where it has never reproduced.
+
 ---
 
 ## Slice 8 — Review, correction & polish

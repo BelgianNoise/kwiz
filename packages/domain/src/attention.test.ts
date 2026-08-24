@@ -248,6 +248,53 @@ describe('each state is reachable', () => {
     ])
   })
 
+  /**
+   * Slice 9's review finding, at the attention layer: a saved verdict used to leave the
+   * question `LOCKED` and the master stranded on a finished desk with no route onward but the
+   * timeline strip. Resolution completes the question (`QUESTION_SCORED`), and `SCORE_DO`
+   * stands down.
+   */
+  it('SCORE_DO stands down once every team has an outcome', () => {
+    const result = attention(
+      run([
+        ...SETUP,
+        { type: 'QUESTION_OPENED', payload: { gameQuestionId: PER_TEAM } },
+        { type: 'QUESTION_LOCKED', payload: { gameQuestionId: PER_TEAM } },
+        {
+          type: 'DO_SCORES_SET',
+          payload: { gameQuestionId: PER_TEAM, scores: [{ teamId: A, score: 6 }] },
+        },
+        {
+          type: 'DO_SCORES_SET',
+          payload: {
+            gameQuestionId: PER_TEAM,
+            scores: [
+              { teamId: A, score: 6 },
+              { teamId: B, score: 0 },
+            ],
+          },
+        },
+        { type: 'QUESTION_SCORED', payload: { gameQuestionId: PER_TEAM } },
+      ]),
+      NOW,
+    )
+    expect(result.kind).not.toBe('SCORE_DO')
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('NEXT_QUESTION')
+  })
+
+  /**
+   * The other half of the same review finding: ending a round early must never point pacing
+   * into what was just ended. With unplayed questions left in a *closed* round, the desk offers
+   * the next round rather than a `[Next question]` that would reopen ended gameplay.
+   */
+  it('suggests NEXT_ROUND for a closed current round with questions still pending', () => {
+    const result = attention(
+      run([...SETUP, { type: 'ROUND_CLOSED', payload: { gameRoundId: 'r1' } }]),
+      NOW,
+    )
+    expect(result.kind === 'ADVANCE' && result.suggestion).toBe('NEXT_ROUND')
+  })
+
   it('is BREAK_TIE_FOR_PICK when the board is stalled on equal scores', () => {
     expect(
       kindOf(run([...SETUP, { type: 'ROUND_OPENED', payload: { gameRoundId: 'r2' } }])),

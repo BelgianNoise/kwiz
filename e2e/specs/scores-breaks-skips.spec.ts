@@ -10,7 +10,7 @@ import {
   railRow,
   startFirstQuestion,
 } from '../support/flows'
-import { createGame } from '../support/game'
+import { createGame, gameContent } from '../support/game'
 import { addFreeText, newQuestionSetRound, newQuiz } from '../support/quiz'
 import { openControl, openPlayer, openScreen } from '../support/surfaces'
 
@@ -209,4 +209,70 @@ test('20 — skipping pays nobody, not even an answer already auto-graded', asyn
   ).toBeVisible()
 
   await Promise.all([phone.context.close(), master.context.close()])
+})
+
+/**
+ * Scenario 20b — *ending a round early never points pacing back into it.*
+ *
+ * Slice 9's review finding: `End this round` with questions still pending used to leave the
+ * desk suggesting `[Next question]` into the closed round, and opening one of its questions
+ * reopened ended gameplay. Now the closed round is invisible to pacing, its timeline link is
+ * gone, and a direct request is refused with a typed error.
+ */
+test('20b — a round the master ended cannot be reopened and does not trap pacing', async ({
+  browser,
+}) => {
+  const db = testDb()
+  const quizId = newQuiz(db, 'scores — scenario 20b')
+  const roundOne = newQuestionSetRound(db, quizId, 'Round one')
+  addFreeText(db, roundOne, 'Capital of France?', ['paris'], { points: 10 })
+  addFreeText(db, roundOne, 'Capital of Spain?', ['madrid'], { points: 10 })
+  const roundTwo = newQuestionSetRound(db, quizId, 'Round two')
+  addFreeText(db, roundTwo, 'Capital of Portugal?', ['lisbon'], { points: 10 })
+  const game = createGame(db, quizId, TEAMS)
+
+  const content = gameContent(db, game.gameId)
+  const spainQuestionId = content.rounds[0]!.questions[1]!.id
+
+  const master = await openControl(browser)
+  await master.page.goto(`/en/control/${game.gameId}`)
+  await startFirstQuestion(master.page)
+
+  // Play question one to completion…
+  await advance(master.page, c.question.close)
+  await advance(master.page, c.question.reveal)
+  await advance(master.page, c.question.score)
+
+  // …then end the round with question two still unplayed.
+  await master.page.getByRole('button', { name: c.frame.menu }).click()
+  await master.page.getByRole('menuitem', { name: c.frame.closeRound }).click()
+
+  // The desk's suggestion is the NEXT ROUND — never a `[Next question]` into what was just
+  // ended. This is the assertion that failed before the fix.
+  await expect(
+    master.page.getByRole('button', { name: c.question.nextRound }),
+  ).toBeVisible()
+  await expect(
+    master.page.getByRole('button', { name: c.question.next, exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    master.page.getByRole('button', { name: c.question.openNext }),
+  ).toHaveCount(0)
+
+  // A direct request cannot reopen the closed round's gameplay either (PRD 3 §9.2).
+  const refused = await master.page.request.post(
+    `/api/games/${game.gameId}/questions/${spainQuestionId}/open`,
+    { data: {} },
+  )
+  expect(refused.status()).toBe(409)
+  expect(await refused.json()).toMatchObject({ ok: false, error: 'ROUND_CLOSED' })
+
+  // …and pacing flows onward: round two opens and plays normally.
+  await advance(master.page, c.question.nextRound)
+  await advance(master.page, c.question.openNext)
+  await expect(
+    master.page.getByRole('heading', { name: 'Capital of Portugal?' }),
+  ).toBeVisible()
+
+  await master.context.close()
 })

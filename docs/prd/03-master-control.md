@@ -424,6 +424,15 @@ On `N`, per D35, **without a second click**:
   needs to see who they haven't got to, even though both resolve to 0.
 - Values are clamped to `0…points` on entry rather than rejected on save.
 
+**Saving the verdict completes the question.** `DO` has no reveal beat — there is nothing
+hidden to put on the projector — so once every team has an outcome, `QUESTION_SCORED` is
+recorded and the desk yields to the advance suggestion like any other scored question. For
+`WINNER_TAKES_ALL` that is immediate (one commit resolves everyone, including `[Nobody got
+it]`); for `Score each team` the desk persists while any team is still blank — D24's
+empty-vs-zero distinction made load-bearing: *blank* means "not judged yet", an entered `0`
+resolves that team. Closing the round does not abandon an unfinished scoring desk; it stays
+until the remaining teams are given their scores.
+
 ---
 
 ## 9. Jeopardy
@@ -469,7 +478,19 @@ is marked *question skipped* in review.
 `[Skip this question]` is pointer-only, never a keystroke (§12) — a stray key must not be
 able to discard a question in front of a room.
 
-### 9.2 What cannot be undone from here
+### 9.2 Closed rounds
+
+Ending a round early — `[⋯] → End this round` with questions still unplayed — is a promise
+that its remaining questions will not be played. Everything that could reopen them obeys:
+
+- **Pacing suggestions never point into the closed round.** The desk offers `[Start the next
+  round]` (or `[End the game]`, on the last round) immediately after closing, never a
+  `[Next question]` into what was just ended.
+- **Opening one of its questions is refused** (`ROUND_CLOSED`), so neither the timeline nor a
+  stray request can resurrect played-out gameplay.
+- The round stays visible in the timeline as history; only its open link goes.
+
+### 9.3 What cannot be undone from here
 
 Stated plainly because the absence is deliberate:
 

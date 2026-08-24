@@ -350,6 +350,7 @@ type ErrorCode =
                               //   last bullet). A copy bug, never a normal refusal — should
                               //   not be reachable, and rolls the whole transaction back
   | 'QUESTION_STILL_OPEN'     // break refused over a live question (PRD 4 §11)
+  | 'ROUND_CLOSED'            // opening a question in a round the master has ended (PRD 3 §9.1)
   | 'SCORE_OUT_OF_RANGE'      // PER_TEAM_SCORE outside 0…points (D24)
   // ─── DSMTW_FINALE (D50) ───
   | 'NOT_A_FINALE_ROUND'      // finale action against a non-finale round

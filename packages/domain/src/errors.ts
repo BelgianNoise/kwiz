@@ -42,6 +42,13 @@ export const ERROR_CODES = [
   'RESYNC_BLOCKED',
   'SOURCE_QUIZ_DELETED',
   'QUESTION_STILL_OPEN',
+  /**
+   * A question in a round the master has already ended cannot be opened — the round is over, and
+   * reopening its gameplay would contradict the closing. Added with the fix that made closed
+   * rounds invisible to pacing suggestions (slice 9's review): without it, `advanceSuggestion`
+   * kept pointing into the closed round and a timeline click reopened played gameplay.
+   */
+  'ROUND_CLOSED',
   'SCORE_OUT_OF_RANGE',
   /**
    * data model §7's last bullet: a copy is validated after writing, not trusted. Thrown by

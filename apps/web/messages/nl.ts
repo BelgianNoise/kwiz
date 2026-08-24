@@ -33,6 +33,7 @@ const nl: Messages = {
     GAME_NOT_FINISHED: 'Dat kan pas nadat de quiz is afgelopen.',
     RESYNC_BLOCKED: 'Deze quiz is al gespeeld en kan niet meer worden bijgewerkt.',
     SOURCE_QUIZ_DELETED: 'De quiz waar dit spel uit komt bestaat niet meer.',
+    ROUND_CLOSED: 'Die ronde is al afgesloten.',
     COPY_INVALID: 'Deze kopie is niet geldig. Probeer het opnieuw of meld dit.',
     QUESTION_STILL_OPEN: 'Sluit of sla eerst de open vraag over.',
     SCORE_OUT_OF_RANGE: 'Die score valt buiten wat deze vraag toestaat.',

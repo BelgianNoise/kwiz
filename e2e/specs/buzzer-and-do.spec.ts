@@ -1,16 +1,15 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
 
 import { testDb } from '../support/db'
-import {
-  advance,
-  en,
-  joinAs,
-  openNextQuestion,
-  railRow,
-  startFirstQuestion,
-} from '../support/flows'
+import { advance, en, joinAs, railRow, startFirstQuestion } from '../support/flows'
 import { createGame } from '../support/game'
-import { addBuzzer, addDo, newQuestionSetRound, newQuiz } from '../support/quiz'
+import {
+  addBuzzer,
+  addDo,
+  addFreeText,
+  newQuestionSetRound,
+  newQuiz,
+} from '../support/quiz'
 import { openControl, openPlayer } from '../support/surfaces'
 
 /**
@@ -250,14 +249,16 @@ test('15 — DO winner-takes-all pays one winner, a tie, and nobody', async ({
   await expect(phones[0]!.page.getByText(t.game.masterJudging)).toBeVisible()
   await expect(phones[0]!.page.getByLabel(t.game.yourAnswer)).toBeHidden()
 
-  // One winner.
+  // One winner. Saving the verdict completes the question — `DO` has no reveal beat — so the
+  // desk yields to `[Next question]` instead of staying on a finished scoring view.
   await advance(master.page, c.question.close)
   await expect(master.page.getByRole('heading', { name: c.do.whoWon })).toBeVisible()
   await master.page.getByRole('button', { name: new RegExp(TEAMS[0]!) }).click()
   await master.page.getByRole('button', { name: /^Award 10/ }).click()
-  // A saved verdict leaves a `DO` question `LOCKED` — there is no reveal and no score step —
-  // so the desk stays on this screen and the route onward is the timeline's (§2.1).
-  await openNextQuestion(master.page, 'Best paper aeroplane')
+  await advance(master.page, c.question.next)
+  await expect(
+    master.page.getByRole('heading', { name: 'Best paper aeroplane' }),
+  ).toBeVisible()
 
   // A tie, paid in full to both (D24) rather than split.
   await advance(master.page, c.question.close)
@@ -266,7 +267,8 @@ test('15 — DO winner-takes-all pays one winner, a tie, and nobody', async ({
   await master.page.getByRole('button', { name: /each$/ }).click()
 
   // Nobody got it — an explicit outcome with its own button (D23), never the absence of one.
-  await openNextQuestion(master.page, 'Hardest riddle')
+  await advance(master.page, c.question.next)
+  await expect(master.page.getByRole('heading', { name: 'Hardest riddle' })).toBeVisible()
   await advance(master.page, c.question.close)
   await master.page.getByRole('button', { name: c.do.nobody, exact: true }).click()
 
@@ -328,4 +330,59 @@ test('16 — DO per-team scores are bounded by the question’s value', async ({
     ...phones.map((phone) => phone.context.close()),
     master.context.close(),
   ])
+})
+
+/**
+ * Scenario 16b — *the per-team desk holds while anyone is still blank, and yields when the last
+ * team is scored.*
+ *
+ * Slice 9's review finding, at the surface: a partial save used to leave the master stranded on
+ * a finished scoring view with no route onward but the timeline strip. D24's empty-vs-zero
+ * distinction is what makes the hold honest — a blank box means "not judged yet", an entered `0`
+ * resolves that team — so this drives exactly that: save one team of three, confirm the desk is
+ * still the scoring desk, then complete it and confirm `[Next question]` arrives.
+ */
+test('16b — a partial PER_TEAM_SCORE save holds the desk until every team is scored', async ({
+  browser,
+}) => {
+  const db = testDb()
+  const quizId = newQuiz(db, 'do — scenario 16b')
+  const roundId = newQuestionSetRound(db, quizId, 'Round one')
+  addDo(
+    db,
+    roundId,
+    'Rate their karaoke',
+    { scoringMode: 'PER_TEAM_SCORE' },
+    { points: 10 },
+  )
+  addFreeText(db, roundId, 'Capital of France?', ['paris'], { points: 10 })
+  const game = createGame(db, quizId, TEAMS)
+
+  const master = await openControl(browser)
+  await master.page.goto(`/en/control/${game.gameId}`)
+  await startFirstQuestion(master.page)
+  await advance(master.page, c.question.close)
+  await expect(master.page.getByRole('heading', { name: c.do.scoreEach })).toBeVisible()
+
+  // One team of three. The save lands (their rail total moves)…
+  await master.page.getByLabel(TEAMS[0]!).fill('7')
+  await master.page.getByRole('button', { name: c.do.save, exact: true }).click()
+  await expect(railRow(master.page, TEAMS[0]!)).toContainText('7')
+
+  // …but two teams are still blank, so the desk persists rather than stranding the master.
+  await expect(master.page.getByRole('heading', { name: c.do.scoreEach })).toBeVisible()
+
+  // Completing the coverage closes the question with the same save.
+  await master.page.getByLabel(TEAMS[1]!).fill('0')
+  await master.page.getByLabel(TEAMS[2]!).fill('4')
+  await master.page.getByRole('button', { name: c.do.save, exact: true }).click()
+
+  // The yield: the scoring desk gives way to the advance suggestion, which opens the round's
+  // remaining question directly.
+  await advance(master.page, c.question.next)
+  await expect(
+    master.page.getByRole('heading', { name: 'Capital of France?' }),
+  ).toBeVisible()
+
+  await master.context.close()
 })

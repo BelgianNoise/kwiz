@@ -27,6 +27,7 @@ const STATUS: Record<ErrorCode, number> = {
   // A copy bug, not a client mistake — the request was fine, the server's own write was not.
   COPY_INVALID: 500,
   QUESTION_STILL_OPEN: 409,
+  ROUND_CLOSED: 409,
   SCORE_OUT_OF_RANGE: 400,
   NOT_A_FINALE_ROUND: 409,
   TOO_FEW_FINALISTS: 400,

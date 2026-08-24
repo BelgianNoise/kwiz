@@ -69,7 +69,7 @@ async function installWireTap(page: Page): Promise<void> {
         super(url, init)
         for (const type of ['state', 'notice', 'message']) {
           this.addEventListener(type, (event) => {
-            const data = 'data' in event ? String((event as MessageEvent).data) : ''
+            const data = 'data' in event ? String(event.data) : ''
             if (data) kwizWireTap.push('SSE:' + type + ':' + data)
           })
         }
