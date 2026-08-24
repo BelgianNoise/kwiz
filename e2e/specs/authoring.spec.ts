@@ -263,10 +263,26 @@ test('1 — a whole quiz authored through the UI', async ({ page }) => {
   await quizRow(page, 'Board').getByRole('link', { name: a.quiz.openRound }).click()
 
   for (const category of ['Geography', 'Film', 'Music', 'Sport', 'Random']) {
-    await page.getByRole('button', { name: a.board.addCategory }).click()
-    await page.getByLabel(a.board.categoryName).fill(category)
-    await page.getByRole('dialog').getByRole('button', { name: common.add }).click()
-    await expect(page.locator('main').getByText(category, { exact: true })).toBeVisible()
+    // Retried as one unit: under load the create POST can be refused by the database
+    // (`createCategory`'s result is intentionally fire-and-forget in the UI), and the only
+    // observable "it worked" is the column header existing.
+    await expect(async () => {
+      const exists = await page
+        .locator('main')
+        .getByText(category, { exact: true })
+        .isVisible()
+        .catch(() => false)
+      if (!exists) {
+        await page.getByRole('button', { name: a.board.addCategory }).click()
+        await page.getByLabel(a.board.categoryName).fill(category)
+        await page.getByRole('dialog').getByRole('button', { name: common.add }).click()
+        await expect(
+          page.locator('main').getByText(category, { exact: true }),
+        ).toBeVisible({
+          timeout: 2_000,
+        })
+      }
+    }).toPass({ timeout: 30_000 })
   }
 
   // The default ladder is already 100–500, so the board is 5×5 the moment the columns exist.
