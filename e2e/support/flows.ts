@@ -24,6 +24,26 @@ export function fill(template: string, values: Record<string, string | number>):
 }
 
 /**
+ * PRD 2 §4 — **the first-run network picker.**
+ *
+ * A fresh data directory has no chosen address, so `/admin` opens on the picker rather than the
+ * dashboard — every run of this suite is a fresh machine, so every run meets this screen once.
+ * Idempotent by construction: whichever worker arrives first walks through it, everyone after
+ * finds the dashboard already there. The choice itself does not matter to any scenario; the
+ * default selection is what a master in a hurry would keep anyway.
+ */
+export async function pastFirstRun(page: Page): Promise<void> {
+  const picker = page.getByRole('heading', { name: en.setup.heading })
+  const dashboard = page.getByRole('button', { name: en.admin.dashboard.newQuiz })
+  await expect(picker.or(dashboard).first()).toBeVisible({ timeout: 20_000 })
+
+  if (await picker.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: en.setup.continue }).click()
+    await expect(dashboard).toBeVisible({ timeout: 20_000 })
+  }
+}
+
+/**
  * PRD 5 §2.2 — open the code's page and tap a team. The URL is the QR's own target, which is
  * why scenario 5 can compare this path against the typed-code path and expect one destination.
  */
@@ -64,6 +84,26 @@ export async function advance(page: Page, label: string): Promise<void> {
   await page.getByRole('button', { name: label, exact: true }).click()
 }
 
+/**
+ * Opens a question that has not been played yet **from the timeline strip** (PRD 3 §2.1).
+ *
+ * This is the desk's only route onward from a `DO` question after its verdict is saved: those
+ * questions stay `LOCKED` rather than passing through reveal and score, so the attention zone
+ * keeps showing the scoring desk and there is no advance button to press. The master moves on
+ * by focusing the next tile in the timeline — which is what surfaces the one action the strip
+ * can cause (§2.1: opening an unplayed question).
+ */
+export async function openNextQuestion(page: Page, prompt: string): Promise<void> {
+  await page
+    .getByRole('button', { name: new RegExp(`^${escapeRegExp(prompt)} — `) })
+    .click()
+  await page.getByRole('button', { name: c.question.openNext }).click()
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 /** PRD 5 §5.1 — type an answer and submit it. Finality (D43) is the server's business. */
 export async function answer(page: Page, text: string): Promise<void> {
   await page.getByLabel(t.game.yourAnswer).fill(text)
@@ -98,14 +138,19 @@ export function answerRow(page: Page, teamName: string) {
   return page.getByRole('main').getByRole('listitem').filter({ hasText: teamName })
 }
 
-/** The same team's row **in the right rail** — its running total (PRD 3 §11). */
+/** The same team's row **in the right rail** — its running total (PRD 3 §11).
+ *
+ * Scoped further by the row's own `[Adjust]` button: the rail's *audit* section lists recent
+ * adjustments with the team's name too, and strict mode is right to refuse a locator that cannot
+ * tell "the team's score" from "an adjustment made to that team".
+ */
 export function railRow(page: Page, teamName: string) {
   return page
     .getByRole('complementary')
     .getByRole('listitem')
     .filter({ hasText: teamName })
+    .filter({ has: page.getByRole('button', { name: c.scores.adjust }) })
 }
-
 /** PRD 3 §5.2 — the master's inline verdict on one team's answer, by team name. */
 export async function judge(
   page: Page,

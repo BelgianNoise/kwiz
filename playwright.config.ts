@@ -32,13 +32,23 @@ import { BASE_URL, DATA_DIR, PORT } from './e2e/support/paths'
 
 export default defineConfig({
   testDir: './e2e/specs',
-  // Deliberately generous: two-device and three-device scenarios (D43, D45, D35) run
-  // concurrently against the same server, and a slow CI runner still must not flake.
+  // Deliberately generous: two-device and three-device scenarios (D43, D45, D35) run concurrently
+  // against the same server, and a slow CI runner still must not flake.
   timeout: 45_000,
   expect: {
-    timeout: 10_000,
+    // Generous for the same reason as `timeout`: under load, a pushed view can take a couple of
+    // seconds to arrive, and "absent" assertions deserve the same patience as "present" ones.
+    timeout: 15_000,
   },
   fullyParallel: true,
+  /*
+   * **Two workers, not four.** Every spec shares one SQLite file with the server, and a fixture
+   * write is a deferred transaction that upgrades to a write — the one shape `busy_timeout`
+   * cannot wait for (e2e/support/db.ts). At four workers the contention windows started eating
+   * *server* joins mid-test, which showed up as phones stuck on the team picker; at two, the
+   * suite is deterministic and still twice as fast as serial.
+   */
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI

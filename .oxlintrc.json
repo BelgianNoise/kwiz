@@ -75,6 +75,22 @@
       // §1.4's architectural rules, which must never be weakened.
       "files": ["apps/web/components/ui/**"],
       "rules": { "typescript/no-unsafe-type-assertion": "off" }
+    },
+    {
+      // The E2E harness lives on **type boundaries no shared type can describe**: addInitScript
+      // and evaluate bodies run inside the browser, fixture helpers read raw HTTP JSON envelopes,
+      // and the fixtures deliberately bypass app-level types when seeding through `@kwiz/db`.
+      // Assertions are the honest bridge there. Same reasoning as the ui/** override above —
+      // and like it, this is not one of §1.4's architectural rules.
+      "files": ["e2e/**"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unnecessary-boolean-literal-compare": "off",
+        // Sequential awaits inside loops are **the determinism rules at work**: joins must land
+        // before the next device reads the picker, tiles are filled in board order, and setup
+        // POSTs race nothing. `Promise.all` here would be the flake the suite exists to prevent.
+        "no-await-in-loop": "off"
+      }
     }
   ]
 }

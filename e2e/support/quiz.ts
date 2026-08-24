@@ -74,6 +74,31 @@ export function addFreeText(
   return questionId
 }
 
+/**
+ * A FREE_TEXT question with **no accepted answers** — deliberately broken, for scenario 2: this
+ * is the finding pre-flight exists to catch (I5), authored the ordinary way rather than by any
+ * special "make it invalid" switch.
+ */
+export function addUnanswered(db: KwizDatabase, roundId: string, prompt: string): string {
+  const questionId = unwrap(() => createQuestion(db, roundId)).questionId
+  must(() => updateQuestion(db, questionId, { prompt }))
+  return questionId
+}
+
+/** Master-only notes (PRD 1 §7 invariant 7) — the canonical "must never reach a player" field. */
+export function setMasterNotes(
+  db: KwizDatabase,
+  questionId: string,
+  notes: string,
+): void {
+  must(() => updateQuestion(db, questionId, { masterNotes: notes }))
+}
+
+/** Rewrites one question's prompt in place — used to plant a secret on an existing board tile. */
+export function setPrompt(db: KwizDatabase, questionId: string, prompt: string): void {
+  must(() => updateQuestion(db, questionId, { prompt }))
+}
+
 export interface McOption {
   text: string
   isCorrect: boolean

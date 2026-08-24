@@ -42,9 +42,11 @@ export function testDb(): KwizDatabase {
  *
  * Retrying is safe because a transaction that reported busy never committed: there is no
  * half-built quiz to reconcile, only a call to make again. Bounded rather than open-ended, so
- * a genuine deadlock fails the spec instead of hanging it out to the 45 s timeout.
+ * a genuine deadlock fails the spec instead of hanging it out to the test timeout — 160
+ * attempts at a 25 ms spin is roughly four seconds of contention headroom, which several
+ * parallel workers building fixtures at once has been measured to need.
  */
-export function retryOnBusy<T>(operation: () => T, attempts = 40): T {
+export function retryOnBusy<T>(operation: () => T, attempts = 160): T {
   let last: unknown
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
