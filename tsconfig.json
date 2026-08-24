@@ -1,7 +1,8 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   // The root-level files no package owns. It must be named `tsconfig.json` rather than
   // something more descriptive: editors and `oxlint --type-aware` both resolve the *nearest
@@ -10,5 +11,10 @@
   // `pnpm typecheck` passed.
   //
   // Files under `apps/` and `packages/` resolve to their own tsconfig, not this one.
-  "include": ["vitest.config.ts", "scripts/**/*.ts"]
+  "include": [
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts"
+  ]
 }

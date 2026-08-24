@@ -25,7 +25,16 @@ const SKIP_DIRS = new Set([
   'playwright-report',
   'data',
   'scripts',
+  // The E2E harness (build-order slice 9) is test tooling in the same category as `scripts/`
+  // above, not application code: it launches and configures a *throwaway* server process from
+  // the outside, which is a different job from the server's own boot-time config (PRD 1 §6.8).
+  // `playwright.config.ts` itself is a root file rather than a directory and is matched by name
+  // below.
+  'e2e',
 ])
+
+/** Root-level files that are tooling, not application source — same exemption as `scripts/`. */
+const ALLOWED_FILES = new Set(['playwright.config.ts'])
 
 const EXTENSIONS = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
 
@@ -46,6 +55,7 @@ for await (const file of walk(ROOT)) {
   const rel = relative(ROOT, file)
   if (ALLOWED.some((prefix) => rel.startsWith(prefix + sep) || rel.startsWith(prefix)))
     continue
+  if (ALLOWED_FILES.has(rel)) continue
 
   const source = await readFile(file, 'utf8')
   source.split('\n').forEach((line, i) => {
