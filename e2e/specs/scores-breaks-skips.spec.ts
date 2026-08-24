@@ -126,32 +126,34 @@ test('19 — a break counts down everywhere, extends, and never resumes itself',
   await expect(phone.page.getByText(t.game.backIn)).toBeVisible()
 
   // "Five more minutes" is the most predictable thing in an interval (§11.2) — extend, and the
-  // clock grows rather than restarting from some default. Growth is asserted against the *desk's*
-  // own number (guaranteed present while the desk is on the break), as a jump: an absolute value
-  // would race the projector's view push under load.
+  // clock jumps to the new total rather than restarting from some default. The extension is a
+  // **large** jump (30 s over a 3 s base) on purpose: under load the menu-and-dialog dance can
+  // outlive the short base, and an expired base still shows `Back in 0:00` until resumed — so
+  // asserting "the desk reached ≥ 0:25 after extending to 0:30" is true regardless of whether
+  // the old clock had already run out, while a small absolute delta would race the view push.
+  await master.page.getByRole('button', { name: c.frame.menu }).click()
+  await master.page.getByRole('menuitem', { name: c.break.extend }).click()
+  await master.page.getByLabel(c.break.minutes).fill('0.5')
+  await master.page
+    .getByRole('dialog')
+    .getByRole('button', { name: c.break.extend })
+    .click()
   const deskBreakSeconds = async (): Promise<number> => {
     const text = await master.page.getByText(/Back in \d+:\d{2}/).innerText()
     const [, minutes, seconds] = /Back in (\d+):(\d{2})/.exec(text)!
     return Number(minutes) * 60 + Number(seconds)
   }
-  const beforeExtend = await deskBreakSeconds()
-  await master.page.getByRole('button', { name: c.frame.menu }).click()
-  await master.page.getByRole('menuitem', { name: c.break.extend }).click()
-  await master.page.getByLabel(c.break.minutes).fill('0.1')
-  await master.page
-    .getByRole('dialog')
-    .getByRole('button', { name: c.break.extend })
-    .click()
   await expect
     .poll(deskBreakSeconds, { timeout: 15_000, message: 'extend grew the clock' })
-    .toBeGreaterThan(beforeExtend + 3)
+    .toBeGreaterThanOrEqual(25)
   /*
-   **Zero holds.** The countdown runs out — the projector says so in as many words (§11) — and
-   * nothing anywhere advances: the desk is still on the break, the phone is still on the break.
-   * Nothing in this product auto-resumes (D8), and this is the moment that rule earns its place.
+   **Zero holds.** The 30-second clock runs out — the projector says so in as many words (§11) —
+   * and nothing anywhere advances: the desk is still on the break, the phone is still on the
+   * break. Nothing in this product auto-resumes (D8), and this is the moment that rule earns its
+   * place.
    */
   await expect(screen.page.getByText(s.break.startingSoon)).toBeVisible({
-    timeout: 20_000,
+    timeout: 45_000,
   })
   await expect(screen.page.getByText(s.break.backIn)).toBeHidden()
   await expect(master.page.getByRole('heading', { name: c.break.title })).toBeVisible()

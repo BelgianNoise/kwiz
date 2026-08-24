@@ -159,14 +159,15 @@ test('9 — the option distribution lands a beat after the correct answer', asyn
   await advance(master.page, c.question.close)
   await advance(master.page, c.question.reveal)
 
-  // The correct option's tick — beat 1.
-  await expect(screen.page.getByText('✓')).toBeVisible()
+  // The correct option's tick — beat 1. The legibility spec's two 1080p contexts add real load
+  // to the shared server, so this waits a full push cycle rather than the default.
+  await expect(screen.page.getByText('✓')).toBeVisible({ timeout: 20_000 })
   const markedAt = Date.now()
 
   // The team dots — beat 2. `aria-hidden` by design (they are colour, and the row already names
   // the option), so this is one of the few places a CSS locator is the honest one.
   const dots = screen.page.locator('li span[style*="background-color"]')
-  await expect(dots.first()).toBeVisible()
+  await expect(dots.first()).toBeVisible({ timeout: 20_000 })
   const distributedAt = Date.now()
 
   // Generous lower bound: the point is that a beat exists, and removing the delay drops this
