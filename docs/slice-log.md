@@ -12,6 +12,87 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 10 — field rehearsal: runbook + the automatable guards
+
+**Status:** complete-as-executable-by-an-agent · `pnpm check` green (**732 tests**) · e2e green —
+**32 specs**, consecutive clean runs · lint silent
+
+### An honest framing
+
+Slice 10 says *"not a coding slice: run a real quiz and write down what broke."* A room,
+projector, phones, and a hotspot are not things an agent can stand in front of. So this slice
+was executed as everything short of the physical evening, split the same way build-order draws
+it:
+
+1. **The runbook** (`docs/field-rehearsal.md`) makes the physical pass executable by whoever
+   can be in the room: bring-list, pre-doors setup with watch-fors, a phase-by-phase script
+   covering every mechanic (including the two slice-9-review fixes), failure drills
+   (kill-server, nl flip), the physical-only table from agent-workflow §4.5, triage rules that
+   route each finding to exactly one of four verdicts, and a findings sheet.
+2. **The automatable residue moved into the suite now** rather than waiting for a human to
+   discover it on the night — which is build-order's own rule ("anything the rehearsal finds
+   that *is* automatable gets added to the suite") applied in anticipation.
+
+### The new guard: `legibility.spec.ts`
+
+- **The §2.1 floor is a CI check.** Both projectors (en + nl) at 1920×1080 are walked through
+  *arming, waiting, round intro, question open, reveal, mid-round leaderboard, multiple-choice
+  reveal, break, jeopardy board, buzz display, finale picking, finale turn active, finished* —
+  every direct text node measured against 4% of viewport height with half a pixel of tolerance.
+  Slice 6's manual version caught three real violations; it was a snippet someone had to
+  remember to run.
+- **Overflow guard** alongside: page scroll dimensions never exceed the viewport at any stage —
+  the frame letterboxes, so overflow means clipping.
+- **Join-URL rules pinned** (slice 6's finding): after the network picker, game hub and
+  projector show the same absolute URL with authority, QR rendered client-side; on a fresh
+  server with no address chosen, nothing renders a scannable-looking link for an unknown game.
+
+Two exemptions are documented in the spec rather than hidden: transform-scaled text would be
+invisible to computed font-size (nothing does it today; extend the guard if one appears), and
+the language switcher is chrome matched *structurally* (`nav` subtree) because its accessible
+name is translated — the first nl run caught the label-based exemption leaking its 14px links.
+
+### Where the review instinct paid off
+
+First draft of the floor check exempted `nav[aria-label="Language"]` — correct in en, silently
+vacuous in nl ("Taal"), caught because both locales measure in one spec. First draft of the
+finale checkpoint forgot that setting finalists ≠ opening the keyword question, so `[Start
+<team>]` never existed; and `/^Start /` matched the picker's own button. Each failure was a
+missing step of understanding, fixed by driving the desk rather than guessing.
+
+### Spec deviations
+
+None. Build-order slice 10 updated to record what moved forward (legibility + URL rules) and
+to point at the runbook; smoke-checklist defers its physical rows there.
+
+### Raised, not resolved
+
+- **Scenario 1's tile autosave poll timed out once under parallel load** (15 s); leash raised
+  to 30 s plus a sheet-visibility gate. If it recurs, suspect server-side write contention
+  under `-workers=2`, not the test.
+- **The rehearsal itself remains unexecuted** — by definition. Everything that could be
+  verified without a room now has a permanent guard; everything else is in the runbook with
+  triage rules attached.
+
+### Deliberately left out
+
+- Buzz-timing measurement during the jeopardy buzz display exists (checkpoint included);
+  haptics/PA-audio/hotspot-load did not — physical.
+- No pixel baselines or visual regression tooling: PRD 4 stages settled only recently, and a
+  floor check plus overflow guard covers the actual rehearsal class (illegible/clipped) without
+  freezing churn.
+
+### What the next agent would otherwise rediscover
+
+- `legibility.spec.ts`'s `collectViolations`/`collectOverflow` evaluate inside the page and are
+  locale-agnostic; driving differs per locale only where copy is a selector (arming click).
+- A spawned-server screen assertion for an unknown game hits §14's calm failure state — no
+  arming overlay exists to wait for.
+- Break-extend assertions must survive an expired base (`Back in 0:00` persists until resumed):
+  jump-to-large-total beats small-delta racing.
+
+---
+
 ## Slice 9 — the end-to-end browser suite
 
 **Status:** complete · `pnpm check` green (**726** unit tests) · `pnpm e2e` green — **28 specs,
