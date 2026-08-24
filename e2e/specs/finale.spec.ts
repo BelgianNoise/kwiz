@@ -293,13 +293,19 @@ test('26 — one survivor, and two different stories on the finished screen', as
   const screen = await openScreen(browser)
   await openScreenFor(screen.page, game.gameId)
 
-  // D55's common case: everyone pre-selected, deselect the leader, run with two.
+  // D55's common case: everyone pre-selected, deselect the leader, run with two. The checkbox
+  // itself is clicked, and its state asserted either side: the row is a wrapping <label>, and a
+  // label-click on Radix's checkbox proved to be a silent no-op under automation here — which
+  // would run a three-team finale and make every later assertion about the wrong game.
   await openFinaleRound(master.page, game.gameId)
-  await master.page
+  const foxRow = master.page
     .getByRole('main')
     .getByRole('listitem')
     .filter({ hasText: 'Foxes' })
-    .click()
+  const foxCheckbox = foxRow.getByRole('checkbox')
+  await expect(foxCheckbox).toBeChecked()
+  await foxCheckbox.click()
+  await expect(foxCheckbox).not.toBeChecked()
   await advance(master.page, c.finale.start)
 
   await advance(master.page, c.question.openNext)

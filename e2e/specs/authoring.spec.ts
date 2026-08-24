@@ -284,10 +284,17 @@ test('1 — a whole quiz authored through the UI', async ({ page }) => {
       const plus = page.getByRole('button', {
         name: `${a.board.addTile} ${category} ${value}`,
       })
-      await plus.click()
-      // The tile replaces the `+` at the same grid position once the refresh lands.
       const cell = cells.nth(row * 5 + column)
-      await expect(cell).not.toHaveClass(/border-dashed/, { timeout: 15_000 })
+      /*
+       * The click and the refresh it causes race each other: a refresh from the *previous*
+       * tile's save can re-render the grid mid-click, the dispatched click lands on a detached
+       * node, and no tile is created. So click-and-verify as one retried unit — if the `+` is
+       * still there after a beat, click it again.
+       */
+      await expect(async () => {
+        if (await plus.isVisible().catch(() => false)) await plus.click()
+        await expect(cell).not.toHaveClass(/border-dashed/, { timeout: 2_000 })
+      }).toPass({ timeout: 20_000 })
       await fillTile(
         page,
         cell,
