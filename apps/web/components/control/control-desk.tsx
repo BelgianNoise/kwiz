@@ -5,6 +5,7 @@ import { SCORE_BANNER_MS } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { nextPendingInRound } from '@/components/control/advance'
 import { BoardDesk } from '@/components/control/board-desk'
 import { BreakDesk } from '@/components/control/break-desk'
 import { BuzzDesk } from '@/components/control/buzz-desk'
@@ -243,6 +244,33 @@ function AdvanceZone({ view, api, run, gameId }: ZoneProps) {
       <Leaderboard view={view} api={api} run={run} gameId={gameId} />
     )
   }
+  /*
+   * **A scored Jeopardy tile hands the desk back to the board** (PRD 3 §9), mirroring the main
+   * screen's resolver — which needed this exact fix in slice 6 for the projector and now again
+   * here for the desk. The board is the input device (D16): between tiles it is the only place
+   * that shows who picks next (D30), and the generic branch below would instead offer
+   * `[Next question]`, which opens the next tile *in position order* and silently bypasses the
+   * pick. A `LOCKED` or `REVEALED` tile stays on the question desk — those states are still the
+   * reveal moment the room is watching.
+   *
+   * Only while tiles remain: once the last tile is scored there is nothing left to pick, and the
+   * master needs the advance button (next round / end of game) more than an empty board.
+   */
+  if (
+    view.round?.type === 'JEOPARDY' &&
+    view.question?.state === 'SCORED' &&
+    nextPendingInRound(view)
+  ) {
+    return (
+      <BoardDesk
+        view={view}
+        api={api}
+        run={run}
+        gameId={gameId}
+        tiedTeamIds={view.board?.tiedForPickTeamIds ?? []}
+      />
+    )
+  }
   if (
     view.question &&
     view.question.state !== 'PENDING' &&
@@ -250,7 +278,12 @@ function AdvanceZone({ view, api, run, gameId }: ZoneProps) {
   ) {
     return <QuestionDesk view={view} api={api} run={run} gameId={gameId} />
   }
-  if (view.round?.type === 'JEOPARDY') {
+  /*
+   * The board is the desk **while there are tiles left to pick** (D16). Once every tile has
+   * been played or skipped, there is nothing to pick — and showing an empty board would bury
+   * the one thing the master needs: the advance button (next round / end of game).
+   */
+  if (view.round?.type === 'JEOPARDY' && nextPendingInRound(view)) {
     return <BoardDesk view={view} api={api} run={run} gameId={gameId} tiedTeamIds={[]} />
   }
   return <Leaderboard view={view} api={api} run={run} gameId={gameId} />
