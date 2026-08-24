@@ -92,5 +92,55 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # The Playwright suite is build-order slice 9. It gets its own job then — it needs a running
-  # server and is far slower, so it must not gate every typecheck (conventions §1.5).
+  # The Playwright suite is build-order slice 9. It gets its own job — it needs a running server
+  # and is far slower, so it must not gate every typecheck (conventions §1.5). Linux only: the
+  # suite drives four browser surfaces against one built app, and its platform-sensitive pieces
+  # (better-sqlite3's prebuild, the architecture tests) are already covered per-platform above.
+  e2e:
+    name: e2e · chromium
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The one dependency `pnpm install` cannot know about: a Chromium matching this exact
+      # Playwright version, with its OS libraries.
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Builds and starts the production server itself (playwright.config.ts's webServer), then
+      # runs every scenario against it.
+      - name: Run the e2e suite
+        run: pnpm e2e
+
+      # A failing browser test with no trace costs more to diagnose than it saved; the config
+      # retains them on failure, so upload them where they outlive the runner.
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

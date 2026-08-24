@@ -17,6 +17,11 @@ import { afterAll, describe, expect, it } from 'vitest'
  * Reading the config back would not catch that — only running the linter does. Hence a
  * subprocess: oxlint's `overrides` key on real paths (`packages/domain/**`), so a fixture
  * anywhere else would not match them.
+ *
+ * **The assertions read `--format=json`, not the pretty reporter** (slice 9). The pretty
+ * glyphs mark severity only visually and bury the one severity word in a summary line, so a
+ * formatter tweak silently broke these assertions once already. The JSON payload puts
+ * `severity` and `code` on every diagnostic, which is the contract worth pinning.
  */
 
 const ROOT = join(import.meta.dirname, '..')
@@ -62,6 +67,39 @@ function outputOf(error: unknown): string {
   return combined
 }
 
+interface OxlintDiagnostic {
+  code: string
+  severity: string
+}
+
+/** The one diagnostic shape these assertions need; anything else in the payload is ignored. */
+function isDiagnostic(value: unknown): value is OxlintDiagnostic {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    typeof value.code === 'string' &&
+    'severity' in value &&
+    typeof value.severity === 'string'
+  )
+}
+
+function diagnosticsOf(stdout: string): OxlintDiagnostic[] {
+  const start = stdout.indexOf('{')
+  if (start === -1) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout.slice(start))
+  } catch {
+    return []
+  }
+  const list =
+    typeof parsed === 'object' && parsed !== null && 'diagnostics' in parsed
+      ? (parsed as { diagnostics: unknown }).diagnostics
+      : parsed
+  return Array.isArray(list) ? list.filter(isDiagnostic) : []
+}
+
 function exitCodeOf(error: unknown): number {
   if (
     typeof error === 'object' &&
@@ -74,18 +112,41 @@ function exitCodeOf(error: unknown): number {
   return 1
 }
 
+const reportsError = (diagnostics: OxlintDiagnostic[], code: string): boolean =>
+  diagnostics.some((d) => d.severity === 'error' && d.code === code)
+
 /**
- * Runs oxlint over one file and returns its combined output, whatever the exit code.
+ * Runs oxlint over one file and returns its machine-readable diagnostics, whatever the exit
+ * code.
  *
  * `--no-ignore` is required because the fixtures are gitignored and oxlint honours
  * `.gitignore`. One command string rather than an argv array: `pnpm` is a shim on Windows and
  * needs a shell, and passing args alongside `shell: true` is deprecated (DEP0190). The paths
  * are the constants above, not input.
  */
-function lint(relativePath: string, { typeAware = false } = {}): string {
-  const flags = typeAware ? '--type-aware --no-ignore' : '--no-ignore'
+function lint(
+  relativePath: string,
+  { typeAware = false }: { typeAware?: boolean } = {},
+): OxlintDiagnostic[] {
+  const flags = typeAware
+    ? '--type-aware --no-ignore --format=json'
+    : '--no-ignore --format=json'
   try {
     execSync(`pnpm exec oxlint ${flags} ${relativePath}`, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    })
+    return []
+  } catch (error) {
+    return diagnosticsOf(outputOf(error))
+  }
+}
+
+/** Plain-text variant, for assertions about what the linter *says* rather than what it fires. */
+function lintText(relativePath: string): string {
+  try {
+    execSync(`pnpm exec oxlint --no-ignore --format=json ${relativePath}`, {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: 'pipe',
@@ -99,30 +160,33 @@ function lint(relativePath: string, { typeAware = false } = {}): string {
 afterAll(removeFixtures)
 
 describe('packages/domain is pure (CLAUDE.md §2.1)', () => {
-  write(
-    fixtures.purity,
-    [
-      "import { drizzle } from 'drizzle-orm/better-sqlite3'",
-      "import { NextResponse } from 'next/server'",
-      "import { readFileSync } from 'node:fs'",
-      'export const wrong: any = { drizzle, NextResponse, readFileSync }',
-      '',
-    ].join('\n'),
-  )
+  const source = [
+    "import { drizzle } from 'drizzle-orm/better-sqlite3'",
+    "import { NextResponse } from 'next/server'",
+    "import { readFileSync } from 'node:fs'",
+    'export const wrong: any = { drizzle, NextResponse, readFileSync }',
+    '',
+  ].join('\n')
 
-  const output = lint(fixtures.purity)
+  write(fixtures.purity, source)
+  const diagnostics = lint(fixtures.purity)
 
   it.each([
     ['a database driver', 'drizzle-orm/better-sqlite3'],
     ['Next.js', 'next/server'],
     ['the filesystem', 'node:fs'],
   ])('rejects importing %s', (_label, specifier) => {
-    expect(output).toContain('no-restricted-imports')
-    expect(output).toContain(specifier)
+    // One `no-restricted-imports` error per forbidden import, and the offending specifier is
+    // named somewhere in the report — so the failure says what to remove.
+    expect(reportsError(diagnostics, 'eslint(no-restricted-imports)')).toBe(true)
+    expect(
+      diagnostics.filter((d) => d.code === 'eslint(no-restricted-imports)').length,
+    ).toBe(3)
+    expect(lintText(fixtures.purity)).toContain(specifier)
   })
 
   it('rejects `any`, which is a warning elsewhere but an error here', () => {
-    expect(output).toMatch(/error.*no-explicit-any/)
+    expect(reportsError(diagnostics, 'typescript(no-explicit-any)')).toBe(true)
   })
 })
 
@@ -130,7 +194,9 @@ describe('packages/db forbids `any` (conventions §1.4)', () => {
   write(fixtures.explicitAny, 'export const wrong: any = 1\n')
 
   it('reports it as an error, not a warning', () => {
-    expect(lint(fixtures.explicitAny)).toMatch(/error.*no-explicit-any/)
+    expect(reportsError(lint(fixtures.explicitAny), 'typescript(no-explicit-any)')).toBe(
+      true,
+    )
   })
 })
 
@@ -171,20 +237,26 @@ describe('unhandled promises are rejected (conventions §1.3)', () => {
     ].join('\n'),
   )
 
-  const floatingOutput = lint(fixtures.floating, { typeAware: true })
-
   it('reports an unawaited promise as an error', () => {
-    expect(floatingOutput).toMatch(/error.*no-floating-promises/)
+    expect(
+      reportsError(
+        lint(fixtures.floating, { typeAware: true }),
+        'typescript(no-floating-promises)',
+      ),
+    ).toBe(true)
   })
 
   it('reports a promise passed where a void return is expected', () => {
-    expect(lint(fixtures.misused, { typeAware: true })).toMatch(
-      /error.*no-misused-promises/,
-    )
+    expect(
+      reportsError(
+        lint(fixtures.misused, { typeAware: true }),
+        'typescript(no-misused-promises)',
+      ),
+    ).toBe(true)
   })
 
   it('is silent without --type-aware, which is why the flag is in the lint script', () => {
-    expect(lint(fixtures.floating)).not.toContain('no-floating-promises')
+    expect(lintText(fixtures.floating)).not.toContain('no-floating-promises')
   })
 })
 
