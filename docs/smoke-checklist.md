@@ -443,4 +443,12 @@ that ran. Most of this is meaningless against a `SETUP` game.
       writes are deferred transactions `busy_timeout` cannot wait out (`e2e/support/db.ts`);
       four workers turned that into phones stuck on the team picker.
 
+### After slice 10 — field rehearsal
+
+Execute [`field-rehearsal.md`](field-rehearsal.md) top to bottom in a real room — its phases
+replace the ad-hoc rows this checklist used to carry for the physical pass (iOS autocorrect,
+`nosleep.js`, haptics, projector contrast, hotspot load, 10 m legibility). The automatable
+residue now lives in `e2e/specs/legibility.spec.ts`: the §2.1 floor across every stage in en
+and nl, overflow guards, and the join-URL absoluteness rule.
+
 ---

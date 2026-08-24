@@ -294,19 +294,26 @@ browser test with no trace costs more to diagnose than it saved.
 
 ## Slice 10 — Field rehearsal
 
-Not a coding slice. Run a real quiz end to end and write down what broke.
+Not a coding slice. Run a real quiz end to end and write down what broke. The runbook is
+[`docs/field-rehearsal.md`](field-rehearsal.md) — bring, setup, a phase-by-phase script with
+watch-fors, physical-only checks, triage rules, and the findings sheet.
 
 Slice 9's suite proves the software works. This proves the *system* works — hardware,
 network, room, and the things §4.5 of [`agent-workflow.md`](agent-workflow.md) says no
 browser can check.
 
-The failures this design most expects, and which only a rehearsal finds:
+Two of the expected failures below have already been pulled forward as automated guards
+(slice 10's prep, `e2e/specs/legibility.spec.ts`): the §2.1 legibility floor walked across
+every projected stage in **en and nl** (which covers "Dutch overflowing a main-screen layout"
+mechanically), and the join-URL rule — absolute after the network picker, honestly relative
+before it.
 
-- The QR code resolving to an unreachable address
+The failures only a rehearsal finds:
+
+- The QR code resolving to an unreachable address *on the venue's actual network*
 - A projector clipping the safe area, or crushing the team palette
 - Audio arming silently failing, discovered mid-music-round
 - A phone locking despite `nosleep.js`
-- Dutch overflowing a main-screen layout
 - Twenty devices on one hotspot behaving differently from four on wifi
 
 **Anything the rehearsal finds that *is* automatable gets added to slice 9's suite.** That is
