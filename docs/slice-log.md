@@ -12,6 +12,122 @@ and why**, **what you raised without resolving**, **what you deliberately left o
 
 ---
 
+## Slice 9 — the end-to-end browser suite
+
+**Status:** complete · `pnpm check` green (**726** unit tests) · `pnpm e2e` green — **28 specs,
+three consecutive clean runs** (~90 s warm) · lint silent · traces retained on failure
+
+### What was built
+
+The Playwright harness from the previous session (production build+start on its own port, one
+fresh data dir per run, fixtures straight through `@kwiz/db`, per-context surfaces, traces on
+failure) plus every remaining journey: authoring & portability (1–4, the exceptions that drive
+the *authoring UI* on purpose), joining (5–7), QUESTION_SET (8–12), buzzer & DO (13–16),
+Jeopardy turn order (17), scores/breaks/skips (18–20), the network-level **sentinel** (21),
+cross-game isolation **with a kill-and-restart mid-game** (22), the whole DSMTW_FINALE group
+(23–27), and the CI job running the suite on its own Linux runner with trace upload.
+
+Two of those journeys exposed **real product bugs**, both fixed here:
+
+1. **A scored Jeopardy tile never handed the control desk back to the board**
+   (`components/control/control-desk.tsx`, `AdvanceZone`). The generic branch kept showing the
+   question desk with `[Next question]`, which opens the next tile *in position order* and
+   silently bypasses D16/D30's pick — the projector had gotten this exact fix in slice 6 and the
+   desk hadn't. Gated on tiles remaining, so an exhausted board still yields the advance button;
+   the second half of the gap (an all-skipped board swallowing the desk with no way forward)
+   surfaced the same day in the sentinel journey and is fixed by the same gate.
+2. *(inherited, uncommitted)* Scenarios 13/15 asserted a transient buzzer face and a post-award
+   route that does not exist (`DO` verdicts leave the question `LOCKED`; the desk stays on the
+   scoring view and the master moves on from the timeline). Both rewritten against observed
+   behaviour, with comments explaining why.
+
+### Three harness lessons worth their weight
+
+- **The protocol's SSE frames are named** (`state`/`notice`). A wire tap listening for the
+  default `message` event captures nothing — and the first version of the sentinel's
+  absence-then-presence assertions passed *vacuously* because of it. If a guard cannot fail
+  while blind, it is not a guard.
+- **Authoring autosave cancels on unmount** (~600 ms debounce; only the prompt has a visible
+  indicator), so the authoring specs wait on `GET /api/quizzes/:id` for persistence instead of
+  trusting the sheet. Closing too fast loses the keystrokes silently.
+- **ICU message strings are strings** — interpolate them through `flows.fill()`. And
+  `getByRole('button', { name: 'mark' })` substring-matches `Un-mark`: the event log caught a
+  spec *un-marking* what it had just marked. `exact: true`.
+
+### Determinism decisions recorded where they live
+
+`playwright.config.ts` pins **two workers** (four turned SQLite deferred-transaction contention
+into phones stuck on the team picker — the shared database is one file the server also writes);
+expect timeout 15 s for the same reason. `spawn.ts` now runs **production** `next start`
+(dev writes into `.next` while the run's own webServer serves from it) and probes `/api/games`
+rather than static `/en`. `db.ts` gives `retryOnBusy` ~4 s of headroom. Portability/isolation
+close their fixture connections before wiping (Windows EPERM looks nothing like its cause).
+
+### Spec deviations
+
+None against the normative specs. Two tooling judgement calls, recorded here:
+
+- `scripts/architecture-rules.test.ts` was **red on `main`** before this slice: its severity
+  regexes matched oxlint's old pretty output, and a formatter change broke them silently — the
+  precise failure mode the file exists to prevent. Rewritten onto `--format=json`, pinning
+  `severity` + `code` per diagnostic instead of prose shapes.
+- `.oxlintrc.json` gains an `e2e/**` override (unsafe type assertions, boolean-literal compare,
+  await-in-loop off, reasons inline). Same precedent as the generated `ui/**` override; none of
+  §1.4's architectural rules are touched.
+
+### Raised, not resolved
+
+- **A saved `DO` verdict leaves the question `LOCKED` forever**: `attention` stays `SCORE_DO`,
+  the desk keeps showing "Who won?" with everything resolved, and the only route onward is the
+  timeline strip. The suite drives it as-built. A decision is wanted: either `DO_WINNERS_SET`/
+  complete `PER_TEAM_SCORE` transitions the play state, or `SCORE_DO` learns to stand down once
+  every team has an outcome (D24's "when is per-team done?" is entangled).
+- **Closing a round early traps navigation**: `advanceSuggestion` still reads the *closed*
+  current round, suggests `NEXT_QUESTION` into its pending tiles, and opening one reopens
+  gameplay in a closed round. The sentinel journey sidesteps it by HTTP-opening the finale
+  round directly; the domain needs a rule ("a closed round is invisible to suggestions").
+- **Scenario 16 flaked once** under four workers (rail read before the score push landed) and
+  has been stable at two across every run since. If CI disagrees with this laptop, look there
+  first.
+
+### Deliberately left out
+
+- **No `nl` leg in the suite.** Locale switching is wired and was walked per surface in slices
+  6–8's manual passes; duplicating every journey in Dutch doubles runtime for what the checklist
+  already covers by hand. Revisit if a layout bug ever escapes both.
+- **No pixel/layout assertions** (the §2.1 legibility floor remains slice 6's mechanical manual
+  row) and **no visual regression baselines** — deliberately: PRD 4's stage designs were still
+  settling and baselines would have frozen churn.
+- Chromium only. WebKit/Firefox would buy coverage of fullscreen/wake-lock edge cases the
+  desktop rehearsal cannot see anyway; the suite's value is the journeys, not the engines.
+
+### Not verifiable here (agent-workflow §4.5)
+
+Unchanged from the checklist rows: iOS autocorrect, `nosleep.js`, haptics, projector contrast,
+10 m legibility, twenty phones on one hotspot. All belong to slice 10's rehearsal, and the new
+smoke-checklist rows say so explicitly.
+
+### What the next agent would otherwise rediscover
+
+- `messages/*.ts` values are plain ICU strings — never call them like functions; use
+  `flows.fill(template, values)` (plural syntax included, which `fill` does *not* expand —
+  match rendered text with a regex instead).
+- Game-copy ids differ from template ids (I16): anything addressing game content resolves
+  through `gameContent(db, gameId)` — a template `roundId` POSTs to `no round <uuid>`.
+- `getByLabel` matches the hidden file inputs that share a button's accessible name
+  (`Import…`); scope by role or component marker.
+- The dashboard quiz row's `[Open]` is a **button**, not a link; the review link on game rows is
+  a link. Strict mode will tell you, expensively.
+- `useAutosave`'s cleanup cancels pending saves — any journey that closes a sheet must first
+  prove persistence somewhere the cancel cannot reach.
+- The finale's deterministic constructions live in `finale.spec.ts`'s comments: banks sized so
+  penalties land on *static* clocks, and the pass-first trick that takes a team out of the
+  rotation to make off-turn elimination exact.
+- `pnpm e2e` rebuilds the app every run (~90 s cold). While iterating, filter:
+  `pnpm exec playwright test e2e/specs/<file> -g "<test name>" --workers=1`.
+
+---
+
 ## Slice 8 — Review, correction & polish
 
 **Status:** complete · `pnpm check` green · **726 tests** · lint silent · `pnpm build` clean · driven

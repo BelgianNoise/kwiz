@@ -425,3 +425,22 @@ that ran. Most of this is meaningless against a `SETUP` game.
       quizmaster ended this quiz"* — not the unknown-code page and not a podium. All three outcomes
       (§15 O3) must read differently: finished → standings, abandoned → the sentence, unknown → check
       the code.
+
+### After slice 9 — the suite is the smoke test
+
+`pnpm e2e` automates most of the rows above (build-order slice 9, D49). After it passes:
+
+- [ ] **`pnpm e2e` is green from a clean checkout** — fresh data dir per run, production build,
+      all four surfaces driven. Traces land in `test-results/` on failure; open the trace before
+      re-running anything.
+- [ ] **The manual rows a browser cannot verify stay manual** (agent-workflow §4.5): iOS
+      autocorrect mangling answers, `nosleep.js` on a real phone, haptics, projector contrast and
+      overscan, 10 m legibility, twenty phones on one hotspot. Those are slice 10's field
+      rehearsal, not candidates for automation.
+- [ ] **A red spec is a finding before it is a flake.** Re-run the failing spec solo first; if it
+      fails alone it is a bug or an over-tight assertion — fix or raise it, never retry-and-forget.
+- [ ] **Keep `--workers=2`.** Every spec shares one SQLite file with the server, and fixture
+      writes are deferred transactions `busy_timeout` cannot wait out (`e2e/support/db.ts`);
+      four workers turned that into phones stuck on the team picker.
+
+---
