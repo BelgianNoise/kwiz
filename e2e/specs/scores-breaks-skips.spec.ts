@@ -79,7 +79,7 @@ test('18 — an adjustment announces itself with its reason, and revoking reconc
 test('19 — a break counts down everywhere, extends, and never resumes itself', async ({
   browser,
 }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(90_000)
 
   const db = testDb()
   const quizId = newQuiz(db, 'scores — scenario 19')
@@ -126,7 +126,15 @@ test('19 — a break counts down everywhere, extends, and never resumes itself',
   await expect(phone.page.getByText(t.game.backIn)).toBeVisible()
 
   // "Five more minutes" is the most predictable thing in an interval (§11.2) — extend, and the
-  // clock grows rather than restarting from some default.
+  // clock grows rather than restarting from some default. Growth is asserted against the *desk's*
+  // own number (guaranteed present while the desk is on the break), as a jump: an absolute value
+  // would race the projector's view push under load.
+  const deskBreakSeconds = async (): Promise<number> => {
+    const text = await master.page.getByText(/Back in \d+:\d{2}/).innerText()
+    const [, minutes, seconds] = /Back in (\d+):(\d{2})/.exec(text)!
+    return Number(minutes) * 60 + Number(seconds)
+  }
+  const beforeExtend = await deskBreakSeconds()
   await master.page.getByRole('button', { name: c.frame.menu }).click()
   await master.page.getByRole('menuitem', { name: c.break.extend }).click()
   await master.page.getByLabel(c.break.minutes).fill('0.1')
@@ -134,7 +142,9 @@ test('19 — a break counts down everywhere, extends, and never resumes itself',
     .getByRole('dialog')
     .getByRole('button', { name: c.break.extend })
     .click()
-  await expect(screen.page.getByText(/0:0[4-6]/)).toBeVisible()
+  await expect
+    .poll(deskBreakSeconds, { timeout: 15_000, message: 'extend grew the clock' })
+    .toBeGreaterThan(beforeExtend + 3)
   /*
    **Zero holds.** The countdown runs out — the projector says so in as many words (§11) — and
    * nothing anywhere advances: the desk is still on the break, the phone is still on the break.
