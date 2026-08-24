@@ -323,6 +323,12 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       const found = locate(state, command.gameQuestionId)
       if (!found) return deny('QUESTION_NOT_OPEN', 'unknown question')
       const { question, play } = found
+      // A round the master ended is over: opening its remaining questions would reopen gameplay
+      // the closing contradicted. Before this guard, `advanceSuggestion` kept pointing into a
+      // closed round and the timeline could reopen played-out gameplay (slice 9's review).
+      if (state.closedRoundIds.has(question.roundId)) {
+        return deny('ROUND_CLOSED', `question ${question.id} is in a closed round`)
+      }
       if (play.state === 'OPEN') return NOTHING_TO_DO
       if (!canTransition(play.state, 'QUESTION_OPENED')) {
         return deny('QUESTION_NOT_OPEN', `question ${question.id} is ${play.state}`)
@@ -574,6 +580,13 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       // `teamIds: []` is the explicit "nobody got it" (D23) and still resolves every team, so no
       // row is left pending. The payout comes from the question's authored config, never from the
       // request — the master chose it while writing the quiz (D23).
+      //
+      // Resolving every team **completes the question**: `DO` has no reveal beat (PRD 3 §8), so
+      // the verdict is the last thing that happens to it, and `QUESTION_SCORED` is appended here
+      // rather than left for a second master act that does not exist on the desk. Without it the
+      // question sat `LOCKED` forever and `attention` stayed `SCORE_DO`, stranding the master with
+      // no route onward but the timeline (slice 9's review). The state machine has carried
+      // `LOCKED → SCORED` for exactly this case since PRD 1 §7.1 was drawn.
       return allow([
         {
           type: 'DO_WINNERS_SET',
@@ -583,6 +596,7 @@ export function decide(state: GameState, command: Command, now: number): Decisio
             tiePayout: tiePayoutOf(found.question),
           },
         },
+        { type: 'QUESTION_SCORED', payload: { gameQuestionId: found.question.id } },
       ])
     }
 
@@ -609,6 +623,22 @@ export function decide(state: GameState, command: Command, now: number): Decisio
           )
         }
       }
+
+      /*
+       * A partial save is a real state (D24: "1 of 4 scored"), so the question completes only when
+       * **every** team has an outcome — the entries already saved plus this payload's. D24's
+       * empty-vs-zero distinction is what makes that check honest: a blank box means "not judged
+       * yet", so it keeps the desk up; an explicit 0 resolves that team. Once coverage is complete
+       * there is nothing left to judge and `QUESTION_SCORED` closes the question, exactly as
+       * `SET_DO_WINNERS` does — without this, the last team's score landed and the master was
+       * stranded on a finished desk (slice 9's review).
+       */
+      const resolved = new Set([
+        ...[...found.play.answers.keys()],
+        ...command.scores.map((entry) => entry.teamId),
+      ])
+      const complete = [...state.teams.keys()].every((teamId) => resolved.has(teamId))
+
       return allow([
         {
           type: 'DO_SCORES_SET',
@@ -617,6 +647,14 @@ export function decide(state: GameState, command: Command, now: number): Decisio
             scores: command.scores.map((entry) => ({ ...entry })),
           },
         },
+        ...(complete
+          ? [
+              {
+                type: 'QUESTION_SCORED' as const,
+                payload: { gameQuestionId: found.question.id },
+              },
+            ]
+          : []),
       ])
     }
 

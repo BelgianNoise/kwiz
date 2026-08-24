@@ -305,8 +305,8 @@ Not events, because they are derived:
 
 | Type | Payload | Notes |
 | --- | --- | --- |
-| `DO_WINNERS_SET` | `{ gameQuestionId, teamIds[], tiePayout }` | `teamIds: []` is the explicit "no winner" (D23) |
-| `DO_SCORES_SET` | `{ gameQuestionId, scores: { teamId, score }[] }` | `PER_TEAM_SCORE`; clamped `0…points` (D24) |
+| `DO_WINNERS_SET` | `{ gameQuestionId, teamIds[], tiePayout }` | `teamIds: []` is the explicit "no winner" (D23). Resolves every team in one commit, which **completes the question**: `QUESTION_SCORED` is appended with it, because `DO` has no reveal beat (PRD 3 §8) |
+| `DO_SCORES_SET` | `{ gameQuestionId, scores: { teamId, score }[] }` | `PER_TEAM_SCORE`; clamped `0…points` (D24). A partial save is a real state ("1 of 4 scored"); when the payload gives **every** team an outcome, `QUESTION_SCORED` is appended with it and the question completes |
 
 #### The open-question guard
 
@@ -747,8 +747,11 @@ type MasterControlView = {
   status: GameStatus                      // PRD 3 §4 exists only in SETUP, §10.6 only in FINISHED
   teams: (TeamPublic & { deviceCount: number })[]
   // `type` because the desk differs per round type, and the client must not infer it from
-  // whether `board` happens to be present.
-  round: { id: string; title: string; type: RoundType; number: number; total: number } | null
+  // whether `board` happens to be present. `closed`: the master has ended this round — pacing
+  // suggestions never point into it, its timeline loses the open link, and opening one of its
+  // questions is refused with ROUND_CLOSED (PRD 3 §9.1; slice 9's review).
+  round: { id: string; title: string; type: RoundType; number: number; total: number;
+           closed: boolean } | null
 
   // What ADVANCE / NEXT_ROUND opens: the round after the current one, or the FIRST round when
   // none is open. Top-level rather than inside `round`, because the case that needs it most is
@@ -1157,8 +1160,8 @@ feature, not an error; a *second* submission is neither.
 | --- | --- |
 | `POST /api/games/:gameId/start` · `/finish` · `/abandon` | `{}` |
 | `POST /api/games/:gameId/rounds/:roundId/open` · `/close` | `{}` |
-| `POST /api/games/:gameId/questions/:qId/open` | `{}` — server computes `deadlineAt` from the question's timer |
-| `POST /api/games/:gameId/questions/:qId/lock` · `/reveal` · `/score` | `{}` |
+| `POST /api/games/:gameId/questions/:qId/open` | `{}` — server computes `deadlineAt` from the question's timer. Refused with `ROUND_CLOSED` when the question's round has been ended: a closed round's gameplay does not reopen (PRD 3 §9.1) |
+| `POST /api/games/:gameId/questions/:qId/lock` · `/reveal` · `/score` | `{}` — `score` is how a `DO` question completes when the master closes it out manually; normally the verdict commands append it themselves (§4) |
 | `POST /api/games/:gameId/buzzes/:buzzId/adjudicate` | `{ accepted: boolean }` |
 | `POST /api/games/:gameId/questions/:qId/reopen-buzzers` | `{}` — clears all lockouts (D35) |
 | `POST /api/games/:gameId/answers/validate` | `{ gameQuestionId, teamId, accepted }` — also the revalidation path; allowed from submission onwards (D42) |

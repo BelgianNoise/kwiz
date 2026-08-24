@@ -111,8 +111,15 @@ export function Timeline({ view, api, run }: ZoneProps) {
         </span>
       ) : null}
 
-      {/* The only action the timeline can cause: starting a question that has not been played. */}
-      {focused && focused.state === 'PENDING' && view.status === 'LIVE' ? (
+      {/* The only action the timeline can cause: starting a question that has not been played.
+       *
+       * Gone entirely when the round is closed: its unplayed questions cannot be opened (the
+       * server refuses it), so a link that only produced a refusal would be chrome pretending to
+       * be an action. */}
+      {focused &&
+      focused.state === 'PENDING' &&
+      view.status === 'LIVE' &&
+      !view.round?.closed ? (
         <button
           type="button"
           className="text-primary shrink-0 underline-offset-4 hover:underline"

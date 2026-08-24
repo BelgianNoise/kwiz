@@ -1177,6 +1177,13 @@ export interface MasterControlView {
     type: RoundType
     number: number
     total: number
+    /**
+     * Whether the master has ended this round. Gates the client routes that would otherwise
+     * reopen its gameplay: the timeline's open link disappears, and an exhausted-looking board
+     * stops being rendered as pickable. Pacing suggestions never point into a closed round
+     * (protocol §5.4; slice 9's review).
+     */
+    closed: boolean
   } | null
   /**
    * What `ADVANCE / NEXT_ROUND` opens: the round after the current one, or the **first** round when
@@ -1283,6 +1290,7 @@ export function toMasterControlView(
           type: round.type,
           number: roundIndex + 1,
           total: state.content.rounds.length,
+          closed: state.closedRoundIds.has(round.id),
         }
       : null,
     // `roundIndex` is -1 with nothing open, so this is the first round — which is exactly the case
@@ -1747,6 +1755,20 @@ function advanceSuggestion(
   if (state.finale.ranking !== null) return 'FINISH'
 
   /*
+   * **A closed round is invisible to pacing** (slice 9's review). `ROUND_CLOSED` deliberately
+   * leaves `currentRoundId` pointing at the ended round — the timeline is still about it, and the
+   * projector's between-rounds leaderboard needs it — but a suggestion that read its remaining
+   * questions pointed *into the closed round*: `[Next question]` would reopen gameplay the master
+   * just ended. So a closed current round answers the only pacing question that remains — where
+   * next? — exactly as if nothing were open at all.
+   */
+  const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
+  if (round && state.closedRoundIds.has(round.id)) {
+    const isLastRound = state.content.rounds.at(-1)?.id === round.id
+    return isLastRound ? 'FINISH' : 'NEXT_ROUND'
+  }
+
+  /*
    * `LOCK` was missing from this union until slice 5, and it is the single most common primary
    * action in a game: while a question is `OPEN` the desk suggested `NEXT_QUESTION`, because the
    * fall-through below found unplayed questions in the round. PRD 3 §1.1 says the master must never
@@ -1763,7 +1785,6 @@ function advanceSuggestion(
    */
   if (play?.state === 'REVEALED') return 'NEXT_QUESTION'
 
-  const round = state.content.rounds.find((r) => r.id === state.currentRoundId)
   /*
    * A live game with no round open — which every game is for the first few seconds after
    * `[Start the quiz]`. This returned `null` before slice 5's browser pass, so `attention` was

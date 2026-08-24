@@ -84,26 +84,6 @@ export async function advance(page: Page, label: string): Promise<void> {
   await page.getByRole('button', { name: label, exact: true }).click()
 }
 
-/**
- * Opens a question that has not been played yet **from the timeline strip** (PRD 3 §2.1).
- *
- * This is the desk's only route onward from a `DO` question after its verdict is saved: those
- * questions stay `LOCKED` rather than passing through reveal and score, so the attention zone
- * keeps showing the scoring desk and there is no advance button to press. The master moves on
- * by focusing the next tile in the timeline — which is what surfaces the one action the strip
- * can cause (§2.1: opening an unplayed question).
- */
-export async function openNextQuestion(page: Page, prompt: string): Promise<void> {
-  await page
-    .getByRole('button', { name: new RegExp(`^${escapeRegExp(prompt)} — `) })
-    .click()
-  await page.getByRole('button', { name: c.question.openNext }).click()
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 /** PRD 5 §5.1 — type an answer and submit it. Finality (D43) is the server's business. */
 export async function answer(page: Page, text: string): Promise<void> {
   await page.getByLabel(t.game.yourAnswer).fill(text)

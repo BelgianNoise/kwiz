@@ -253,11 +253,13 @@ function AdvanceZone({ view, api, run, gameId }: ZoneProps) {
    * pick. A `LOCKED` or `REVEALED` tile stays on the question desk — those states are still the
    * reveal moment the room is watching.
    *
-   * Only while tiles remain: once the last tile is scored there is nothing left to pick, and the
-   * master needs the advance button (next round / end of game) more than an empty board.
+   * Only while tiles remain **and the round is still open**: a closed round's tiles cannot be
+   * picked (opening one is refused server-side), so its leftover board must not bury the advance
+   * button.
    */
   if (
     view.round?.type === 'JEOPARDY' &&
+    !view.round.closed &&
     view.question?.state === 'SCORED' &&
     nextPendingInRound(view)
   ) {
@@ -279,11 +281,12 @@ function AdvanceZone({ view, api, run, gameId }: ZoneProps) {
     return <QuestionDesk view={view} api={api} run={run} gameId={gameId} />
   }
   /*
-   * The board is the desk **while there are tiles left to pick** (D16). Once every tile has
-   * been played or skipped, there is nothing to pick — and showing an empty board would bury
-   * the one thing the master needs: the advance button (next round / end of game).
+   * The board is the desk **while there are tiles left to pick and the round is still open**
+   * (D16). Once every tile has been played or skipped there is nothing to pick — and once the
+   * master has ended the round its remaining tiles cannot be opened at all (the server refuses
+   * it) — so either way the advance button outranks an unpickable board.
    */
-  if (view.round?.type === 'JEOPARDY' && nextPendingInRound(view)) {
+  if (view.round?.type === 'JEOPARDY' && !view.round.closed && nextPendingInRound(view)) {
     return <BoardDesk view={view} api={api} run={run} gameId={gameId} tiedTeamIds={[]} />
   }
   return <Leaderboard view={view} api={api} run={run} gameId={gameId} />

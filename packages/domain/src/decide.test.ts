@@ -847,6 +847,73 @@ describe('DO scoring', () => {
     expect(denied.detail).toEqual({ teamId: A, max: 30 })
   })
 
+  /**
+   * Slice 9's review finding: `DO_WINNERS_SET` resolved every team but left the question
+   * `LOCKED`, so `attention` stayed `SCORE_DO` and the master had no route onward but the
+   * timeline strip. The verdict completes the question — `DO` has no reveal beat.
+   */
+  it('completes the question when the winners are set', () => {
+    const game = doQuestion()
+    const decision = accepted(
+      game.act({ type: 'SET_DO_WINNERS', gameQuestionId: DO_Q, teamIds: [A] }),
+    )
+    expect(decision.events.map((event) => event.type)).toEqual([
+      'DO_WINNERS_SET',
+      'QUESTION_SCORED',
+    ])
+    expect(game.state.questions.get(DO_Q)?.state).toBe('SCORED')
+  })
+
+  it('nobody-got-it completes the question too — [] still resolves every team (D23)', () => {
+    const game = doQuestion()
+    const decision = accepted(
+      game.act({ type: 'SET_DO_WINNERS', gameQuestionId: DO_Q, teamIds: [] }),
+    )
+    expect(decision.events.map((event) => event.type)).toContain('QUESTION_SCORED')
+    expect(game.state.questions.get(DO_Q)?.state).toBe('SCORED')
+  })
+
+  it('a partial PER_TEAM_SCORE save holds the desk; completing it closes the question', () => {
+    const game = doQuestion()
+
+    // One of three teams scored: real state ("1 of 3 scored"), so the desk persists.
+    const partial = accepted(
+      game.act({
+        type: 'SET_DO_SCORES',
+        gameQuestionId: DO_Q,
+        scores: [{ teamId: A, score: 6 }],
+      }),
+    )
+    expect(partial.events.map((event) => event.type)).toEqual(['DO_SCORES_SET'])
+    expect(game.state.questions.get(DO_Q)?.state).toBe('LOCKED')
+
+    // The rest: coverage complete, so the question completes with the save.
+    const completing = accepted(
+      game.act({
+        type: 'SET_DO_SCORES',
+        gameQuestionId: DO_Q,
+        scores: [
+          { teamId: B, score: 0 },
+          { teamId: C, score: 10 },
+        ],
+      }),
+    )
+    expect(completing.events.map((event) => event.type)).toEqual([
+      'DO_SCORES_SET',
+      'QUESTION_SCORED',
+    ])
+    expect(game.state.questions.get(DO_Q)?.state).toBe('SCORED')
+  })
+
+  it('refuses to open a question in a round the master has ended', () => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_ROUND', gameRoundId: 'r1' }, 1_000)
+    game.act({ type: 'CLOSE_ROUND', gameRoundId: 'r1' }, 2_000)
+
+    const denied = refusal(game.act({ type: 'OPEN_QUESTION', gameQuestionId: FREE_Q }))
+    expect(denied.error).toBe('ROUND_CLOSED')
+  })
+
   it('refuses DO scoring against a question that is not a DO', () => {
     const game = driver(LIVE)
     expect(

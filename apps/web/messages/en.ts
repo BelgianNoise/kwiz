@@ -39,6 +39,7 @@ const errors: Record<ErrorCode, string> = {
   RESYNC_BLOCKED:
     'This game has already been played, so it cannot be refreshed from the quiz.',
   SOURCE_QUIZ_DELETED: 'The quiz this game came from no longer exists.',
+  ROUND_CLOSED: 'That round has already ended.',
   COPY_INVALID: "The copy this made isn't valid. Please try again or report this.",
   QUESTION_STILL_OPEN: 'Lock or skip the open question first.',
   SCORE_OUT_OF_RANGE: 'That score is outside the range this question allows.',
