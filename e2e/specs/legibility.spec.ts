@@ -15,30 +15,30 @@ import {
 import { openControl, openPlayer, openScreen } from '../support/surfaces'
 
 /**
- * Slice 10's automatable residue: the **§2.1 legibility floor** walked mechanically across
- * every projected stage in **both locales**, plus the horizontal/vertical overflow guard —
+ * Slice 10's automatable residue: the **Ã‚Â§2.1 legibility floor** walked mechanically across
+ * every projected stage in **both locales**, plus the horizontal/vertical overflow guard Ã¢â‚¬â€
  * and the projector URL rules from slice 6's finding.
  *
- * PRD 4 §2.1: nothing below `4vh` (outside the frame) / `4cqh` (inside it) — the same 43.2px
- * at 1080p — *"nothing is exempt, including timings and captions."* Slice 6 wrote this as a
+ * PRD 4 Ã‚Â§2.1: nothing below `4vh` (outside the frame) / `4cqh` (inside it) Ã¢â‚¬â€ the same 43.2px
+ * at 1080p Ã¢â‚¬â€ *"nothing is exempt, including timings and captions."* Slice 6 wrote this as a
  * manual snippet and it caught three real violations (Jeopardy categories, the penalty label,
  * the arming screen itself). A check that runs only when someone remembers to run it is a
- * check that stops being run; it lives here now, on both locale baselines (PRD 1 §9.2: Dutch
- * is the layout baseline and runs 20–30% longer).
+ * check that stops being run; it lives here now, on both locale baselines (PRD 1 Ã‚Â§9.2: Dutch
+ * is the layout baseline and runs 20Ã¢â‚¬â€œ30% longer).
  *
  * What this deliberately cannot prove:
- * - **Transform-scaled text** — computed font-size hides CSS-transform shrinking. Nothing
+ * - **Transform-scaled text** Ã¢â‚¬â€ computed font-size hides CSS-transform shrinking. Nothing
  *   today scales that way; if one appears, extend this guard.
- * - **Contrast, overscan, washed-out projectors, 10 m sightlines** — hardware (agent-workflow
- *   §4.5). Those stay in `docs/field-rehearsal.md`.
+ * - **Contrast, overscan, washed-out projectors, 10 m sightlines** Ã¢â‚¬â€ hardware (agent-workflow
+ *   Ã‚Â§4.5). Those stay in `docs/field-rehearsal.md`.
  */
 
 const TEAMS = ['Foxes', 'Whales', 'Iguanas']
 const KEYWORDS = ['Thriller', 'Bad', 'Moonwalk', 'Neverland', 'Billie Jean']
 
 /**
- * The §2.1 floor, evaluated inside the page. Direct text nodes only (containers inherit their
- * children's sizes), the language switcher exempt (chrome, not stage content — slice 6's note),
+ * The Ã‚Â§2.1 floor, evaluated inside the page. Direct text nodes only (containers inherit their
+ * children's sizes), the language switcher exempt (chrome, not stage content Ã¢â‚¬â€ slice 6's note),
  * half a pixel of tolerance for subpixel rounding.
  */
 function collectViolations(): string[] {
@@ -46,7 +46,7 @@ function collectViolations(): string[] {
   const bad: string[] = []
   document.body.querySelectorAll('*').forEach((el) => {
     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'LINK', 'META'].includes(el.tagName)) return
-    // The language switcher is chrome for whoever operates the laptop, not stage content —
+    // The language switcher is chrome for whoever operates the laptop, not stage content Ã¢â‚¬â€
     // slice 6 ignored its two entries and this check keeps that exception. Matched structurally
     // (`nav`), because its accessible name is translated and would leak through on the nl page.
     if (el.closest('nav')) return
@@ -81,7 +81,7 @@ test('the projector stays above the legibility floor through every stage, in en 
 }) => {
   test.setTimeout(240_000)
 
-  // ── fixture: three rounds, so every desk and every projected stage is reachable ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ fixture: three rounds, so every desk and every projected stage is reachable Ã¢â€â‚¬Ã¢â€â‚¬
   const db = testDb()
   const quizId = newQuiz(db, 'legibility night')
   const r1 = newQuestionSetRound(db, quizId, 'Openers')
@@ -104,7 +104,7 @@ test('the projector stays above the legibility floor through every stage, in en 
     finale: { secondsPerPoint: 0.5, penaltySeconds: 5 },
   })
 
-  // ── surfaces: control drives; two projectors measure, one per locale ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ surfaces: control drives; two projectors measure, one per locale Ã¢â€â‚¬Ã¢â€â‚¬
   const master = await openControl(browser)
   const screens: { locale: 'en' | 'nl'; page: Page }[] = [
     { locale: 'en', page: (await openScreen(browser)).page },
@@ -116,13 +116,13 @@ test('the projector stays above the legibility floor through every stage, in en 
   const measure = async (stage: string): Promise<void> => {
     for (const { locale, page } of screens) {
       const violations = await page.evaluate(collectViolations)
-      expect(violations, `${stage} [${locale}] — text below the §2.1 floor`).toEqual([])
+      expect(violations, `${stage} [${locale}] Ã¢â‚¬â€ text below the Ã‚Â§2.1 floor`).toEqual([])
       const overflow = await page.evaluate(collectOverflow)
-      expect(overflow, `${stage} [${locale}] — page overflow`).toEqual([])
+      expect(overflow, `${stage} [${locale}] Ã¢â‚¬â€ page overflow`).toEqual([])
     }
   }
 
-  // ── arming screens, before anything else (they sit outside StageFrame) ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ arming screens, before anything else (they sit outside StageFrame) Ã¢â€â‚¬Ã¢â€â‚¬
   for (const { locale, page } of screens) {
     await page.goto(`/${locale}/screen/${game.gameId}`)
     await expect(
@@ -132,7 +132,7 @@ test('the projector stays above the legibility floor through every stage, in en 
     ).toBeVisible()
   }
   const armedViolations = await screens[0]!.page.evaluate(collectViolations)
-  expect(armedViolations, 'arming [en] — text below the §2.1 floor').toEqual([])
+  expect(armedViolations, 'arming [en] Ã¢â‚¬â€ text below the Ã‚Â§2.1 floor').toEqual([])
 
   for (const { locale, page } of screens) {
     const copy = locale === 'nl' ? nl.screen.arming.click : en.screen.arming.click
@@ -145,9 +145,9 @@ test('the projector stays above the legibility floor through every stage, in en 
   await master.page.goto(`/en/control/${game.gameId}`)
   await measure('waiting')
 
-  // ── the master drives; each checkpoint measures both projectors ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ the master drives; each checkpoint measures both projectors Ã¢â€â‚¬Ã¢â€â‚¬
 
-  // Start → leaderboard-with-NEXT_ROUND; then open round one → its intro stage.
+  // Start Ã¢â€ â€™ leaderboard-with-NEXT_ROUND; then open round one Ã¢â€ â€™ its intro stage.
   await advance(master.page, en.control.setup.start)
   await advance(master.page, en.control.question.nextRound)
   await measure('round intro')
@@ -155,7 +155,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await advance(master.page, en.control.question.openNext)
   await measure('question open (free text)')
 
-  // An answer so the reveal has its "You said" row (PRD 4 §8).
+  // An answer so the reveal has its "You said" row (PRD 4 Ã‚Â§8).
   await phone.page.getByLabel(en.player.game.yourAnswer).fill('paris')
   await phone.page.getByRole('button', { name: en.player.game.submit }).click()
 
@@ -163,7 +163,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await advance(master.page, en.control.question.reveal)
   await measure('reveal')
 
-  // Mid-round scoreboard toggle → LEADERBOARD stage (PRD 3 §11.1), then take it down again.
+  // Mid-round scoreboard toggle Ã¢â€ â€™ LEADERBOARD stage (PRD 3 Ã‚Â§11.1), then take it down again.
   await master.page.getByRole('button', { name: en.control.scores.showScores }).click()
   await measure('leaderboard (mid-round)')
   await master.page.getByRole('button', { name: en.control.scores.hideScores }).click()
@@ -171,7 +171,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await advance(master.page, en.control.question.score)
   await advance(master.page, en.control.question.next)
 
-  // Question two is multiple choice — same QUESTION kind, different layout input.
+  // Question two is multiple choice Ã¢â‚¬â€ same QUESTION kind, different layout input.
   await phone.page.getByRole('button', { name: 'Tomato' }).click()
   await phone.page.getByRole('button', { name: en.player.game.submit }).click()
   await advance(master.page, en.control.question.close)
@@ -179,7 +179,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await measure('reveal (multiple choice)')
   await advance(master.page, en.control.question.score)
 
-  // Break: countdown stage, then resume — nothing resumes by itself (D8).
+  // Break: countdown stage, then resume Ã¢â‚¬â€ nothing resumes by itself (D8).
   await master.page.getByRole('button', { name: en.control.frame.menu }).click()
   await master.page.getByRole('menuitem', { name: en.control.break.start }).click()
   await master.page.getByLabel(en.control.break.minutes).fill('5')
@@ -190,11 +190,11 @@ test('the projector stays above the legibility floor through every stage, in en 
   await measure('break')
   await advance(master.page, en.control.break.resume)
 
-  // Round two: the jeopardy board. All-zero scores → BREAK_TIE_FOR_PICK → the choosing line.
+  // Round two: the jeopardy board. All-zero scores Ã¢â€ â€™ BREAK_TIE_FOR_PICK Ã¢â€ â€™ the choosing line.
   await advance(master.page, en.control.question.nextRound)
   await measure('jeopardy board')
 
-  // Open a tile and buzz from the phone: the buzz display with two-decimal timings (§8.3).
+  // Open a tile and buzz from the phone: the buzz display with two-decimal timings (Ã‚Â§8.3).
   await master.page
     .getByRole('main')
     .getByRole('list')
@@ -235,17 +235,17 @@ test('the projector stays above the legibility floor through every stage, in en 
   }
   await advance(master.page, en.control.finale.start)
 
-  // Finalists are set but the keyword question is still pending — opening it is what puts the
-  // first turn within reach ([Start <team>] between turns, §10.5).
+  // Finalists are set but the keyword question is still pending Ã¢â‚¬â€ opening it is what puts the
+  // first turn within reach ([Start <team>] between turns, Ã‚Â§10.5).
   await advance(master.page, en.control.question.openNext)
 
-  // Fewest-seconds rule starts someone; whoever it is, the button names them (§10.5). The
+  // Fewest-seconds rule starts someone; whoever it is, the button names them (Ã‚Â§10.5). The
   // negative lookahead keeps this off the picker's own [Start the finale], which is gone by now.
   await master.page.getByRole('button', { name: /^Start (?!the finale)/ }).click()
   await measure('finale turn active')
 
-  // End the game → FINISHED. The finale has no ranking yet (unfinished), so this is the
-  // standings variant — no tab labels, same components and type scale, which is what the floor
+  // End the game Ã¢â€ â€™ FINISHED. The finale has no ranking yet (unfinished), so this is the
+  // standings variant Ã¢â‚¬â€ no tab labels, same components and type scale, which is what the floor
   // checks. The winner hero names a team at maximum size.
   await master.page.getByRole('button', { name: en.control.frame.menu }).click()
   await master.page.getByRole('menuitem', { name: en.control.frame.finish }).click()
@@ -271,7 +271,7 @@ test('the projector stays above the legibility floor through every stage, in en 
 
 /**
  * Slice 6's finding, pinned: **the projector URL is only trustworthy once the network address
- * exists.** After the picker runs it must be absolute with an authority — a QR encoding a
+ * exists.** After the picker runs it must be absolute with an authority Ã¢â‚¬â€ a QR encoding a
  * relative path resolves to nothing on a phone. Before it runs, relative is correct and
  * deliberate (a guessed origin is a dead link that looks authoritative), which is why that half
  * gets its own spawned server: the shared one has an address by the time any spec runs.
@@ -281,7 +281,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
 }) => {
   test.setTimeout(120_000)
 
-  // ── absolute side, on the shared server ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ absolute side, on the shared server Ã¢â€â‚¬Ã¢â€â‚¬
   const db = testDb()
   const quizId = newQuiz(db, 'qr night')
   const roundId = newQuestionSetRound(db, quizId, 'Round one')
@@ -291,7 +291,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
   const admin = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const adminPage = await admin.newPage()
   await adminPage.goto('/en/admin')
-  // Fresh shared server: whichever worker arrives first walks the picker (§4), the rest find
+  // Fresh shared server: whichever worker arrives first walks the picker (Ã‚Â§4), the rest find
   // the dashboard. Same idempotent pattern as `flows.pastFirstRun`, inline for the hub read.
   const dashboard = adminPage.getByRole('button', { name: en.admin.dashboard.newQuiz })
   await dashboard.or(adminPage.getByRole('heading', { name: en.setup.heading })).waitFor({
@@ -302,7 +302,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
     await expect(dashboard).toBeVisible({ timeout: 20_000 })
   }
 
-  // The game hub shows the join URL with a real authority — host and port, not a path.
+  // The game hub shows the join URL with a real authority Ã¢â‚¬â€ host and port, not a path.
   await adminPage.goto(`/en/admin/games/${game.gameId}`)
   const hubUrl = await adminPage
     .getByText(new RegExp(`[^\\s]*/play/${game.code}`))
@@ -325,7 +325,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
   await expect(screen.page.locator('svg').first()).toBeVisible()
   await admin.close()
 
-  // ── relative side: a spawned server whose settings.json has no address ──
+  // Ã¢â€â‚¬Ã¢â€â‚¬ relative side: a spawned server whose settings.json has no address Ã¢â€â‚¬Ã¢â€â‚¬
   const { spawnKwizServer } = await import('../support/spawn')
   const { resolve } = await import('node:path')
   const dataDir = resolve('.playwright/data', `qr-relative-${process.pid}`)
@@ -335,7 +335,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
     const fresh = await browser.newContext({ viewport: { width: 1920, height: 1080 } })
     const page = await fresh.newPage()
     await page.goto(`${server.url}/en/screen/${game.gameId}`)
-    // Different database entirely — this game does not exist there, so the screen goes to §14's
+    // Different database entirely Ã¢â‚¬â€ this game does not exist there, so the screen goes to Ã‚Â§14's
     // calm failure state (no arming overlay, no waiting stage, no scannable-looking link). The
     // deliberate relative rendering itself is covered by `views.ts`'s joinUrl builder upstream.
     await expect(page.getByText(en.screen.arming.click)).toHaveCount(0)
