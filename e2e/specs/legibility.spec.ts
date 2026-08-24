@@ -116,7 +116,10 @@ test('the projector stays above the legibility floor through every stage, in en 
   const measure = async (stage: string): Promise<void> => {
     for (const { locale, page } of screens) {
       const violations = await page.evaluate(collectViolations)
-      expect(violations, `${stage} [${locale}] Ã¢â‚¬â€ text below the Ã‚Â§2.1 floor`).toEqual([])
+      expect(
+        violations,
+        `${stage} [${locale}] Ã¢â‚¬â€ text below the Ã‚Â§2.1 floor`,
+      ).toEqual([])
       const overflow = await page.evaluate(collectOverflow)
       expect(overflow, `${stage} [${locale}] Ã¢â‚¬â€ page overflow`).toEqual([])
     }
