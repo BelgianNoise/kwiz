@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import nl from '../../apps/web/messages/nl'
 import { testDb } from '../support/db'
-import { advance, en, joinAs, openScreenFor } from '../support/flows'
+import { advance, en, fill, joinAs, openScreenFor } from '../support/flows'
 import { createGame } from '../support/game'
 import {
   addFinaleRound,
@@ -16,20 +16,20 @@ import { openControl, openPlayer, openScreen } from '../support/surfaces'
 
 /**
  * Slice 10's automatable residue: the **§2.1 legibility floor** walked mechanically across
- * every projected stage in **both locales**, plus the horizontal/vertical overflow guard ”
+ * every projected stage in **both locales**, plus the horizontal/vertical overflow guard —
  * and the projector URL rules from slice 6's finding.
  *
- * PRD 4 §2.1: nothing below `4vh` (outside the frame) / `4cqh` (inside it) ” the same 43.2px
- * at 1080p ” *"nothing is exempt, including timings and captions."* Slice 6 wrote this as a
+ * PRD 4 §2.1: nothing below `4vh` (outside the frame) / `4cqh` (inside it) — the same 43.2px
+ * at 1080p — *"nothing is exempt, including timings and captions."* Slice 6 wrote this as a
  * manual snippet and it caught three real violations (Jeopardy categories, the penalty label,
  * the arming screen itself). A check that runs only when someone remembers to run it is a
  * check that stops being run; it lives here now, on both locale baselines (PRD 1 §9.2: Dutch
  * is the layout baseline and runs 20–30% longer).
  *
  * What this deliberately cannot prove:
- * - **Transform-scaled text** ” computed font-size hides CSS-transform shrinking. Nothing
+ * - **Transform-scaled text** — computed font-size hides CSS-transform shrinking. Nothing
  *   today scales that way; if one appears, extend this guard.
- * - **Contrast, overscan, washed-out projectors, 10 m sightlines** ” hardware (agent-workflow
+ * - **Contrast, overscan, washed-out projectors, 10 m sightlines** — hardware (agent-workflow
  *   §4.5). Those stay in `docs/field-rehearsal.md`.
  */
 
@@ -37,24 +37,36 @@ const TEAMS = ['Foxes', 'Whales', 'Iguanas']
 const KEYWORDS = ['Thriller', 'Bad', 'Moonwalk', 'Neverland', 'Billie Jean']
 
 /**
- * The §2.1 floor, evaluated inside the page. Direct text nodes only (containers inherit their
- * children's sizes), the language switcher exempt (chrome, not stage content ” slice 6's note),
- * half a pixel of tolerance for subpixel rounding.
+ * The §2.1 floor, evaluated inside the page.
+ *
+ * - Direct text nodes only: containers inherit their children's sizes.
+ * - Hidden elements are skipped (`display: none` ancestors still resolve computed styles, so
+ *   without this check a closed popover or inactive tab would produce false positives).
+ * - The language switcher is chrome for whoever operates the laptop, not stage content — slice 6
+ *   ignored its two entries and this check keeps that exception. Matched structurally (`nav`),
+ *   because its accessible name is translated and would leak through on the nl page. **Scoped to
+ *   chrome as it exists today**: if projected content ever moves inside a nav, this exemption
+ *   needs revisiting.
  */
 function collectViolations(): string[] {
   const floor = window.innerHeight * 0.04
   const bad: string[] = []
   document.body.querySelectorAll('*').forEach((el) => {
     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'LINK', 'META'].includes(el.tagName)) return
-    // The language switcher is chrome for whoever operates the laptop, not stage content ”
-    // slice 6 ignored its two entries and this check keeps that exception. Matched structurally
-    // (`nav`), because its accessible name is translated and would leak through on the nl page.
     if (el.closest('nav')) return
+    const style = getComputedStyle(el)
+    if (style.display === 'none' || style.visibility === 'hidden') return
+    let parent = el.parentElement
+    while (parent) {
+      const ps = getComputedStyle(parent)
+      if (ps.display === 'none' || ps.visibility === 'hidden') return
+      parent = parent.parentElement
+    }
     const hasText = [...el.childNodes].some(
       (node) => node.nodeType === 3 && (node.textContent ?? '').trim(),
     )
     if (!hasText) return
-    const px = parseFloat(getComputedStyle(el).fontSize)
+    const px = parseFloat(style.fontSize)
     if (!Number.isFinite(px)) return
     if (px < floor - 0.5) {
       bad.push(`${Math.round(px * 10) / 10}px "${el.textContent.trim().slice(0, 40)}"`)
@@ -81,7 +93,7 @@ test('the projector stays above the legibility floor through every stage, in en 
 }) => {
   test.setTimeout(240_000)
 
-  // --  fixture: three rounds, so every desk and every projected stage is reachable
+  // -- fixture: three rounds, so every desk and every projected stage is reachable
   const db = testDb()
   const quizId = newQuiz(db, 'legibility night')
   const r1 = newQuestionSetRound(db, quizId, 'Openers')
@@ -104,7 +116,7 @@ test('the projector stays above the legibility floor through every stage, in en 
     finale: { secondsPerPoint: 0.5, penaltySeconds: 5 },
   })
 
-  // --  surfaces: control drives; two projectors measure, one per locale
+  // -- surfaces: control drives; two projectors measure, one per locale
   const master = await openControl(browser)
   const screens: { locale: 'en' | 'nl'; page: Page }[] = [
     { locale: 'en', page: (await openScreen(browser)).page },
@@ -112,17 +124,21 @@ test('the projector stays above the legibility floor through every stage, in en 
   ]
   const phone = await openPlayer(browser)
 
-  /** Measure both projectors at one checkpoint, naming the stage on failure. */
+  /**
+   * Measure both projectors at one checkpoint, naming the stage on failure. **Every projected
+   * pixel goes through this** — including arming (which sits outside StageFrame but inside the
+   * viewport, so both evaluators work there too).
+   */
   const measure = async (stage: string): Promise<void> => {
     for (const { locale, page } of screens) {
       const violations = await page.evaluate(collectViolations)
-      expect(violations, `${stage} [${locale}] ” text below the §2.1 floor`).toEqual([])
+      expect(violations, `${stage} [${locale}] — text below the §2.1 floor`).toEqual([])
       const overflow = await page.evaluate(collectOverflow)
-      expect(overflow, `${stage} [${locale}] ” page overflow`).toEqual([])
+      expect(overflow, `${stage} [${locale}] — page overflow`).toEqual([])
     }
   }
 
-  // --  arming screens, before anything else (they sit outside StageFrame)
+  // -- arming screens: measured through the same path as everything else
   for (const { locale, page } of screens) {
     await page.goto(`/${locale}/screen/${game.gameId}`)
     await expect(
@@ -131,8 +147,7 @@ test('the projector stays above the legibility floor through every stage, in en 
       }),
     ).toBeVisible()
   }
-  const armedViolations = await screens[0]!.page.evaluate(collectViolations)
-  expect(armedViolations, 'arming [en] ” text below the §2.1 floor').toEqual([])
+  await measure('arming')
 
   for (const { locale, page } of screens) {
     const copy = locale === 'nl' ? nl.screen.arming.click : en.screen.arming.click
@@ -145,9 +160,9 @@ test('the projector stays above the legibility floor through every stage, in en 
   await master.page.goto(`/en/control/${game.gameId}`)
   await measure('waiting')
 
-  // --  the master drives; each checkpoint measures both projectors
+  // -- the master drives; each checkpoint measures both projectors
 
-  // Start --  leaderboard-with-NEXT_ROUND; then open round one  its intro stage.
+  // Start → leaderboard-with-NEXT_ROUND; then open round one → its intro stage.
   await advance(master.page, en.control.setup.start)
   await advance(master.page, en.control.question.nextRound)
   await measure('round intro')
@@ -163,7 +178,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await advance(master.page, en.control.question.reveal)
   await measure('reveal')
 
-  // Mid-- round scoreboard toggle  LEADERBOARD stage (PRD 3 11.1), then take it down again.
+  // Mid-round scoreboard toggle → LEADERBOARD stage (PRD 3 §11.1), then take it down again.
   await master.page.getByRole('button', { name: en.control.scores.showScores }).click()
   await measure('leaderboard (mid-round)')
   await master.page.getByRole('button', { name: en.control.scores.hideScores }).click()
@@ -171,7 +186,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await advance(master.page, en.control.question.score)
   await advance(master.page, en.control.question.next)
 
-  // Question two is multiple choice ” same QUESTION kind, different layout input.
+  // Question two is multiple choice — same QUESTION kind, different layout input.
   await phone.page.getByRole('button', { name: 'Tomato' }).click()
   await phone.page.getByRole('button', { name: en.player.game.submit }).click()
   await advance(master.page, en.control.question.close)
@@ -179,7 +194,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await measure('reveal (multiple choice)')
   await advance(master.page, en.control.question.score)
 
-  // Break: countdown stage, then resume ” nothing resumes by itself (D8).
+  // Break: countdown stage, then resume — nothing resumes by itself (D8).
   await master.page.getByRole('button', { name: en.control.frame.menu }).click()
   await master.page.getByRole('menuitem', { name: en.control.break.start }).click()
   await master.page.getByLabel(en.control.break.minutes).fill('5')
@@ -190,7 +205,7 @@ test('the projector stays above the legibility floor through every stage, in en 
   await measure('break')
   await advance(master.page, en.control.break.resume)
 
-  // Round two--  the jeopardy board. All-zero scores  BREAK_TIE_FOR_PICK  the choosing line.
+  // Round two: the jeopardy board. All-zero scores → BREAK_TIE_FOR_PICK → the choosing line.
   await advance(master.page, en.control.question.nextRound)
   await measure('jeopardy board')
 
@@ -231,21 +246,25 @@ test('the projector stays above the legibility floor through every stage, in en 
       .click()
     await master.page.getByLabel(en.control.scores.amount).fill('40')
     await master.page.getByLabel(en.control.scores.announce).uncheck()
-    await master.page.getByRole('button', { name: /^Apply \+40$/ }).click()
+    const label = fill(en.control.scores.apply, { delta: '+40' })
+    await master.page.getByRole('button', { name: label }).click()
   }
   await advance(master.page, en.control.finale.start)
 
-  // Finalists are set but the keyword question is still pending ” opening it is what puts the
+  // Finalists are set but the keyword question is still pending — opening it is what puts the
   // first turn within reach ([Start <team>] between turns, §10.5).
   await advance(master.page, en.control.question.openNext)
 
-  // Fewest-seconds rule starts someone; whoever it is, the button names them (§10.5). The
-  // negative lookahead keeps this off the picker's own [Start the finale], which is gone by now.
-  await master.page.getByRole('button', { name: /^Start (?!the finale)/ }).click()
+  /*
+   * Fewest-seconds starts Whales (20s, tied with Iguanas at 20s, position tiebreak goes to
+   * Whales at position 1 over Iguanas at position 2). Asserted by name rather than a loose
+   * prefix so a future button beginning "Start…" cannot satisfy it accidentally.
+   */
+  await advance(master.page, fill(en.control.finale.startTurn, { team: TEAMS[1]! }))
   await measure('finale turn active')
 
-  // End the game --  FINISHED. The finale has no ranking yet (unfinished), so this is the
-  // standings variant ” no tab labels, same components and type scale, which is what the floor
+  // End the game → FINISHED. The finale has no ranking yet (unfinished), so this is the
+  // standings variant — no tab labels, same components and type scale, which is what the floor
   // checks. The winner hero names a team at maximum size.
   await master.page.getByRole('button', { name: en.control.frame.menu }).click()
   await master.page.getByRole('menuitem', { name: en.control.frame.finish }).click()
@@ -253,14 +272,10 @@ test('the projector stays above the legibility floor through every stage, in en 
     .getByRole('alertdialog')
     .getByRole('button', { name: en.control.frame.finish })
     .click()
-  await expect(screenEnPage().getByText(TEAMS[0]!).first()).toBeVisible({
+  await expect(screens[0]!.page.getByText(TEAMS[0]!).first()).toBeVisible({
     timeout: 15_000,
   })
   await measure('finished')
-
-  function screenEnPage(): Page {
-    return screens[0]!.page
-  }
 
   await Promise.all([
     master.context.close(),
@@ -271,17 +286,47 @@ test('the projector stays above the legibility floor through every stage, in en 
 
 /**
  * Slice 6's finding, pinned: **the projector URL is only trustworthy once the network address
- * exists.** After the picker runs it must be absolute with an authority ” a QR encoding a
+ * exists.** After the picker runs it must be absolute with an authority — a QR encoding a
  * relative path resolves to nothing on a phone. Before it runs, relative is correct and
  * deliberate (a guessed origin is a dead link that looks authoritative), which is why that half
- * gets its own spawned server: the shared one has an address by the time any spec runs.
+ * gets its own spawned server with its own game: the shared one has an address by the time any
+ * spec runs.
  */
 test('the join URL is absolute after the network picker, and honestly relative before it', async ({
   browser,
 }) => {
   test.setTimeout(120_000)
 
-  // --  absolute side, on the shared server
+  /**
+   * Reads the rendered join URL. `absolute: true` asserts authority (host:port, not just a
+   * path); `absolute: false` asserts the opposite — path-only, no guessed origin.
+   */
+  const readJoinUrl = async (
+    page: Page,
+    code: string,
+    absolute: boolean,
+  ): Promise<string> => {
+    const text = (
+      await page
+        .getByText(new RegExp(`[^\\s]*/play/${code}`))
+        .first()
+        .innerText()
+    ).trim()
+    expect(text).toContain(`/play/${code}`)
+    if (absolute) {
+      // The hub renders the full URL; the projector's displayUrl strips the scheme for
+      // reading. Either way the key assertion is: not a bare path.
+      expect(text.startsWith('/')).toBe(false)
+      expect(text).toContain(':')
+    } else {
+      // No address chosen yet: path-only is correct and deliberate (slice 6).
+      expect(text.startsWith('/')).toBe(true)
+      expect(text).toBe(`/play/${code}`)
+    }
+    return text
+  }
+
+  // ── absolute side, on the shared server ──
   const db = testDb()
   const quizId = newQuiz(db, 'qr night')
   const roundId = newQuestionSetRound(db, quizId, 'Round one')
@@ -302,44 +347,57 @@ test('the join URL is absolute after the network picker, and honestly relative b
     await expect(dashboard).toBeVisible({ timeout: 20_000 })
   }
 
-  // The game hub shows the join URL with a real authority ” host and port, not a path.
+  // The game hub shows the join URL with a real authority — host and port, not a path.
   await adminPage.goto(`/en/admin/games/${game.gameId}`)
-  const hubUrl = await adminPage
-    .getByText(new RegExp(`[^\\s]*/play/${game.code}`))
-    .first()
-    .innerText()
-  expect(hubUrl.startsWith('/')).toBe(false)
-  expect(hubUrl).toContain(':')
+  const hubUrl = await readJoinUrl(adminPage, game.code, true)
 
   // The projector shows the same URL (scheme stripped for reading) and renders its QR.
   const screen = await openScreen(browser)
   await openScreenFor(screen.page, game.gameId)
-  const shown = await screen.page
-    .getByText(new RegExp(`[^\\s]*/play/${game.code}`))
-    .first()
-    .innerText()
-  expect(shown.startsWith('/')).toBe(false)
-  expect(shown.replace(/^https?:\/\//, '').replace(/\/$/, '')).toBe(
-    hubUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''),
-  )
+  const shownUrl = await readJoinUrl(screen.page, game.code, true)
+  // The projector's displayUrl strips the scheme for reading, so normalise both sides.
+  const stripScheme = (url: string): string =>
+    url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  expect(stripScheme(shownUrl)).toBe(stripScheme(hubUrl))
   await expect(screen.page.locator('svg').first()).toBeVisible()
   await admin.close()
 
-  // --  relative side: a spawned server whose settings.json has no address
+  // ── relative side: on a spawned server whose database contains its own game ──
   const { spawnKwizServer } = await import('../support/spawn')
   const { resolve } = await import('node:path')
+  const { openDatabase } = await import('@kwiz/db')
   const dataDir = resolve('.playwright/data', `qr-relative-${process.pid}`)
   const server = spawnKwizServer({ port: 3931, dataDir })
   try {
     await server.waitReady()
+    // A game created **in this server's own data dir** exercises the relative rendering path:
+    // settings.json has no chosen address, so joinUrl stays path-only by design (a guessed
+    // origin is a dead link that looks authoritative).
+    const localDb = openDatabase(resolve(dataDir, 'kwiz.db'))
+    const {
+      newQuiz: fq,
+      newQuestionSetRound: fr,
+      addFreeText: fa,
+    } = await import('../support/quiz')
+    const localQuizId = fq(localDb, 'relative qr night')
+    const localRoundId = fr(localDb, localQuizId, 'Round one')
+    fa(localDb, localRoundId, 'Capital of France?', ['paris'], { points: 10 })
+    const localGame = createGame(localDb, localQuizId, ['Foxes'])
+
     const fresh = await browser.newContext({ viewport: { width: 1920, height: 1080 } })
     const page = await fresh.newPage()
-    await page.goto(`${server.url}/en/screen/${game.gameId}`)
-    // Different database entirely ” this game does not exist there, so the screen goes to §14's
-    // calm failure state (no arming overlay, no waiting stage, no scannable-looking link). The
-    // deliberate relative rendering itself is covered by `views.ts`'s joinUrl builder upstream.
-    await expect(page.getByText(en.screen.arming.click)).toHaveCount(0)
-    await expect(page.getByText(new RegExp(`/play/${game.code}`))).toHaveCount(0)
+    await page.goto(`${server.url}/en/screen/${localGame.gameId}`)
+    await page.getByText(en.screen.arming.click).click()
+    await expect(page.getByText(en.screen.waiting.andEnter)).toBeVisible({
+      timeout: 15_000,
+    })
+
+    // The rendered URL must be exactly the path — no host, no port, nothing scannable-looking.
+    const relativeUrl = await readJoinUrl(page, localGame.code, false)
+    expect(relativeUrl).toBe(`/play/${localGame.code}`)
+
+    // …and the QR renders from the path-only string too.
+    await expect(page.locator('svg').first()).toBeVisible()
     await fresh.close()
   } finally {
     await server.stop().catch(() => undefined)

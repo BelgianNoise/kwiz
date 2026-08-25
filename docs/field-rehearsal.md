@@ -2,7 +2,7 @@
 
 **Status:** Runbook for slice 10 · ready to execute · findings feed back into the suite
 
-Slice 9's suite proves the **software** works: 30 browser journeys, both locales' legibility
+Slice 9's suite proves the **software** works: 32 browser journeys, both locales' legibility
 floor, URL rules, kill-and-restart. This rehearsal proves the **system** works — hardware,
 network, room, and the checks agent-workflow §4.5 says no browser can make. It exists as a
 runbook because "run a real quiz and write down what broke" without one becomes an evening of

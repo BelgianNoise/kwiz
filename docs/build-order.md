@@ -305,8 +305,9 @@ browser can check.
 Two of the expected failures below have already been pulled forward as automated guards
 (slice 10's prep, `e2e/specs/legibility.spec.ts`): the §2.1 legibility floor walked across
 every projected stage in **en and nl** (which covers "Dutch overflowing a main-screen layout"
-mechanically), and the join-URL rule — absolute after the network picker, honestly relative
-before it.
+mechanically), and both halves of the join-URL rule — absolute with authority once the
+network picker has run, and path-only on a server whose address was never chosen (verified
+against a game created in that server's own data dir).
 
 The failures only a rehearsal finds:
 
