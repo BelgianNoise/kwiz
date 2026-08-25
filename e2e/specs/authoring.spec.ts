@@ -256,10 +256,17 @@ test('1 ” a whole quiz authored through the UI', async ({ page }) => {
   await sheet.press('Escape')
   await expect(sheet).toBeHidden()
 
-  // All four rows read ready - nothing left half-typed (section 7's readiness markers). The
-  // predicates above each include the prompt: Escape cancels a save still inside the debounce
-  // window, and a cancelled prompt save leaves an incomplete row that can never turn Ready.
-  // CI caught exactly that for Q4.
+  /*
+   * All four rows read ready - nothing left half-typed (section 7's readiness markers). The
+   * predicates above each include every field the journey set, so the data IS on the server.
+   * But the row markers render from **router.refresh() props**, and the last save's refresh
+   * may have been triggered *before* an earlier debounced save landed - leaving the rendered
+   * row stale even though the server is correct. A reload forces fresh props; without it CI
+   * fails here while local runs pass (CI caught exactly that for Q4).
+   */
+  await page.reload()
+  await expect(sheet).toBeHidden()
+
   for (const prompt of [
     'Capital of France?',
     'Which is a fruit?',
