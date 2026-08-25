@@ -95,7 +95,7 @@ function diagnosticsOf(stdout: string): OxlintDiagnostic[] {
   }
   const list =
     typeof parsed === 'object' && parsed !== null && 'diagnostics' in parsed
-      ? (parsed as { diagnostics: unknown }).diagnostics
+      ? parsed.diagnostics
       : parsed
   return Array.isArray(list) ? list.filter(isDiagnostic) : []
 }
