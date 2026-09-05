@@ -29,6 +29,10 @@ test-results/
 playwright-report/
 .playwright/
 
+# scripts/stress-test.mjs's own run output — regenerated every run, never authored. A finding
+# worth keeping goes into docs/stress-testing-findings.md by hand instead.
+.stress-test/
+
 # Local env overrides. Config is env-driven (PRD 1 §6.8); real values are never committed.
 .env
 .env.local

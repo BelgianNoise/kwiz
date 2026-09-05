@@ -590,7 +590,7 @@ const en = {
     /** §2's frame: header, status, and the overflow menu. */
     frame: {
       round: 'Round {number} of {total}',
-      notStarted: 'Not started',
+      notStarted: 'Ready',
       code: 'Code {code}',
       mainScreen: 'Main screen',
       connecting: 'Connecting…',
@@ -956,7 +956,8 @@ const en = {
     leaderboard: {
       afterRound: 'After round {number}',
       currentScores: 'Current scores',
-      provisional: 'scores provisional · {questions} answers still being checked',
+      provisional:
+        'scores provisional · {questions, plural, one {# answer} other {# answers}} still being checked',
       /** Read out only by a screen reader — the room sees the arrow (§10). */
       movementUp: 'up {places}',
       movementDown: 'down {places}',
