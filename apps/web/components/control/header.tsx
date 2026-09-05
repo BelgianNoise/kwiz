@@ -63,9 +63,17 @@ export function ControlHeader({
       <span className="truncate font-medium">{quizName}</span>
 
       <span className="text-muted-foreground truncate">
+        {/*
+         * `view.round` is null in two states that must not share one label (stress-testing
+         * findings, ISSUE-3): before `[Start the quiz]`, where "not started" is still true, and
+         * live between starting and opening round one, where it reads as if the master's own
+         * press hadn't registered. Derived from `status`, not guessed from which is "less wrong".
+         */}
         {view.round
           ? t('round', { number: view.round.number, total: view.round.total })
-          : t('notStarted')}
+          : live
+            ? t('ready')
+            : t('notStarted')}
         {view.round ? ` · ${view.round.title}` : ''}
       </span>
 

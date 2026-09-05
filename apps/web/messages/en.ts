@@ -590,7 +590,15 @@ const en = {
     /** §2's frame: header, status, and the overflow menu. */
     frame: {
       round: 'Round {number} of {total}',
-      notStarted: 'Ready',
+      /** Before `[Start the quiz]` — no round exists yet, and the game genuinely hasn't begun. */
+      notStarted: 'Not started',
+      /**
+       * Live, between `[Start the quiz]` and opening round one (PRD 3 §3.1 lands here on the
+       * leaderboard). `view.round` is null in both this and `notStarted`'s case, but the two are
+       * not the same fact — stress-testing findings ISSUE-3 found the header saying "Not started"
+       * here, which reads as if the master's own press hadn't registered.
+       */
+      ready: 'Ready',
       code: 'Code {code}',
       mainScreen: 'Main screen',
       connecting: 'Connecting…',

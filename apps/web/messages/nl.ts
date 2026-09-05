@@ -527,7 +527,8 @@ const nl: Messages = {
   control: {
     frame: {
       round: 'Ronde {number} van {total}',
-      notStarted: 'Gereed',
+      notStarted: 'Nog niet begonnen',
+      ready: 'Gereed',
       code: 'Code {code}',
       mainScreen: 'Hoofdscherm',
       connecting: 'Verbinden…',
