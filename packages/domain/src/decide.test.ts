@@ -481,6 +481,30 @@ describe('submit', () => {
   })
 
   /**
+   * `SUBMIT_ANSWER` already refuses `BUZZER`/`DO` — nothing is typed on those, they score by
+   * adjudication or by the master's own dedicated verdict. `SUBMIT_FOR_TEAM` had no matching
+   * guard, so a request that never goes through the control desk (which offers no proxy input
+   * on these question types) could still leave a ghost `PENDING` row with nothing to judge —
+   * the same shape ISSUE-1 found, on a question type ISSUE-5's fix does not otherwise reach.
+   */
+  it('refuses a proxy submission against a question that takes no typed answer', () => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: BUZZ_Q }, 1_000)
+
+    expect(
+      refusal(
+        game.act({
+          type: 'SUBMIT_FOR_TEAM',
+          gameQuestionId: BUZZ_Q,
+          teamId: A,
+          text: 'da vinci',
+        }),
+      ).error,
+    ).toBe('VALIDATION_ERROR')
+    expect(game.state.questions.get(BUZZ_Q)?.answers.has(A)).toBe(false)
+  })
+
+  /**
    * A device submitting after the whole game ended is not D8's "phone that woke up late" — that
    * is a bound on *state*, not on *time*, and it was entirely absent before. Without it a device
    * could go on submitting indefinitely once the master had finished or abandoned the game.

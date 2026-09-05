@@ -2,7 +2,7 @@
  * Stress-test runner — 5 games testing every feature end-to-end.
  * Usage: node scripts/stress-test.mjs
  */
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve as pathResolve } from 'node:path'
 
 const BASE = process.env.BASE_URL || 'http://localhost:3999'
@@ -645,11 +645,21 @@ async function main() {
   log(`Findings: ${findings.length}`)
   for (const f of findings) log(`  [${f.severity}] ${f.area}: ${f.msg}`)
 
+  /*
+   * `.stress-test/`, not `docs/` — this is a run's own throwaway output, regenerated (and
+   * overwritten) every time the script runs, not authored documentation. A findings doc worth
+   * keeping gets written by hand into `docs/stress-testing-findings.md`, the way this round's
+   * own ISSUE-5 was — writing straight into `docs/` is how an earlier run's report ended up
+   * committed to the repo, silently going stale the moment a later run overwrote it locally
+   * without anyone noticing the diff.
+   */
+  const outDir = pathResolve('.stress-test')
+  mkdirSync(outDir, { recursive: true })
   writeFileSync(
-    pathResolve('docs', 'stress-testing-findings-round2.md'),
+    pathResolve(outDir, 'findings.md'),
     `# Stress-Testing Round 2\n\nGenerated: ${new Date().toISOString()}\n\n## Games: ${gameNum}\n## Findings: ${findings.length} (${findings.filter((f) => f.severity === 'HIGH').length} HIGH)\n\n${findings.map((f, i) => `### ${i + 1}. [${f.severity}] ${f.area}\n${f.msg}\n`).join('') || 'No issues.\n'}`,
   )
-  log('\nWritten to docs/stress-testing-findings-round2.md')
+  log('\nWritten to .stress-test/findings.md')
 }
 
 main().catch((err) => {

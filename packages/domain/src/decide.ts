@@ -669,6 +669,21 @@ export function decide(state: GameState, command: Command, now: number): Decisio
         return deny('TEAM_NOT_FOUND', `no team ${command.teamId}`)
       }
       /*
+       * D47's "an answer on a team's behalf" presumes there is an answer to submit — `SUBMIT_ANSWER`
+       * already refuses this against `BUZZER`/`DO`, which score by adjudication (`BUZZ_ADJUDICATED`)
+       * or by the master's own dedicated verdict (`DO_WINNERS_SET`/`DO_SCORES_SET`) and never by a
+       * typed submission at all. `SUBMIT_FOR_TEAM` had no such guard, so a request that never goes
+       * through the control desk — the desk offers no proxy input on those question types — could
+       * still create an `ANSWER_SUBMITTED` row on one, which `autoVerdict` grades `PENDING` with no
+       * text and nothing for the master to judge: the same ghost-row shape ISSUE-1 found.
+       */
+      if (!acceptsTypedAnswers(found.question)) {
+        return deny(
+          'VALIDATION_ERROR',
+          `question ${found.question.id} is ${found.question.answerMethod} and takes no submitted answer`,
+        )
+      }
+      /*
        * D47's own rationale is a live-play mitigation — a team's phone cannot reach the server
        * *while the question is open* — so the bound is the same as an ordinary submission's, not
        * looser. Without it this was legal against `LOCKED`/`REVEALED`/even `SCORED`, silently
