@@ -516,6 +516,51 @@ describe('submit', () => {
       ).error,
     ).toBe('QUESTION_LOCKED')
   })
+
+  /**
+   * Stress-testing findings, ISSUE-5 — round-2's API-driven pass found `SUBMIT_FOR_TEAM` with
+   * `text: ''` accepted outright, silently creating a `NO_ANSWER` row with no feedback. The
+   * control desk's own `ProxyAnswer` already disables `[Save it]` on blank text, so this closes
+   * the same gap at the command layer — a scripted request bypasses the UI, and did.
+   *
+   * No text and no option is not an answer, it is nothing at all — `LOCK_QUESTION`'s draft
+   * commitment already treats an empty draft the same way (the `describe('lock', …)` block
+   * below).
+   */
+  it.each(['SUBMIT_ANSWER', 'SUBMIT_FOR_TEAM'] as const)(
+    'refuses %s with no text and no selected option',
+    (type) => {
+      const game = open()
+      expect(
+        refusal(game.act({ type, gameQuestionId: FREE_Q, teamId: A, text: '' })).error,
+      ).toBe('VALIDATION_ERROR')
+      expect(
+        refusal(game.act({ type, gameQuestionId: FREE_Q, teamId: A, text: '   ' })).error,
+      ).toBe('VALIDATION_ERROR')
+      expect(refusal(game.act({ type, gameQuestionId: FREE_Q, teamId: A })).error).toBe(
+        'VALIDATION_ERROR',
+      )
+      // Nothing was appended — a rejected submission must not leave a ghost row behind, which is
+      // the whole reason ISSUE-5 mattered: a `NO_ANSWER` row that reads as a deliberate answer.
+      expect(game.state.questions.get(FREE_Q)?.answers.has(A)).toBe(false)
+    },
+  )
+
+  it('still accepts a multiple-choice submission that carries an option but no text', () => {
+    const game = driver(LIVE)
+    game.act({ type: 'OPEN_QUESTION', gameQuestionId: MC_Q }, 1_000)
+    // MC never sends `text` at all — only `selectedOptionId` — so the empty-submission guard
+    // must not mistake "no text" for "no answer" here.
+    const decision = accepted(
+      game.act({
+        type: 'SUBMIT_ANSWER',
+        gameQuestionId: MC_Q,
+        teamId: A,
+        selectedOptionId: 'opt-a',
+      }),
+    )
+    expect(decision.events).toHaveLength(1)
+  })
 })
 
 // ─── draft commitment at lock (protocol §4.3, D26) ───

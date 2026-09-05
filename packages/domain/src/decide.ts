@@ -173,6 +173,8 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (notOpen) return notOpen
       const optionError = checkOption(question, command.selectedOptionId)
       if (optionError) return optionError
+      const emptyError = checkNotEmpty(command.text, command.selectedOptionId)
+      if (emptyError) return emptyError
 
       return allow([
         {
@@ -678,6 +680,8 @@ export function decide(state: GameState, command: Command, now: number): Decisio
       if (notOpen) return notOpen
       const optionError = checkOption(found.question, command.selectedOptionId)
       if (optionError) return optionError
+      const emptyError = checkNotEmpty(command.text, command.selectedOptionId)
+      if (emptyError) return emptyError
 
       // **The one legitimate overwrite** (D47): an explicit master act, flagged as such, which
       // resets the verdict because the answer genuinely changed. First-write-wins protects players
@@ -1225,6 +1229,26 @@ function checkOption(
   return question.options.some((option) => option.id === selectedOptionId)
     ? null
     : deny('VALIDATION_ERROR', `option ${selectedOptionId} is not on this question`)
+}
+
+/**
+ * Shared by `SUBMIT_ANSWER` and `SUBMIT_FOR_TEAM`: no text and no selected option is not an
+ * answer, it is nothing at all. `LOCK_QUESTION`'s draft commitment already applies exactly this
+ * rule to an outstanding draft, so a proxy or player submission has no business being looser —
+ * round-2 stress testing found `SUBMIT_FOR_TEAM` doing exactly that, with `text: ''`, which
+ * silently creates a `NO_ANSWER` row the master gets no feedback about (stress-testing findings,
+ * ISSUE-5). The control desk's own proxy input already disables `[Save it]` on blank text
+ * (`ProxyAnswer`), so this is the API-level backstop for the same rule, not a new one.
+ *
+ * Written once, next to `checkOption`, so the two commands cannot drift the way `SUBMIT_FOR_TEAM`
+ * once did by omitting `requireOpen`'s second half.
+ */
+function checkNotEmpty(
+  text: string | undefined,
+  selectedOptionId: string | undefined,
+): Decision | null {
+  if (normaliseAnswer(text ?? '') !== '' || selectedOptionId !== undefined) return null
+  return deny('VALIDATION_ERROR', 'a submission needs text or a selected option')
 }
 
 /** Same text (after D22 normalisation) and same option ⇒ the retry case, not a conflict. */
