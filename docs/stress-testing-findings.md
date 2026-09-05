@@ -89,6 +89,41 @@ confusion about which number is the timer, consider adding a clock icon or label
 
 ---
 
+## Round 2: API-driven stress test
+
+**Method:** 5 games played entirely through API calls (no browser), exercising edge cases
+and every feature category. Script at `scripts/stress-test.mjs`.
+
+### ISSUE-5 [MEDIUM] SUBMIT_FOR_TEAM accepts empty text
+
+**What:** `POST /api/games/{id}/answers/submit-for-team` with `text: ""` is accepted and creates
+an `ANSWER_SUBMITTED` event. This creates an answer row that will score as incorrect, but the
+master has no visual feedback that the submission was effectively empty.
+
+**Impact:** Low — the master shouldn't submit empty text, but nothing prevents it. The row goes
+through normal scoring and verdict assignment. Not a data-corruption risk, but unnecessary noise.
+
+**Recommend:** Reject empty text in `SUBMIT_FOR_TEAM` with a typed error, matching how player
+`SUBMIT_ANSWER` handles it.
+
+### Confirmed working correctly (Round 2)
+
+| Mechanism | Evidence |
+| --- | --- |
+| D43 first-write-wins | Double-submit same text accepted (idempotent) |
+| D47 master proxy overwrite | Different text accepted for same team |
+| Post-lock rejection | `QUESTION_LOCKED` on submit after lock ✓ |
+| Jeopardy round open/close | Round opened, tiles played, closed ✓ |
+| Finale lifecycle | Open → set finalists → start turn → mark/unmark keyword → finish ✓ |
+| DO-WTA scoring | do-winners with team IDs, tie payout setting ✓ |
+| DO-PTS partial scoring | do-scores with per-team scores ✓ |
+| Score adjustment | adjust-score with reason ✓ |
+| Break | Break started ✓ |
+| Cross-game isolation | Two games live simultaneously, scores isolated ✓ |
+| Rapid transitions | Start → play → finish in quick succession ✓ |
+
+---
+
 ## Games played
 
 | # | Config | Rounds | Outcome |

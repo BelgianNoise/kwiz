@@ -527,7 +527,7 @@ const nl: Messages = {
   control: {
     frame: {
       round: 'Ronde {number} van {total}',
-      notStarted: 'Nog niet begonnen',
+      notStarted: 'Gereed',
       code: 'Code {code}',
       mainScreen: 'Hoofdscherm',
       connecting: 'Verbinden…',
@@ -845,7 +845,8 @@ const nl: Messages = {
     leaderboard: {
       afterRound: 'Na ronde {number}',
       currentScores: 'Tussenstand',
-      provisional: 'voorlopige stand · {questions} antwoorden nog te controleren',
+      provisional:
+        'voorlopige stand · {questions, plural, one {# antwoord} other {# antwoorden}} nog te controleren',
       movementUp: '{places} omhoog',
       movementDown: '{places} omlaag',
       movementHeld: 'onveranderd',

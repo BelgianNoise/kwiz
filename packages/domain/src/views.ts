@@ -1478,7 +1478,13 @@ function pendingValidationCount(state: GameState): number {
   for (const play of state.questions.values()) {
     if (play.state === 'SKIPPED') continue
     for (const answer of play.answers.values()) {
-      if (answer.verdict === 'PENDING') count += 1
+      if (
+        answer.verdict === 'PENDING' &&
+        (answer.text !== null ||
+          answer.selectedOptionId !== null ||
+          answer.enteredByMaster)
+      )
+        count += 1
     }
   }
   return count
@@ -1685,7 +1691,15 @@ export function attention(state: GameState, now: number): Attention {
 }
 
 const hasPendingAnswer = (play: QuestionPlayState): boolean =>
-  [...play.answers.values()].some((answer) => answer.verdict === 'PENDING')
+  [...play.answers.values()].some(
+    (answer) =>
+      answer.verdict === 'PENDING' &&
+      // Ghost rows created by setOutcome() for teams that never submitted have null content
+      // and block the validation sweep with nothing actionable. Exclude them.
+      (answer.text !== null ||
+        answer.selectedOptionId !== null ||
+        answer.enteredByMaster),
+  )
 
 /**
  * Which question `VALIDATE_QUESTION` should be about — and the whole of PRD 3 §6.2's **round-end
@@ -1733,8 +1747,7 @@ function remainingUnvalidatedQuestions(state: GameState, exceptId: string): numb
   let count = 0
   for (const [id, play] of state.questions) {
     if (id === exceptId || play.state === 'SKIPPED') continue
-    if ([...play.answers.values()].some((answer) => answer.verdict === 'PENDING'))
-      count += 1
+    if (hasPendingAnswer(play)) count += 1
   }
   return count
 }
