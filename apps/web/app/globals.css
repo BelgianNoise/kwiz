@@ -15,92 +15,109 @@
  * Fonts are a **system stack on purpose.** `next/font/google` downloads at build time, and
  * an offline-first LAN app must build and run with no internet (PRD 1 §2). A self-hosted
  * woff2 is the option if a display face is ever wanted on the projected screen.
+ *
+ * **"Terminal"** — the admin and master-control palette, modelled on Discord/Steam's own
+ * layered dark UI rather than an invented metaphor: three stacked surfaces (page → card →
+ * popover), one saturated indigo reserved for primary actions, everything else a quiet
+ * neutral. Values are literal hex rather than oklch — this is the exact palette approved
+ * from the mockup, and a hand conversion risked drifting from what was actually reviewed.
+ *
+ * Dark is the shipped default (root layout adds `.dark` to `<html>` unless the OS reports
+ * `light`, live-updating on change) — `:root` below is the light values for exactly that
+ * reason: `.dark` overriding it is the same shadcn convention every `dark:` utility class
+ * already in `components/ui/*` was written against, so nothing there had to change.
+ *
+ * `--accent`/`--accent-foreground` are **not** a status colour — shadcn's own primitives
+ * (`dropdown-menu.tsx`, `select.tsx`, `button.tsx`'s ghost/outline variants) consume them as
+ * the neutral hover/focus-highlight tint, so they stay close to `--secondary` here. A
+ * "LIVE" badge is `variant="default"` (`badge.tsx`) and takes `--primary` like any other
+ * primary-toned badge — there is no separate success/live token today.
  */
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --background: #f5f6f9;
+  --foreground: #14151a;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
+  --card: #ffffff;
+  --card-foreground: #14151a;
+  --popover: #ffffff;
+  --popover-foreground: #14151a;
 
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --primary: #4a5bd6;
+  --primary-foreground: #ffffff;
+  --secondary: #e9eaf2;
+  --secondary-foreground: #33364a;
 
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --muted: #e9eaf2;
+  --muted-foreground: #6b6e80;
+  --accent: #e9eaf2;
+  --accent-foreground: #14151a;
 
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --destructive: #d1353d;
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --border: #dee0ea;
+  --input: #dee0ea;
+  --ring: #4a5bd6;
 
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --chart-1: #4a5bd6;
+  --chart-2: #1f9d51;
+  --chart-3: #c08a1e;
+  --chart-4: #d1353d;
+  --chart-5: #1e8f86;
 
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14151a;
+  --sidebar-primary: #4a5bd6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e9eaf2;
+  --sidebar-accent-foreground: #14151a;
+  --sidebar-border: #dee0ea;
+  --sidebar-ring: #4a5bd6;
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
+  --background: #15161b;
+  --foreground: #e4e6eb;
 
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
+  --card: #1d1f26;
+  --card-foreground: #e4e6eb;
+  --popover: #1d1f26;
+  --popover-foreground: #e4e6eb;
 
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --primary: #5b6cf0;
+  --primary-foreground: #ffffff;
+  --secondary: #262933;
+  --secondary-foreground: #c4c7d1;
 
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
+  --muted: #262933;
+  --muted-foreground: #8a8d99;
+  --accent: #2c2f3a;
+  --accent-foreground: #e4e6eb;
 
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --destructive: #e4494f;
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+  --border: #2a2d36;
+  --input: #2a2d36;
+  --ring: #5b6cf0;
 
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --chart-1: #5b6cf0;
+  --chart-2: #3ba55d;
+  --chart-3: #e0b54d;
+  --chart-4: #e4494f;
+  --chart-5: #35b3a6;
 
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --sidebar: #1d1f26;
+  --sidebar-foreground: #e4e6eb;
+  --sidebar-primary: #5b6cf0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2c2f3a;
+  --sidebar-accent-foreground: #e4e6eb;
+  --sidebar-border: #2a2d36;
+  --sidebar-ring: #5b6cf0;
 }
 
 @theme inline {
