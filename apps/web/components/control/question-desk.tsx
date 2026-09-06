@@ -312,7 +312,20 @@ function AnswerRow({
   const auto = item.verdict === 'AUTO_CORRECT' || item.verdict === 'AUTO_WRONG'
 
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <li
+      className="flex items-center gap-3 py-1.5"
+      /*
+       * An unjudged answer pulses rather than sitting flat — the master's eye is on the
+       * question, not scanning every row for the one still `PENDING`. Inline `style` rather
+       * than a class, matching every other message-carrying animation in `globals.css`: the
+       * reduced-motion override there targets `[style*='kwiz-attention']` the same way it
+       * already targets `kwiz-eq`/`kwiz-urgent`, so a class-based approach would silently
+       * fall outside that rule.
+       */
+      style={
+        decided ? undefined : { animation: 'kwiz-attention 2.4s ease-in-out infinite' }
+      }
+    >
       <TeamDot colour={item.teamColour} />
       <span className="w-40 shrink-0 truncate">{item.teamName}</span>
 
