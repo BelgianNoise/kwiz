@@ -80,6 +80,13 @@ const nl: Messages = {
       en: 'English',
       nl: 'Nederlands',
     },
+
+    theme: {
+      label: 'Thema',
+      system: 'Systeem',
+      light: 'Licht',
+      dark: 'Donker',
+    },
   },
 
   landing: {
@@ -821,6 +828,7 @@ const nl: Messages = {
       label: 'Menu',
       close: 'Sluiten',
       language: 'Taal',
+      theme: 'Thema',
       switchTeam: 'Van ploeg wisselen',
       leave: 'Deze quiz verlaten',
       leaveConfirm: 'Dit toestel verlaat de quiz. Je kunt opnieuw meedoen met de code.',

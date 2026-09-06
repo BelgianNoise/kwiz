@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { BreakDialog } from '@/components/control/break-desk'
 import type { Run } from '@/components/control/control-desk'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -105,6 +106,8 @@ export function ControlHeader({
             {t('mainScreen')}
           </a>
         </Button>
+
+        <ThemeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

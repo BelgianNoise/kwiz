@@ -43,22 +43,28 @@ export default async function LocaleLayout({
     <html lang={locale} suppressHydrationWarning>
       <head>
         {/*
-         * Dark by default, following the OS otherwise — inline and blocking so `.dark`
-         * lands on `<html>` before first paint (no flash of the wrong theme), and
-         * `suppressHydrationWarning` above is for exactly this: the class this adds
-         * differs from what the server rendered, and that mismatch is expected, not a bug.
+         * Dark by default, following the OS otherwise, unless the theme toggle
+         * (`components/theme-toggle.tsx`) has stored an explicit choice — inline and
+         * blocking so `.dark` lands on `<html>` before first paint (no flash of the wrong
+         * theme), and `suppressHydrationWarning` above is for exactly this: the class this
+         * adds differs from what the server rendered, and that mismatch is expected, not a
+         * bug.
+         *
+         * Cannot import `lib/client/theme.ts` — this has to run before any bundle does —
+         * so the storage key and the fallback order (`light` → `dark` → follow the OS) are
+         * duplicated here by hand; keep the two in sync if either changes.
          *
          * `!isLight` rather than `prefers-color-scheme: dark` matching: the query only
          * tells us when the OS explicitly says light, and "dark unless told otherwise" is
          * the product decision (CLAUDE.md §7's Terminal theme) — an OS with no opinion, or
-         * one this query can't read, still gets dark. The change listener is what makes
-         * this a *following* rather than a one-time read: this app runs for a whole
-         * evening on a laptop nobody restarts, and an OS theme flip (a scheduled
-         * light↔dark switch is a common OS default) applies without a reload.
+         * one this query can't read, still gets dark. The change listener only matters
+         * without a stored override — this app runs for a whole evening on a laptop nobody
+         * restarts, and an OS theme flip (a scheduled light↔dark switch is a common OS
+         * default) applies without a reload for anyone who hasn't overridden it.
          */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var m=window.matchMedia('(prefers-color-scheme: light)');var apply=function(isLight){document.documentElement.classList.toggle('dark',!isLight)};apply(m.matches);m.addEventListener('change',function(e){apply(e.matches)})}catch(e){}})();`,
+            __html: `(function(){try{var s=null;try{s=localStorage.getItem('kwiz.theme')}catch(e){}var m=window.matchMedia('(prefers-color-scheme: light)');var apply=function(){document.documentElement.classList.toggle('dark',s==='dark'||(s!=='light'&&!m.matches))};apply();m.addEventListener('change',function(){if(s===null)apply()})}catch(e){}})();`,
           }}
         />
       </head>
