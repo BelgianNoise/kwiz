@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { useRouter } from '@/i18n/navigation'
 import { player } from '@/lib/client/api'
 import { clearDeviceToken } from '@/lib/client/device'
@@ -78,6 +79,13 @@ export function DeviceMenu({
           <div className="border-border flex min-h-14 items-center justify-between rounded-xl border px-4">
             <span className="text-lg">{t('language')}</span>
             <LanguageSwitcher />
+          </div>
+
+          {/* Same 44 px target as everything else on this surface — this is a per-device
+              preference, not a game action, so it earns no more space than the row above it. */}
+          <div className="border-border flex min-h-14 items-center justify-between rounded-xl border px-4">
+            <span className="text-lg">{t('theme')}</span>
+            <ThemeToggle className="size-11 [&_svg]:size-5" />
           </div>
 
           {/*

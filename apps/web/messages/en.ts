@@ -92,6 +92,14 @@ const en = {
       en: 'English',
       nl: 'Nederlands',
     },
+
+    /** The theme toggle — cycles system → light → dark. Never shown on the main screen. */
+    theme: {
+      label: 'Theme',
+      system: 'System',
+      light: 'Light',
+      dark: 'Dark',
+    },
   },
 
   /** PRD 2 §3 — the only page a guest and a master both see. */
@@ -936,6 +944,7 @@ const en = {
       label: 'Menu',
       close: 'Close',
       language: 'Language',
+      theme: 'Theme',
       switchTeam: 'Switch team',
       leave: 'Leave this quiz',
       /** §14 — confirmed, because it genuinely severs this device's link. */

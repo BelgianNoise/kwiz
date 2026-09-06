@@ -2,6 +2,7 @@ import { useTranslations } from 'next-intl'
 
 import { JoinForm } from '@/components/landing/join-form'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
 
@@ -24,8 +25,11 @@ export default function LandingPage() {
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-10 p-6 sm:p-10">
       <header className="flex items-center justify-between">
         <span className="text-2xl font-semibold tracking-tight">Kwiz</span>
-        {/* Prominent here, per PRD 1 §9.4: this is where a player picks their language. */}
-        <LanguageSwitcher />
+        <div className="flex items-center gap-3">
+          {/* Prominent here, per PRD 1 §9.4: this is where a player picks their language. */}
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="grid flex-1 content-center gap-6 sm:grid-cols-5">
