@@ -189,34 +189,52 @@ function PerTeamScore({ api, run, scoring }: ZoneProps & { scoring: Scoring }) {
       </div>
 
       <ul className="space-y-2">
-        {scoring.teams.map((team) => (
-          <li key={team.teamId} className="flex items-center gap-3">
-            <TeamDot colour={team.colour} />
-            <span className="min-w-0 flex-1 truncate">{team.name}</span>
-            <Input
-              aria-label={team.name}
-              className="w-20 text-right tabular-nums"
-              inputMode="numeric"
-              value={scores[team.teamId] ?? ''}
+        {scoring.teams.map((team) => {
+          const empty = (scores[team.teamId] ?? '').trim() === ''
+          return (
+            <li
+              key={team.teamId}
+              className="flex items-center gap-3"
               /*
-               * §8.2 — **clamped on entry, not rejected on save.** A master typing 99 into a
-               * 20-point question sees it become 20 while they are still looking at the row, rather
-               * than discovering it after pressing save. An empty box stays empty: that is D24's
-               * distinction between "not got to yet" and "scored zero".
+               * Same signal as an unjudged answer row (`question-desk.tsx`), and the same
+               * reason: a master mid-conversation with the room, three rows in, is the exact
+               * moment the fourth, still-blank one is easiest to walk past — D24's own
+               * distinction between "not got to yet" and "scored zero" is invisible at a
+               * glance otherwise, since both render as an empty-looking box either way.
                */
-              onChange={(event) => {
-                const typed = event.target.value
-                setScores((current) => ({
-                  ...current,
-                  [team.teamId]:
-                    typed.trim() === ''
-                      ? ''
-                      : String(clamp(Number(typed), scoring.points)),
-                }))
-              }}
-            />
-          </li>
-        ))}
+              style={
+                empty
+                  ? { animation: 'kwiz-attention 2.4s ease-in-out infinite' }
+                  : undefined
+              }
+            >
+              <TeamDot colour={team.colour} />
+              <span className="min-w-0 flex-1 truncate">{team.name}</span>
+              <Input
+                aria-label={team.name}
+                className="w-20 text-right tabular-nums"
+                inputMode="numeric"
+                value={scores[team.teamId] ?? ''}
+                /*
+                 * §8.2 — **clamped on entry, not rejected on save.** A master typing 99 into a
+                 * 20-point question sees it become 20 while they are still looking at the row, rather
+                 * than discovering it after pressing save. An empty box stays empty: that is D24's
+                 * distinction between "not got to yet" and "scored zero".
+                 */
+                onChange={(event) => {
+                  const typed = event.target.value
+                  setScores((current) => ({
+                    ...current,
+                    [team.teamId]:
+                      typed.trim() === ''
+                        ? ''
+                        : String(clamp(Number(typed), scoring.points)),
+                  }))
+                }}
+              />
+            </li>
+          )
+        })}
       </ul>
 
       <Button size="lg" onClick={save}>
