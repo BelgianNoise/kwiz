@@ -58,6 +58,14 @@
   --destructive: #d1353d;
   --destructive-foreground: #ffffff;
 
+  /*
+   * "Needs a look," never "something is wrong" — `--destructive` is already spoken for
+   * (wrong verdicts, delete, abandon) and reusing it for an ordinary, expected state like
+   * an unjudged answer would say the wrong thing every time it appeared.
+   */
+  --warning: #c08a1e;
+  --warning-foreground: #2b1c02;
+
   --border: #dee0ea;
   --input: #dee0ea;
   --ring: #4a5bd6;
@@ -99,6 +107,9 @@
 
   --destructive: #e4494f;
   --destructive-foreground: #ffffff;
+
+  --warning: #e0b54d;
+  --warning-foreground: #2e2003;
 
   --border: #2a2d36;
   --input: #2a2d36;
@@ -148,6 +159,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -226,6 +239,24 @@
   }
 }
 
+/*
+ * PRD 3 §6 — an unjudged answer, waiting on the master. Background only, never opacity or
+ * position: the row's text (the answer itself, and the accept/deny buttons) has to stay
+ * fully legible the whole time, which a fading row would not manage.
+ *
+ * `--warning` at partial opacity rather than a solid fill, so a dense list of several
+ * pending rows next to each other reads as "these need you," not as a wall of amber.
+ */
+@keyframes kwiz-attention {
+  0%,
+  100% {
+    background-color: color-mix(in oklab, var(--warning) 22%, transparent);
+  }
+  50% {
+    background-color: var(--secondary);
+  }
+}
+
 /* §12.1 — a marked keyword tile crossfading from its word shapes to the text. */
 @keyframes kwiz-resolve {
   from {
@@ -260,5 +291,16 @@
   [style*='kwiz-stage-in'],
   [style*='kwiz-urgent'] {
     animation-name: kwiz-resolve !important;
+  }
+
+  /*
+   * A row that needs judgment is not decorating, so the signal stays — held at the "on"
+   * half of the pulse rather than removed, the same trade the equaliser's silence is not
+   * allowed (it is decorative, and goes away entirely); this one carries a message, so it
+   * is allowed to hold still instead of disappearing.
+   */
+  [style*='kwiz-attention'] {
+    animation: none !important;
+    background-color: color-mix(in oklab, var(--warning) 22%, transparent) !important;
   }
 }
