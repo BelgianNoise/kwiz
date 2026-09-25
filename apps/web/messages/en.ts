@@ -806,6 +806,8 @@ const en = {
     timeline: {
       label: 'This round',
       preflight: 'flagged by pre-flight',
+      /** §3.1 — a settled question that still owes a verdict; the round-end sweep clears it. */
+      unjudged: 'still has an answer to judge',
       current: 'now',
       state: {
         PENDING: 'not played',

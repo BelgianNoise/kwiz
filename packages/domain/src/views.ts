@@ -1009,6 +1009,18 @@ export interface TimelineEntry {
   prompt: string
   state: QuestionPlayState['state']
   failsPreflight?: PreflightCode
+  /**
+   * PRD 3 §3.1: `VALIDATE_QUESTION` is priority 6, *"needed before scores are honest, but the
+   * room isn't blocked"* — nothing stops a master revealing and scoring past a question that
+   * still has an unjudged answer, and the round-end sweep (§6.2) is otherwise the only thing
+   * that ever catches it. `true` only once the question has moved past judging (`REVEALED` or
+   * `SCORED`) and still owes a verdict — an `OPEN`/`LOCKED` one is current work, already visible
+   * on the desk itself, and flagging it here too would just be the same fact said twice.
+   *
+   * Built up, never stripped, same as `failsPreflight`: a settled question's entry has no such
+   * key at all rather than carrying `false`.
+   */
+  hasUnjudgedAnswer?: true
 }
 
 /**
@@ -1386,15 +1398,20 @@ function timeline(state: GameState, round: RoundContent | undefined): TimelineEn
       // depend on the caller having already ordered rows.
       .sort((a, b) => a.position - b.position)
       .map((question) => {
+        const play = state.questions.get(question.id)
         const entry: TimelineEntry = {
           gameQuestionId: question.id,
           position: question.position,
           prompt: question.prompt,
-          state: state.questions.get(question.id)?.state ?? 'PENDING',
+          state: play?.state ?? 'PENDING',
         }
         const code = failsPreflight(round, question)
         // Built up, never stripped: a healthy question's entry simply has no `failsPreflight` key.
-        return code ? { ...entry, failsPreflight: code } : entry
+        const withPreflight = code ? { ...entry, failsPreflight: code } : entry
+        const settled = play?.state === 'REVEALED' || play?.state === 'SCORED'
+        return settled && hasPendingAnswer(play)
+          ? { ...withPreflight, hasUnjudgedAnswer: true as const }
+          : withPreflight
       })
   )
 }

@@ -724,6 +724,7 @@ const nl: Messages = {
     timeline: {
       label: 'Deze ronde',
       preflight: 'gemarkeerd door de check',
+      unjudged: 'heeft nog een antwoord te beoordelen',
       current: 'nu',
       state: {
         PENDING: 'nog niet gespeeld',

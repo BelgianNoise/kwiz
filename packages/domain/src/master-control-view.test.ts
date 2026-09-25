@@ -169,6 +169,76 @@ describe('the fields PRD 3 needs beyond the current question', () => {
     // The `⚠` a master pressed `[Play anyway]` past, re-derived rather than remembered.
     expect(view.timeline[1]?.failsPreflight).toBe('NO_ACCEPTED_ANSWER')
     expect(view.timeline[0]).not.toHaveProperty('failsPreflight')
+    // No answer was ever submitted to q1, so there is nothing outstanding to flag either.
+    expect(view.timeline[0]).not.toHaveProperty('hasUnjudgedAnswer')
+  })
+
+  /**
+   * PRD 3 §3.1 — `VALIDATE_QUESTION` is priority 6, *"needed before scores are honest, but the
+   * room isn't blocked"*: nothing stops a master revealing and scoring past a question that
+   * still owes a verdict, and the round-end sweep is otherwise the only thing that ever catches
+   * it. The timeline is what makes that visible before the sweep, rather than after.
+   */
+  it('flags a settled question that still owes a verdict, only once it is settled', () => {
+    const submitWrong: GameEvent = {
+      type: 'ANSWER_SUBMITTED',
+      payload: {
+        gameQuestionId: 'q1',
+        teamId: 'a',
+        text: 'no',
+        fromDraft: false,
+        enteredByMaster: false,
+      },
+    }
+
+    // Still open: this is current work, already visible on the desk itself — flagging it here
+    // too would just be the same fact said twice.
+    const open = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      submitWrong,
+    ])
+    expect(toMasterControlView(open, 9_000).timeline[0]).not.toHaveProperty(
+      'hasUnjudgedAnswer',
+    )
+
+    // Locked, but not yet revealed: still the master's current business.
+    const locked = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      submitWrong,
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'q1' } },
+    ])
+    expect(toMasterControlView(locked, 9_000).timeline[0]).not.toHaveProperty(
+      'hasUnjudgedAnswer',
+    )
+
+    // Revealed — the master has moved on, and the unjudged answer is now behind them.
+    const revealed = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      submitWrong,
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'q1' } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: 'q1' } },
+    ])
+    expect(toMasterControlView(revealed, 9_000).timeline[0]?.hasUnjudgedAnswer).toBe(true)
+
+    // Judged — the flag clears the moment the master actually decides, with no further event
+    // needed to say so (the same way `pendingValidationCount` already reacts to `ANSWER_VALIDATED`).
+    const judged = fold(sheet, [
+      ...LIVE,
+      { type: 'QUESTION_OPENED', payload: { gameQuestionId: 'q1' } },
+      submitWrong,
+      { type: 'QUESTION_LOCKED', payload: { gameQuestionId: 'q1' } },
+      { type: 'QUESTION_REVEALED', payload: { gameQuestionId: 'q1' } },
+      {
+        type: 'ANSWER_VALIDATED',
+        payload: { gameQuestionId: 'q1', teamId: 'a', accepted: false },
+      },
+    ])
+    expect(toMasterControlView(judged, 9_000).timeline[0]).not.toHaveProperty(
+      'hasUnjudgedAnswer',
+    )
   })
 
   it('carries the same ⚠ on the open question, so the desk and the timeline cannot disagree', () => {

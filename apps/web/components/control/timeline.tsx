@@ -76,7 +76,7 @@ export function Timeline({ view, api, run }: ZoneProps) {
                 title={entry.prompt}
                 aria-label={`${entry.prompt} — ${t(`state.${entry.state}`)}${
                   entry.failsPreflight ? ` — ${t('preflight')}` : ''
-                }`}
+                }${entry.hasUnjudgedAnswer ? ` — ${t('unjudged')}` : ''}`}
                 className={cn(
                   'flex items-center gap-1 rounded-md border px-2 py-1 whitespace-nowrap',
                   isFocused ? 'border-foreground' : 'border-transparent',
@@ -92,6 +92,16 @@ export function Timeline({ view, api, run }: ZoneProps) {
                 {/* PRD 2 §10's ⚠ — the master already chose to play it anyway. */}
                 {entry.failsPreflight ? (
                   <AlertTriangle aria-hidden className="text-destructive size-3" />
+                ) : null}
+                {/*
+                 * §3.1 — the same shape as the preflight warning, but `--warning` rather than
+                 * `--destructive`: this one isn't a mistake the master made, it's ordinary
+                 * unfinished business the round-end sweep will still catch on its own. A
+                 * settled question showing this is the one thing the sweep can't make obvious
+                 * three questions later, which is the whole reason it needs saying here too.
+                 */}
+                {entry.hasUnjudgedAnswer ? (
+                  <AlertTriangle aria-hidden className="text-warning size-3" />
                 ) : null}
               </button>
             </li>
