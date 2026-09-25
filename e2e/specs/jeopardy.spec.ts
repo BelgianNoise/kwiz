@@ -38,7 +38,11 @@ test('17 — the pick follows the room: lowest first, winner next, lowest again'
     scores.map((delta, index) => ({
       type: 'SCORE_ADJUSTED' as const,
       payload: {
-        adjustmentId: `seed-${index}`,
+        // Namespaced by `game.gameId` — `game_score_adjustment.id` is a bare global primary
+        // key (CLAUDE.md §2.7's UUIDs, here a literal for readability instead), and a Playwright
+        // retry re-runs this whole test with a *new* game but the *same* literal, colliding
+        // with the row the first, failed attempt already committed before it ever hit main.
+        adjustmentId: `${game.gameId}-seed-${index}`,
         teamId: game.teamIds[index]!,
         delta,
         announced: false,
