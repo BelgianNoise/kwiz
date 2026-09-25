@@ -45,3 +45,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .playwright-mcp/
+
+# Ad-hoc `pnpm dev`/`pnpm start` output redirected to a file by hand — scratch, never authored.
+*.log
