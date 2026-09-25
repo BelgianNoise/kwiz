@@ -53,7 +53,10 @@ function finaleGame(
     scores.map((delta, index) => ({
       type: 'SCORE_ADJUSTED' as const,
       payload: {
-        adjustmentId: `${label}-${index}`,
+        // Namespaced by `game.gameId`, not just `label`: a Playwright retry re-runs this
+        // scenario with a *new* game but the same `label`, and `game_score_adjustment.id` is a
+        // bare global primary key — the literal alone collided with the first attempt's row.
+        adjustmentId: `${game.gameId}-${label}-${index}`,
         teamId: game.teamIds[index]!,
         delta,
         announced: false,

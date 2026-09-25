@@ -157,7 +157,10 @@ test('21 — nothing secret crosses the wire to a player or the room, in any sta
     [6, 3].map((delta, index) => ({
       type: 'SCORE_ADJUSTED' as const,
       payload: {
-        adjustmentId: `sentinel-${index}`,
+        // Namespaced by `game.gameId` for the same reason jeopardy.spec.ts's own seed is: a
+        // Playwright retry re-runs this test against a *new* game with the *same* literal, and
+        // `game_score_adjustment.id` is a bare global primary key.
+        adjustmentId: `${game.gameId}-sentinel-${index}`,
         teamId: game.teamIds[index]!,
         delta,
         announced: false,
