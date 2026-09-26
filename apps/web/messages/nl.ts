@@ -863,7 +863,6 @@ const nl: Messages = {
     },
     waiting: {
       scanOrGoTo: 'Scan, of ga naar',
-      andEnter: 'en voer in',
       soundReady: 'geluid klaar',
       soundFailed: 'Geluid kon niet starten. Klik nog één keer op het scherm.',
     },
