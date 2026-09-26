@@ -2,7 +2,7 @@
 
 import type { TeamPublic } from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Dot, HollowDot, JoinCode } from '@/components/screen/parts'
 
@@ -28,7 +28,6 @@ export function WaitingStage({
   joinedTeamIds: string[]
   sound: boolean
 }) {
-  const t = useTranslations('screen.waiting')
   const joined = new Set(joinedTeamIds)
 
   return (
@@ -43,15 +42,7 @@ export function WaitingStage({
         */}
         <div className="flex min-h-0 flex-1 items-center justify-center gap-[8cqh]">
           <Qr text={joinUrl} />
-
-          <div className="flex flex-col gap-[2cqh]">
-            <p className="text-[5cqh] text-neutral-400">{t('scanOrGoTo')}</p>
-            {/* The address, at body scale: it is typed, not read at a glance. */}
-            <p className="text-[6cqh] font-medium break-all">{displayUrl(joinUrl)}</p>
-            <p className="pt-[2cqh] text-[5cqh] text-neutral-400">{t('andEnter')}</p>
-            {/* §4 — the code is the largest element after the title. */}
-            <JoinCode code={code} size={13} />
-          </div>
+          <TextColumn joinUrl={joinUrl} code={code} />
         </div>
 
         <TeamList teams={teams} joined={joined} />
@@ -70,12 +61,7 @@ export function WaitingStage({
  * it, which pressures a table that is merely slow — and the master has the real figure on control.
  */
 function TeamList({ teams, joined }: { teams: TeamPublic[]; joined: Set<string> }) {
-  /*
-   * §4's ladder, exactly as written: *"beyond ~12 teams it becomes a two-column grid, then names only
-   * without dots."* Two rungs, not three — this had a `>12 → three columns` tier of its own invention
-   * until the slice-6 review, which is reasonable at the 20-team envelope and simply is not the spec.
-   */
-  const columns = teams.length > 12 ? 2 : 1
+  const columns = teams.length > 3 ? 2 : 1
   const dots = teams.length <= 18
 
   return (
@@ -137,6 +123,74 @@ function displayUrl(url: string): string {
 }
 
 /**
+ * §4's "scan, or go to… and enter" column, **scaled as one block to whatever the row actually has**.
+ *
+ * The four lines' `cqh` sizes are sized against the whole stage, like everything else on it — fine in
+ * isolation, but this column has no floor the way `FittedText` gives a prompt (§2.4): a full team list
+ * plus a longer quiz name genuinely leaves it less than its content needs, and centred-but-oversized
+ * content doesn't shrink on its own, it just overflows both ways past whatever row it sits in — which
+ * is what happened here, into the team list below. Measured directly rather than reused from
+ * `FittedText`: that component fits one string by stepping a single font-size, and this is a fixed
+ * stack of differently-sized lines that must shrink *together*, keeping their proportions to one
+ * another, so a uniform `transform: scale` against the real content height is the right tool, not a
+ * second font-size search.
+ */
+function TextColumn({ joinUrl, code }: { joinUrl: string; code: string }) {
+  const t = useTranslations('screen.waiting')
+  const outer = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+
+  useLayoutEffect(() => {
+    const outerElement = outer.current
+    const innerElement = inner.current
+    if (!outerElement || !innerElement) return undefined
+
+    const recompute = (): void => {
+      // `transform` is paint-only — it never affects layout geometry, so `scrollHeight` already
+      // reads the box's *unscaled* content height regardless of whatever scale is currently
+      // applied. Resetting the transform before measuring is not just unnecessary here, it is
+      // actively wrong: a repeated measurement that lands on the same value is a no-op React
+      // state update, which never re-renders to restore the transform a manual DOM reset just
+      // clobbered — leaving the column stuck unscaled the next time ResizeObserver's mandatory
+      // first callback fires with nothing having changed.
+      const available = outerElement.clientHeight
+      const natural = innerElement.scrollHeight
+      setScale(natural > 0 ? Math.min(1, available / natural) : 1)
+    }
+
+    recompute()
+    // The row's own height changes with the title and the team list, neither of which this
+    // component renders — a resize of its own box is the only signal it has that the budget moved.
+    const observer = new ResizeObserver(recompute)
+    observer.observe(outerElement)
+    return () => observer.disconnect()
+  }, [joinUrl, code])
+
+  return (
+    <div ref={outer} className="h-full min-h-0 self-stretch overflow-hidden">
+      <div
+        ref={inner}
+        // Top-aligned (flex's own default — no `justify-center`), on purpose: centred content can
+        // overflow *upward* past this box, and `scrollHeight` does not reliably report that half of
+        // an overflow, only the downward half. Top-aligned, the box only ever overflows down, which
+        // `scrollHeight` measures correctly — and scaling from `top center` then keeps that top edge
+        // fixed and pulls the bottom in to match, rather than shrinking toward a centre computed from
+        // an under-measured height.
+        className="flex h-full flex-col gap-[2cqh]"
+        style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+      >
+        <p className="text-[5cqh] text-neutral-400">{t('scanOrGoTo')}</p>
+        {/* The address, at body scale: it is typed, not read at a glance. */}
+        <p className="text-[6cqh] font-medium break-all">{displayUrl(joinUrl)}</p>
+        {/* §4 — the code is the largest element after the title. */}
+        <JoinCode code={code} size={13} />
+      </div>
+    </div>
+  )
+}
+
+/**
  * The QR as inline SVG, generated in the browser from the pushed `joinUrl`.
  *
  * Client-side rather than server-rendered because the code is **regenerable while `SETUP`** (data
@@ -167,7 +221,15 @@ function Qr({ text }: { text: string }) {
   }, [text])
 
   return (
-    <div className="size-[45cqh] shrink-0 rounded-[2cqh] bg-white p-[2cqh]">
+    /*
+     * `h-full self-stretch` + `max-h-[45cqh]`, not a bare `size-[45cqh]` — a fixed size measured
+     * against the *whole stage* ignored how much room this row actually had left once the title
+     * and team list took theirs, and overflowed upward into the title on a real 16:9 view with a
+     * longer quiz name or a fuller team list. Stretching to the row's own height (capped at the
+     * original 45cqh for the common case) means it can only ever get smaller when room is tight,
+     * never overlap — `aspect-square` keeps the width following 1:1.
+     */
+    <div className="aspect-square h-full max-h-[45cqh] shrink-0 self-stretch rounded-[2cqh] bg-white p-[2cqh]">
       {svg === null ? null : (
         /*
           The SVG is generated here from a URL this server produced — not remote content — and there is

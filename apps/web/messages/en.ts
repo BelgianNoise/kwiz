@@ -985,7 +985,6 @@ const en = {
     },
     waiting: {
       scanOrGoTo: 'Scan, or go to',
-      andEnter: 'and enter',
       /** §4.1's verification, so a muted projector is found while the room is still filling. */
       soundReady: 'sound ready',
       soundFailed: 'Sound could not start. Click the screen once more.',

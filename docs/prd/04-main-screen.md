@@ -138,8 +138,7 @@ getting twenty people onto the right URL.
 │      ████████████        Scan, or go to                    │
 │      ██  ▄▄▄▄  ██        kwiz.local:3000                   │
 │      ██  ████  ██                                          │
-│      ████████████        and enter                         │
-│                                                            │
+│      ████████████                                          │
 │                          7 K M Q 2 X                       │
 │                                                            │
 │   ● Quizzly Bears   ● The Quizinart   ○ Norfolk & Chance   │
@@ -153,12 +152,17 @@ getting twenty people onto the right URL.
   but the typeface must not reintroduce ambiguity.)
 - **The QR and the typed URL are equal partners.** Camera QR scanning fails often enough
   — old phones, cracked screens, bad light — that a text fallback is not optional.
+- **No "and enter" line.** The URL and the code beneath it already say what to do with
+  them; a third line of instruction cost vertical space this column doesn't have to spare
+  once a full team list and a long quiz name are competing for the same row.
 - **Teams appear as they join**, filled dot for joined, hollow for not. This is social
   pressure that works: a table sees its name still hollow and does something about it.
 - **No count of how many are missing.** The room can see. A number invites announcing it,
   which pressures a table that's just slow.
-- Team names are shown at §2.1 body size, so the list is capped at what fits — beyond
-  ~12 teams it becomes a two-column grid, then names only without dots.
+- Team names are shown at §2.1 body size. **Above 3 teams it becomes a two-column grid**
+  — even a short list reads as lopsided in one column once there's a second column's worth
+  of empty width doing nothing — then, once the list is capped at what fits, names only
+  without dots.
 
 ### 4.1 Arming playback and fullscreen
 

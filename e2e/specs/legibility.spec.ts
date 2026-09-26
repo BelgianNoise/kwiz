@@ -388,7 +388,7 @@ test('the join URL is absolute after the network picker, and honestly relative b
     const page = await fresh.newPage()
     await page.goto(`${server.url}/en/screen/${localGame.gameId}`)
     await page.getByText(en.screen.arming.click).click()
-    await expect(page.getByText(en.screen.waiting.andEnter)).toBeVisible({
+    await expect(page.getByText(en.screen.waiting.scanOrGoTo)).toBeVisible({
       timeout: 15_000,
     })
 
