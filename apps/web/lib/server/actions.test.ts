@@ -64,6 +64,8 @@ const SPEC_PATHS = [
   // `TEAM_UPDATED` existed as events with no action that could cause them.
   'teams',
   'teams/:teamId',
+  // PRD 4 §5.1 / D60 — legal at every status, including `LIVE`, same as the two team actions above.
+  'main-screen-theme',
   // §12.1 — the cascade was in data model §10 and the menu item in the PRD, with no action between.
   'delete',
 ]
@@ -73,8 +75,8 @@ describe('the action catalogue', () => {
     const implemented = ROUTES.map((route) => route.pattern.join('/'))
 
     expect([...implemented].sort()).toEqual([...SPEC_PATHS].sort())
-    // 42 here plus `POST /api/games/join`, which is the 43 the spec lists.
-    expect(implemented).toHaveLength(42)
+    // 43 here plus `POST /api/games/join`, which is the 44 the spec lists.
+    expect(implemented).toHaveLength(43)
   })
 
   it('requires a device token on exactly the four player actions', () => {

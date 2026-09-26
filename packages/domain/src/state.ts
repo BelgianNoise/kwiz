@@ -7,6 +7,8 @@ import type {
   BuzzOutcome,
   GameStatus,
   Locale,
+  MainScreenColourScheme,
+  MainScreenTypography,
   RoundType,
 } from './vocabulary'
 
@@ -98,6 +100,9 @@ export interface GameContent {
   quizName: string
   code: string
   defaultPlayerLocale: Locale
+  /** The quiz's default at the moment this game was created (D60); `mainScreenThemeOverride` may replace it. */
+  mainScreenColourScheme: MainScreenColourScheme
+  mainScreenTypography: MainScreenTypography
   rounds: RoundContent[]
 }
 
@@ -285,6 +290,21 @@ export interface GameState {
 
   /** PRD 4 §10.2's two tabs, switched from control (D51). */
   finishedTab: FinishedTab
+
+  /**
+   * Overrides `content.mainScreenColourScheme`/`mainScreenTypography` once set (D60).
+   *
+   * `null` until the master changes it on this game, at which point it wins over the copied
+   * default forever after — the same "authored default, event overrides it" shape as
+   * `FinaleState.secondsPerPoint`/`penaltySeconds` (D54), and for the same reason: the game copy
+   * itself is write-once (I16), so a later change has to live beside it rather than in it. Unlike
+   * the finale settings, legal at **any** status, including `LIVE` — a theme that reads badly on
+   * a real projector is worth fixing without restarting the game.
+   */
+  mainScreenThemeOverride: {
+    colourScheme: MainScreenColourScheme
+    typography: MainScreenTypography
+  } | null
 
   /** Jeopardy (D30). `reason` is kept because tie-breaks and overrides are decisions. */
   picker: { teamId: string; reason: 'RULE' | 'TIE_BREAK' | 'MASTER_OVERRIDE' } | null

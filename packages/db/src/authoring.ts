@@ -4,6 +4,8 @@ import {
   wordLengths,
   type ActionResult,
   type AnswerMethod,
+  type MainScreenColourScheme,
+  type MainScreenTypography,
   type QuestionConfig,
   type QuizContent,
   roundConfigSchemaByType,
@@ -166,7 +168,12 @@ export function createQuiz(
 export function updateQuiz(
   database: KwizDatabase,
   quizId: string,
-  patch: { name?: string; description?: string | null },
+  patch: {
+    name?: string
+    description?: string | null
+    mainScreenColourScheme?: MainScreenColourScheme
+    mainScreenTypography?: MainScreenTypography
+  },
   now: Date = new Date(),
 ): ActionResult {
   return database.db.transaction((tx) => {
@@ -175,6 +182,12 @@ export function updateQuiz(
       .set({
         ...(patch.name === undefined ? {} : { name: patch.name }),
         ...(patch.description === undefined ? {} : { description: patch.description }),
+        ...(patch.mainScreenColourScheme === undefined
+          ? {}
+          : { mainScreenColourScheme: patch.mainScreenColourScheme }),
+        ...(patch.mainScreenTypography === undefined
+          ? {}
+          : { mainScreenTypography: patch.mainScreenTypography }),
         revision: sql`${quiz.revision} + 1`,
         updatedAt: now,
       })
@@ -210,6 +223,8 @@ export function duplicateQuiz(
         id: newQuizId,
         name: `${source.name} (copy)`,
         description: source.description,
+        mainScreenColourScheme: source.mainScreenColourScheme,
+        mainScreenTypography: source.mainScreenTypography,
         revision: 1,
         createdAt: now,
         updatedAt: now,

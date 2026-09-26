@@ -206,12 +206,57 @@ needs one too (PRD 1 §14's stated risk). One click satisfies both.
 Deliberately near-empty. It's on screen for a few seconds while the master introduces the
 round out loud, and its job is to be readable instantly and then get out of the way.
 
-**This is where PRD 2's O7 (per-quiz accent colour) is decided: no.** The reasoning is
-specific to this surface — **colour here is reserved for team identity.** Team colours are
-the only colour carrying meaning (PRD 1 §9.5), they are already constrained to a palette
-guaranteeing mutual distinguishability, and a per-quiz accent would compete with the one
-thing the audience uses colour to decode. A round intro carries its weight through
-typography and scale instead, which is also what survives a bad projector.
+**This is where PRD 2's O7 (per-quiz accent colour) was first decided against, and where
+D60 later reversed it.** The principle that motivated the original "no" survives intact —
+**colour still means team identity, and nothing else** — but a closed, pre-vetted set of
+presets (§5.1) satisfies that principle without forcing every quiz to look identical. A
+round intro still carries most of its weight through typography and scale rather than
+colour; the preset accent here is one word's worth of colour under the round number, not a
+wash across the stage.
+
+### 5.1 Per-quiz theme (D60)
+
+Two independent choices, defaulted once per quiz (PRD 2 §6) and copied onto every game
+created from it:
+
+- **Colour scheme** — one of three presets, each pairing a single "house" accent with a
+  matching backdrop treatment. The accent is used only for chrome that carries no
+  meaning of its own: the timer ring, card and tile borders, the safe-area corner marks,
+  and the correct-answer reveal. One preset uses no accent at all — the quietest option,
+  spending no colour beyond the team dots.
+- **Typography** — one of three display/body font pairings, chosen independently of the
+  colour scheme. Any combination is valid: a quiz can pair the boldest colour scheme with
+  the plainest typography, or the reverse.
+
+**Both are closed sets, never open pickers.** This is what makes D60 compatible with the
+concern that sank O7 the first time: each preset is vetted in advance against the curated
+team palette (PRD 1 §9.3) for mutual distinguishability at projector scale, so a master
+never has to make that judgement live, and the audience never encounters a combination
+nobody checked. Adding a fourth preset later goes through the same vetting before it
+ships — it is a design decision, not a runtime one.
+
+**A game's theme can be changed per session, at any status, including mid-`LIVE`** — a
+master who discovers a preset reads badly on this particular projector should not have to
+restart the game to fix it. The change is an override on the game, not an edit to the
+quiz's default (PRD 2 §12): the quiz's choice is copied onto the game at creation, exactly
+like every other game-copy field (I16), and a later change is layered on top of that copy
+rather than mutating it — the same shape D54's finale settings already use. Because the
+theme is carried on `MainScreenView` and every view is pushed whole on change (D38), the
+projector picks up a change **without a reload**: there is no separate "apply" step and
+nothing for the room to notice happening. A reload remains a safe fallback if a future
+theme element ever needs one (a font that only resolves at load, say), but nothing in the
+mechanism as specified requires it.
+
+**The invariant that survives from the original "no" is unchanged: colour still never
+means anything except team identity.** A preset's accent never appears on a team's dot,
+never marks a state (correct/incorrect, a spent tile, an elimination), and never
+substitutes for the semantic colours already in use elsewhere on this screen (§7's timer
+urgency, §10's movement arrows). A preset that wants to touch any of those is a different,
+larger decision than this one.
+
+**Presets are static-only.** None may introduce motion beyond what §15 already allows —
+no per-preset looping chrome, no exception alongside the audio equaliser. A preset that
+wants an ambient effect needs its own decision, not a quiet extension of this one.
 
 ---
 

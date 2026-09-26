@@ -473,6 +473,25 @@ const nl: Messages = {
       title: 'Op het hoofdscherm',
       body: 'Het geprojecteerde scherm op ware verhoudingen. Kijk of de vraag past en of het beeld een beamer overleeft.',
     },
+    mainScreenTheme: {
+      title: 'Thema hoofdscherm',
+      colourScheme: 'Kleurenschema',
+      typography: 'Typografie',
+      colourSchemes: {
+        BROADCAST: 'Broadcast',
+        MARQUEE: 'Marquee',
+        QUIET: 'Rustig',
+      },
+      typographies: {
+        IMPACT: 'Impact',
+        RETRO: 'Retro',
+        MODERN: 'Modern',
+      },
+      preview: 'Voorbeeld op het hoofdscherm',
+      previewTitle: 'Op het hoofdscherm',
+      previewBody:
+        'Het geprojecteerde scherm op ware verhoudingen, in het gekozen thema.',
+    },
     addTeam: {
       title: 'Team toevoegen',
       titleMidGame: 'Team toevoegen tijdens het spel?',

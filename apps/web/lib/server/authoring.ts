@@ -28,6 +28,8 @@ import {
   dsmtwFinaleRoundConfigSchema,
   fail,
   jeopardyRoundConfigSchema,
+  MAIN_SCREEN_COLOUR_SCHEMES,
+  MAIN_SCREEN_TYPOGRAPHIES,
   ROUND_TYPES,
   TIE_PAYOUTS,
   type ActionResult,
@@ -62,6 +64,9 @@ const id = z.string().min(1)
 const quizPatchSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
+  /** PRD 4 §5.1 / D60 — the quiz's default; a game's own copy may later diverge (§12). */
+  mainScreenColourScheme: z.enum(MAIN_SCREEN_COLOUR_SCHEMES).optional(),
+  mainScreenTypography: z.enum(MAIN_SCREEN_TYPOGRAPHIES).optional(),
 })
 
 /**

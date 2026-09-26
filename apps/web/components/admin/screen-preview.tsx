@@ -1,10 +1,16 @@
 'use client'
 
-import type { MainScreenQuestion, QuestionContent } from '@kwiz/domain'
+import type {
+  MainScreenColourScheme,
+  MainScreenQuestion,
+  MainScreenTypography,
+  QuestionContent,
+} from '@kwiz/domain'
 import { useTranslations } from 'next-intl'
 
 import { QuestionStage } from '@/components/screen/question-stage'
 import { StageFrame } from '@/components/screen/stage-frame'
+import { ThemeChrome } from '@/components/screen/theme-chrome'
 import {
   Dialog,
   DialogContent,
@@ -32,12 +38,15 @@ import {
 export function ScreenPreview({
   question,
   points,
+  theme,
   open,
   onClose,
 }: {
   question: QuestionContent
   /** The effective value — a board tile takes it from the ladder, not from the question row (O3). */
   points: number
+  /** PRD 4 §5.1 / D60 — the quiz's theme, so this matches what the room will actually see. */
+  theme: { colourScheme: MainScreenColourScheme; typography: MainScreenTypography }
   open: boolean
   onClose: () => void
 }) {
@@ -84,9 +93,12 @@ export function ScreenPreview({
         </DialogHeader>
 
         {/* 840 of 1920 — a hair over 43%, and every proportion inside is the projector's exactly. */}
-        <StageFrame width={840}>
-          <QuestionStage question={view} />
-        </StageFrame>
+        <div data-main-theme={theme.colourScheme} data-main-font={theme.typography}>
+          <StageFrame width={840}>
+            <ThemeChrome colourScheme={theme.colourScheme} />
+            <QuestionStage question={view} />
+          </StageFrame>
+        </div>
       </DialogContent>
     </Dialog>
   )

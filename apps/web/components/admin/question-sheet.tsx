@@ -3,6 +3,8 @@
 import {
   ANSWER_METHODS,
   type AnswerMethod,
+  type MainScreenColourScheme,
+  type MainScreenTypography,
   type QuestionContent,
   type RoundContent,
 } from '@kwiz/domain'
@@ -43,6 +45,7 @@ export function QuestionSheet({
   question,
   index,
   total,
+  theme,
   onClose,
   onStep,
   onChanged,
@@ -51,6 +54,8 @@ export function QuestionSheet({
   question: QuestionContent | undefined
   index: number
   total: number
+  /** PRD 4 §5.1 / D60 — the quiz's default theme, so this preview matches the quiz-editor one (§6). */
+  theme: { colourScheme: MainScreenColourScheme; typography: MainScreenTypography }
   onClose: () => void
   onStep: (delta: number) => void
   onChanged: () => void
@@ -90,6 +95,7 @@ export function QuestionSheet({
             question={question}
             index={index}
             total={total}
+            theme={theme}
             onStep={onStep}
             onChanged={onChanged}
           />
@@ -114,6 +120,7 @@ function QuestionForm({
   question,
   index,
   total,
+  theme,
   onStep,
   onChanged,
 }: {
@@ -121,6 +128,7 @@ function QuestionForm({
   question: QuestionContent
   index: number
   total: number
+  theme: { colourScheme: MainScreenColourScheme; typography: MainScreenTypography }
   onStep: (delta: number) => void
   onChanged: () => void
 }) {
@@ -325,6 +333,7 @@ function QuestionForm({
           open={previewing}
           question={question}
           points={question.points}
+          theme={theme}
           onClose={() => setPreviewing(false)}
         />
       </div>

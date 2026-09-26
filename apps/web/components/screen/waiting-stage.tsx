@@ -32,9 +32,9 @@ export function WaitingStage({
   const joined = new Set(joinedTeamIds)
 
   return (
-    <section className="flex h-full w-full flex-col bg-neutral-950 text-neutral-50">
+    <section className="flex h-full w-full flex-col text-neutral-50">
       <div className="flex min-h-0 flex-1 flex-col p-[5cqh]">
-        <h1 className="text-center text-[10cqh] font-semibold">{quizName}</h1>
+        <h1 className="main-display text-center text-[10cqh]">{quizName}</h1>
 
         {/*
           §4 — **the QR and the typed URL are equal partners.** Camera scanning fails often enough

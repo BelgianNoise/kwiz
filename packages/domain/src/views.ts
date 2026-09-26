@@ -38,6 +38,8 @@ import type {
   DoScoringMode,
   GameStatus,
   Locale,
+  MainScreenColourScheme,
+  MainScreenTypography,
   RoundType,
   TiePayout,
 } from './vocabulary'
@@ -374,6 +376,12 @@ export interface MainScreenView {
    */
   abandoned: boolean
   teams: TeamPublic[]
+  /**
+   * PRD 4 §5.1 / D60 — this game's effective theme: its own override once set, else the quiz's
+   * default it was created with. Applies across every stage, not just one, so it sits at this top
+   * level rather than inside `stage`.
+   */
+  theme: { colourScheme: MainScreenColourScheme; typography: MainScreenTypography }
   stage:
     | { kind: 'WAITING_FOR_PLAYERS'; joinedTeamIds: string[] }
     | {
@@ -455,6 +463,10 @@ export function toMainScreenView(
     soundMuted: machine.soundMuted ?? false,
     abandoned: state.status === 'ABANDONED',
     teams,
+    theme: state.mainScreenThemeOverride ?? {
+      colourScheme: state.content.mainScreenColourScheme,
+      typography: state.content.mainScreenTypography,
+    },
     stage: mainScreenStage(state, now, machine.playback ?? null),
   }
 }

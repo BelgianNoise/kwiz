@@ -58,7 +58,7 @@ export function HollowDot({ colour, size = 3 }: { colour: string; size?: number 
 export function JoinCode({ code, size }: { code: string; size: number }) {
   return (
     <p
-      className="font-semibold tabular-nums"
+      className="main-display text-[var(--main-accent)] tabular-nums"
       style={{ fontSize: `${size}cqh`, letterSpacing: '0.18em' }}
     >
       {code}

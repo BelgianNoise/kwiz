@@ -69,6 +69,7 @@ export function initialGameState(content: GameContent): GameState {
     previousLeaderboardRanks: null,
     finishedTab: 'RESULT',
     picker: null,
+    mainScreenThemeOverride: null,
     seq: 0,
   }
 }
@@ -426,6 +427,17 @@ export function applyEvent(
     case 'FINISHED_TAB_SET':
       state.finishedTab = event.payload.tab
       return
+    case 'MAIN_SCREEN_THEME_SET': {
+      const current = state.mainScreenThemeOverride ?? {
+        colourScheme: state.content.mainScreenColourScheme,
+        typography: state.content.mainScreenTypography,
+      }
+      state.mainScreenThemeOverride = {
+        colourScheme: event.payload.colourScheme ?? current.colourScheme,
+        typography: event.payload.typography ?? current.typography,
+      }
+      return
+    }
     case 'PICKER_ASSIGNED':
       state.picker = { teamId: event.payload.teamId, reason: event.payload.reason }
       return

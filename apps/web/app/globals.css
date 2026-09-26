@@ -193,6 +193,82 @@
 }
 
 /*
+ * PRD 4 §5.1 / D60 — the main (projected) screen's per-quiz theme: two independent axes, three
+ * presets each, applied via `data-main-theme`/`data-main-font` on a wrapping element
+ * (`components/screen/theme-chrome.tsx` reads the same attributes; `main-screen.tsx` sets them
+ * from the pushed view's `theme` field, so a change reaches the projector on the next SSE frame,
+ * no reload).
+ *
+ * **These variables carry decorative "house" chrome only** — the timer ring, card and tile
+ * borders, the corner marks, the join code and a correct-answer reveal. They never appear on a
+ * team dot, a verdict, or a movement arrow: those stay the literal Tailwind neutral/emerald/
+ * orange classes they always were, because colour there means something and this doesn't
+ * (PRD 1 §9.5). Fallback values at `:root` match today's plain look, so any surface that renders
+ * a stage component without a `data-main-theme` ancestor (there should be none) still looks right.
+ *
+ * No `next/font/google` here on purpose — an offline-first LAN app must build with no internet
+ * (see this file's own header comment) — so the three typography presets are differentiated by
+ * weight, tracking and generic family (sans/serif/monospace) rather than by a downloaded display
+ * face. `.main-display` is the one class every hero/numeral element opts into; body copy is
+ * untouched by either axis.
+ */
+:root {
+  --main-bg: #0a0a0a;
+  --main-accent: #d4d4d4;
+  --main-accent-soft: rgb(255 255 255 / 4%);
+  --main-accent-border: rgb(255 255 255 / 14%);
+  --main-font-display: var(--font-sans);
+  --main-weight-display: 600;
+  --main-tracking-display: normal;
+}
+
+[data-main-theme='BROADCAST'] {
+  --main-bg: radial-gradient(ellipse 1400px 1000px at 50% 10%, #201709 0%, #0a0a0a 70%);
+  --main-accent: #b8863b;
+  --main-accent-soft: rgb(184 134 59 / 12%);
+  --main-accent-border: rgb(184 134 59 / 40%);
+}
+
+[data-main-theme='MARQUEE'] {
+  --main-bg: radial-gradient(ellipse 1400px 1000px at 50% 5%, #0c1614 0%, #0a0a0a 65%);
+  --main-accent: #3e9c82;
+  --main-accent-soft: rgb(62 156 130 / 12%);
+  --main-accent-border: rgb(62 156 130 / 40%);
+}
+
+[data-main-theme='QUIET'] {
+  --main-bg: radial-gradient(ellipse 1600px 1200px at 50% 0%, #101010 0%, #0a0a0a 60%);
+  /* No accent hue at all — the quietest preset spends no colour beyond the team dots. */
+  --main-accent: #d4d4d4;
+  --main-accent-soft: rgb(255 255 255 / 4%);
+  --main-accent-border: rgb(255 255 255 / 14%);
+}
+
+[data-main-font='IMPACT'] {
+  --main-font-display: var(--font-sans);
+  --main-weight-display: 800;
+  --main-tracking-display: 0.01em;
+}
+
+[data-main-font='RETRO'] {
+  --main-font-display: var(--font-mono);
+  --main-weight-display: 700;
+  --main-tracking-display: 0.08em;
+}
+
+[data-main-font='MODERN'] {
+  --main-font-display: var(--font-sans);
+  --main-weight-display: 600;
+  --main-tracking-display: normal;
+}
+
+.main-display {
+  font-family: var(--main-font-display);
+  font-weight: var(--main-weight-display);
+  letter-spacing: var(--main-tracking-display);
+}
+
+/*
  * PRD 4 §6.1's equaliser — a fixed decorative loop, never real spectrum analysis.
  *
  * Its one job is to prove sound is playing, and its going still is the "no sound" signal. Defined

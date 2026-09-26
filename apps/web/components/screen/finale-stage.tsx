@@ -43,7 +43,7 @@ export function FinaleStage({ finale, teams }: { finale: FinaleView; teams: Team
   if (eliminated.length > 0) return <EliminationMoment clocks={eliminated} />
 
   return (
-    <section className="flex h-full w-full flex-col bg-neutral-950 p-[5cqh] text-neutral-50">
+    <section className="flex h-full w-full flex-col p-[5cqh] text-neutral-50">
       <header className="flex shrink-0 items-start justify-between gap-[3cqh]">
         <div className="min-w-0 flex-1">
           <FittedText max={6} className="text-left font-semibold">
@@ -76,7 +76,7 @@ export function FinaleStage({ finale, teams }: { finale: FinaleView; teams: Team
       {onTurn ? (
         <div className="flex shrink-0 items-center gap-[3cqh]">
           <Dot colour={onTurn.colour} size={5} />
-          <span className="text-[7cqh] font-semibold uppercase">{onTurn.name}</span>
+          <span className="main-display text-[7cqh] uppercase">{onTurn.name}</span>
           {/*
             No flash here. §12.3 is *"every **other** finalist loses time"* — the team that just found
             the keyword pays nothing, so a `−20s` on their own line would be a lie about the rule the
@@ -155,7 +155,9 @@ function Keyword({
           className="flex min-w-0 flex-1 items-center gap-[3cqh]"
           style={{ animation: 'kwiz-resolve 400ms ease-out' }}
         >
-          <span className="text-[6.5cqh] font-semibold">{keyword.text}</span>
+          <span className="main-display text-[6.5cqh] text-[var(--main-accent)]">
+            {keyword.text}
+          </span>
           {/*
             A revealed-unguessed tile resolves the same way but with **no team**: *"the absence is the
             point, so they get no marker rather than a placeholder one."* So this is a `credited` test
@@ -175,7 +177,7 @@ function Keyword({
               // Word position is the only identity a shape has.
               // oxlint-disable-next-line no-array-index-key
               key={index}
-              className="block rounded-[0.6cqh] bg-neutral-700"
+              className="block rounded-[0.6cqh] border border-[var(--main-accent-border)] bg-[var(--main-accent-soft)]"
               // Sized per character so the shape is proportional to the word, which is what makes it
               // a hint rather than a placeholder.
               style={{ width: `${length * 2.6}cqh`, height: '5cqh' }}
@@ -213,7 +215,7 @@ function ClockValue({
   return (
     <span className="flex items-baseline gap-[1cqh]">
       <span
-        className={`font-semibold tabular-nums ${urgent ? 'text-orange-400' : ''}`}
+        className={`main-display tabular-nums ${urgent ? 'text-orange-400' : 'text-[var(--main-accent)]'}`}
         style={{
           fontSize: `${size}cqh`,
           ...(urgent ? { animation: 'kwiz-urgent 1s ease-in-out infinite' } : {}),
@@ -258,14 +260,14 @@ function EliminationMoment({ clocks }: { clocks: Clock[] }) {
 
   return (
     <section
-      className="flex h-full w-full flex-col items-center justify-center gap-[3cqh] bg-neutral-950 text-neutral-50"
+      className="flex h-full w-full flex-col items-center justify-center gap-[3cqh] text-neutral-50"
       style={{ animation: 'kwiz-resolve 300ms ease-out' }}
     >
       {clocks.map((clock) => (
         <div key={clock.teamId} className="flex items-center gap-[3cqh]">
           <Dot colour={clock.colour} size={size * 0.5} />
           <span
-            className="leading-none font-semibold uppercase"
+            className="main-display leading-none uppercase"
             style={{ fontSize: `${size}cqh` }}
           >
             {clock.name}

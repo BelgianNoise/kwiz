@@ -1089,6 +1089,39 @@ export function decide(state: GameState, command: Command, now: number): Decisio
     }
 
     /** Legal at every status, including `FINISHED` — a misspelled name is worth fixing (§13.4). */
+    /*
+     * PRD 4 §5.1 / D60 — legal at **any** status, including `LIVE`: a theme that reads badly on a
+     * real projector is worth fixing without restarting the game. No `requireLive` guard, by design
+     * — contrast `CONFIGURE_FINALE`, which is `SETUP`-only for a reason (team count) that has no
+     * analogue here.
+     */
+    case 'SET_MAIN_SCREEN_THEME': {
+      const effective = state.mainScreenThemeOverride ?? {
+        colourScheme: state.content.mainScreenColourScheme,
+        typography: state.content.mainScreenTypography,
+      }
+      const changesColour =
+        command.colourScheme !== undefined &&
+        command.colourScheme !== effective.colourScheme
+      const changesTypography =
+        command.typography !== undefined && command.typography !== effective.typography
+      if (!changesColour && !changesTypography) return NOTHING_TO_DO
+
+      return allow([
+        {
+          type: 'MAIN_SCREEN_THEME_SET',
+          payload: {
+            ...(command.colourScheme === undefined
+              ? {}
+              : { colourScheme: command.colourScheme }),
+            ...(command.typography === undefined
+              ? {}
+              : { typography: command.typography }),
+          },
+        },
+      ])
+    }
+
     case 'UPDATE_TEAM': {
       if (!state.teams.has(command.teamId)) {
         return deny('TEAM_NOT_FOUND', `no team ${command.teamId}`)

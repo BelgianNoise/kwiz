@@ -209,6 +209,10 @@ export function QuestionSetEditor({
         question={openIndex === undefined ? undefined : round.questions[openIndex]}
         index={openIndex ?? 0}
         total={round.questions.length}
+        theme={{
+          colourScheme: quiz.mainScreenColourScheme,
+          typography: quiz.mainScreenTypography,
+        }}
         onClose={() => setOpenIndex(undefined)}
         onStep={(delta) =>
           setOpenIndex((current) => {

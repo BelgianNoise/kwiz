@@ -529,6 +529,28 @@ const en = {
       title: 'On the main screen',
       body: 'The projected screen at its real proportions. Check the prompt fits and the image survives a projector.',
     },
+    /**
+     * PRD 4 §5.1 / D60 — shared by the quiz editor's default (§6) and a game's own live override
+     * (§12): two independent closed sets, never a colour picker or a font list.
+     */
+    mainScreenTheme: {
+      title: 'Main screen theme',
+      colourScheme: 'Colour scheme',
+      typography: 'Typography',
+      colourSchemes: {
+        BROADCAST: 'Broadcast',
+        MARQUEE: 'Marquee',
+        QUIET: 'Quiet',
+      },
+      typographies: {
+        IMPACT: 'Impact',
+        RETRO: 'Retro',
+        MODERN: 'Modern',
+      },
+      preview: 'Preview on the main screen',
+      previewTitle: 'On the main screen',
+      previewBody: 'The projected screen at its real proportions, in the selected theme.',
+    },
     /** PRD 2 §11.2 / O5 — a table arriving mid-game, and the arithmetic that makes it a decision. */
     addTeam: {
       title: 'Add a team',

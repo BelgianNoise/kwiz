@@ -64,7 +64,9 @@ export function Timer({ timer }: { timer: TimerView }) {
             ⏸
           </span>
         ) : seconds > 0 ? (
-          <span className="text-[8cqh] font-semibold tabular-nums">{seconds}</span>
+          <span className="main-display text-[8cqh] text-[var(--main-accent)] tabular-nums">
+            {seconds}
+          </span>
         ) : (
           /*
            * §7 — **at zero it does not disappear.** It shows `TIME` and holds: the question is still
@@ -111,7 +113,7 @@ function Ring({ fraction, urgent }: { fraction: number; urgent: boolean }) {
         strokeLinecap="round"
         strokeDasharray={circumference}
         strokeDashoffset={circumference * (1 - fraction)}
-        className={urgent ? 'text-orange-400' : 'text-neutral-300'}
+        className={urgent ? 'text-orange-400' : 'text-[var(--main-accent)]'}
       />
     </svg>
   )

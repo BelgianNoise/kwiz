@@ -1190,6 +1190,7 @@ feature, not an error; a *second* submission is neither.
 | `POST /api/games/:gameId/resync` | `{}` — `SETUP` only (data model §7.1) |
 | `POST /api/games/:gameId/teams` | `{ name, colour, startingScore?, reason? }` — **legal at every status** (PRD 2 §11.2). A non-zero `startingScore` also writes a `SCORE_ADJUSTED`, so a late team's opening balance is an ordinary adjustment and stays revocable (D41). The server mints both ids |
 | `POST /api/games/:gameId/teams/:teamId` | `{ name?, colour? }` — rename or recolour, legal at every status **including `FINISHED`** (PRD 2 §13.4) |
+| `POST /api/games/:gameId/main-screen-theme` | `{ colourScheme?, typography? }` — PRD 4 §5.1 / D60. Overrides this game's own copy of the theme, legal at every status **including `LIVE`**; either field alone is a valid partial patch |
 | `POST /api/games/:gameId/delete` | `{}` — cascades to the copy subtree, teams, devices, events, drafts and all four projections (data model §10). The quiz is untouched. **Per game only**; there is no bulk prune (Q5) |
 
 > **These two were missing from this catalogue.** `TEAM_ADDED` and `TEAM_UPDATED` were in the event
@@ -1199,11 +1200,11 @@ feature, not an error; a *second* submission is neither.
 > slice 4. **Deleting a game** was absent for the same reason — data model §10 describes the cascade
 > and PRD 2 §12.1 offers the menu item, but no action reached it. The count below moves 38 → 41.
 
-**That is 43 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
+**That is 44 endpoints**, not the 25 conventions §10.1 originally counted — the `DSMTW_FINALE`
 actions (D50) arrived after that number was written, the two team actions plus the game delete above
-arrived in slice 4, and slice 6 added `media/playback` and `finished-tab` for the two things PRD 4's
-screen needs a master to drive. Counted here because "every action is zod-validated" is only
-checkable against a correct total.
+arrived in slice 4, slice 6 added `media/playback` and `finished-tab` for the two things PRD 4's
+screen needs a master to drive, and `main-screen-theme` (PRD 4 §5.1 / D60) is the newest. Counted
+here because "every action is zod-validated" is only checkable against a correct total.
 
 `resync` and `media/playback` are the two actions with **no domain command**, for opposite reasons.
 Both halves of `resync` are outside `packages/domain`: the precondition that matters is whether

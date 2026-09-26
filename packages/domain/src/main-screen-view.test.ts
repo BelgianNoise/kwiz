@@ -46,6 +46,8 @@ const content: GameContent = {
   quizName: 'Pub Quiz #4',
   code: '7KMQ2X',
   defaultPlayerLocale: 'en',
+  mainScreenColourScheme: 'BROADCAST',
+  mainScreenTypography: 'IMPACT',
   rounds: [
     {
       id: 'r1',

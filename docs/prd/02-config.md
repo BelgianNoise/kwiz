@@ -168,6 +168,10 @@ Masters otherwise assume deletion destroys their history and never clean up.
   Name         [Pub Quiz #4                    ]
   Description  [Monthly quiz at De Kroon       ]
 
+  Main screen  Colour scheme  (•) Broadcast  ( ) Marquee  ( ) Quiet
+               Typography     ( ) Impact  (•) Retro  ( ) Modern
+               [ Preview on the main screen → ]
+
   Rounds                                              [+ Add round]
   ⠿  1  Warm-up            QUESTION_SET   12 questions   120 pts   [Open →]
   ⠿  2  Music              QUESTION_SET   10 questions   100 pts   [Open →]
@@ -189,6 +193,15 @@ Masters otherwise assume deletion destroys their history and never clean up.
 - `+ Add round` asks only for **type** and **title** — everything else has defaults and
   is set in the round editor. A dialog that demands eight fields before you can write a
   question is how authoring stalls.
+- **Colour scheme and typography are two independent choices** (D60), each a closed set
+  of three presets — never a colour picker or a font list, which is exactly what keeps
+  every combination pre-vetted against the team palette (PRD 1 §9.3). Both default to the
+  same first preset for a new quiz, so an author who never touches this section gets a
+  consistent, already-checked look rather than an unstyled one.
+  **`[Preview on the main screen →]`** opens the same PRD 4 renderer as §7.1's per-question
+  preview, in the same mock `OPEN` state, driven by whichever presets are currently
+  selected here — so a master judging "does this combination work?" gets the identical
+  true-scale answer §7.1 already gives for "does this question fit?".
 
 ### 6.1 The finale is optional, and pinned last
 
@@ -694,6 +707,10 @@ The hub for one game, before, during and after.
     ● Quizzly Bears     1 device    ● Norfolk & Chance   1 device
     ● The Quizinart     —           ● Team 4             —
 
+  Main screen theme    Colour scheme (•) Broadcast ( ) Marquee ( ) Quiet
+                        Typography    ( ) Impact (•) Retro ( ) Modern
+                        [ Preview on the main screen → ]
+
   Rounds        5 rounds · 84 questions · not started
 ```
 
@@ -710,6 +727,15 @@ The hub for one game, before, during and after.
 - **The re-sync banner** appears only while `SETUP` and only when stale, and its
   confirmation states what survives: *"Teams, devices and the join code are kept.
   Questions are refreshed from the template."*
+- **The theme controls are available at every status, including `LIVE`** (D60) — the same
+  "legal at every status" shape as `[Add team]` above, for the same reason: a decision
+  worth revisiting mid-evening should not force restarting the game. Changing it here does
+  not edit the quiz's own default (§6); it overrides this **game's** copy of it, the way
+  finale settings override their authored default (§11.1) rather than editing the game
+  copy (I16). The projected screen picks the change up on its next pushed view — no
+  reload, because the theme travels on `MainScreenView` like everything else the room sees
+  (protocol §5.2, D38). `[Preview on the main screen →]` is the same renderer as §6's and
+  §7.1's, driven by whichever combination is currently selected here.
 
 ### 12.1 The game overflow menu
 
@@ -943,7 +969,7 @@ that's the master's disk.
 | ~~O4~~ | ~~Main-screen preview~~ | **Resolved: minimal.** One action opening the real PRD 4 renderer in a mock `OPEN` state at projector type scale (§7.1). |
 | ~~O5~~ | ~~Teams after `GAME_STARTED`~~ | **Resolved: allowed, with a warning dialog that computes what was missed and offers an inline starting score** (§11.2). |
 | ~~O6~~ | ~~Unplayable media~~ | **Resolved: verify in-browser at upload.** Off-screen media element confirms playability before upload; no transcoding (§7.1). |
-| ~~O7~~ | ~~Quiz cover image or accent colour~~ | **Resolved in PRD 4 §5: no.** On the projected surface **colour is reserved for team identity** — team colours are the only colour carrying meaning (PRD 1 §9.5) and are palette-constrained for mutual distinguishability. A per-quiz accent would compete with the one thing the audience uses colour to decode. Round intros carry their weight through typography and scale, which is also what survives a bad projector. |
+| ~~O7~~ | ~~Quiz cover image or accent colour~~ | **Originally resolved in PRD 4 §5: no** — an open per-quiz colour choice would compete with team-colour legibility on a projector. **Reversed → D60**, once framed as a *closed* set instead of an open one: three vetted colour-scheme presets and three vetted typography presets, chosen independently per quiz (§6), each checked in advance against the team palette for mutual distinguishability. A quiz cover *image* is still not offered — nothing in D60 revisits that half of the question. Full mechanics in PRD 4 §5.1. |
 
 ---
 

@@ -145,6 +145,8 @@ function assertValidCopy(tx: KwizTx, gameId: string): void {
     description: null,
     revision: 0,
     updatedAt: 0,
+    mainScreenColourScheme: content.mainScreenColourScheme,
+    mainScreenTypography: content.mainScreenTypography,
     rounds: content.rounds,
   }
 
@@ -165,7 +167,13 @@ export function createGameFromQuiz(
   now: () => Date = () => new Date(),
 ): ActionResult<CreatedGame> {
   const template = database.db
-    .select({ id: quiz.id, name: quiz.name, revision: quiz.revision })
+    .select({
+      id: quiz.id,
+      name: quiz.name,
+      revision: quiz.revision,
+      mainScreenColourScheme: quiz.mainScreenColourScheme,
+      mainScreenTypography: quiz.mainScreenTypography,
+    })
     .from(quiz)
     .where(eq(quiz.id, options.quizId))
     .get()
@@ -209,6 +217,10 @@ export function createGameFromQuiz(
             ...(options.defaultPlayerLocale === undefined
               ? {}
               : { defaultPlayerLocale: options.defaultPlayerLocale }),
+            // Unconditional, unlike `defaultPlayerLocale`: PRD 4 §5.1 / D60 has no setup-time
+            // override control, only the quiz's default and a later per-session change (§12).
+            mainScreenColourScheme: template.mainScreenColourScheme,
+            mainScreenTypography: template.mainScreenTypography,
             createdAt: now(),
           })
           .run()

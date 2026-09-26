@@ -12,6 +12,7 @@
  */
 
 import type { FinishedTab } from './state'
+import type { MainScreenColourScheme, MainScreenTypography } from './vocabulary'
 
 /** A stored draft, as `LOCK_QUESTION` receives it from `game_answer_draft` (protocol §4.3). */
 export interface DraftSubmission {
@@ -89,6 +90,12 @@ export type Command =
   // ─── §7.2 master: pacing ───
   | { type: 'TOGGLE_SCOREBOARD'; shown: boolean }
   | { type: 'SET_FINISHED_TAB'; tab: FinishedTab }
+  /** PRD 4 §5.1 / D60 — legal at any status, including `LIVE`. Either field alone is a valid patch. */
+  | {
+      type: 'SET_MAIN_SCREEN_THEME'
+      colourScheme?: MainScreenColourScheme
+      typography?: MainScreenTypography
+    }
   | { type: 'START_BREAK'; durationMs?: number }
   | { type: 'END_BREAK' }
   | {

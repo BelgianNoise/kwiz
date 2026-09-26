@@ -1,4 +1,9 @@
-import { GAME_STATUSES, LOCALES } from '@kwiz/domain'
+import {
+  GAME_STATUSES,
+  LOCALES,
+  MAIN_SCREEN_COLOUR_SCHEMES,
+  MAIN_SCREEN_TYPOGRAPHIES,
+} from '@kwiz/domain'
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { v7 as uuidv7 } from 'uuid'
@@ -37,6 +42,23 @@ export const game = sqliteTable(
     defaultPlayerLocale: text('default_player_locale', { enum: LOCALES })
       .notNull()
       .default('en'),
+
+    /**
+     * PRD 4 §5.1 / D60 — the quiz's default at creation. Write-once, like the rest of the game
+     * copy (I16): a later change goes through `MAIN_SCREEN_THEME_SET` and lives only in the
+     * in-memory projection (`GameState.mainScreenThemeOverride`), the same shape as the finale's
+     * authored-default-plus-event-override (D54) — never an `UPDATE` on this row.
+     */
+    mainScreenColourScheme: text('main_screen_colour_scheme', {
+      enum: MAIN_SCREEN_COLOUR_SCHEMES,
+    })
+      .notNull()
+      .default('BROADCAST'),
+    mainScreenTypography: text('main_screen_typography', {
+      enum: MAIN_SCREEN_TYPOGRAPHIES,
+    })
+      .notNull()
+      .default('IMPACT'),
 
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()
