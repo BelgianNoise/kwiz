@@ -13,16 +13,17 @@ type RoundIntro = Extract<MainScreenView['stage'], { kind: 'ROUND_INTRO' }>
  * **Deliberately near-empty.** It is on screen for a few seconds while the master introduces the round
  * out loud, and its job is to be readable instantly and then get out of the way.
  *
- * §5 also settles PRD 2's O7 here, and the reasoning is specific to this surface: **no per-quiz accent
- * colour.** Colour on this screen is reserved for team identity — it is the one thing the audience uses
- * colour to decode (PRD 1 §9.5), and an accent would compete with it. A round intro carries its weight
- * through typography and scale instead, which is also what survives a bad projector.
+ * §5 also settles PRD 2's O7 here — originally "no per-quiz accent colour", **reversed by D60**
+ * (§5.1): the reasoning that colour is reserved for team identity survives, but a closed,
+ * pre-vetted set of presets satisfies it without forcing every quiz to look identical. A round
+ * intro still carries most of its weight through typography and scale rather than colour — the
+ * accent below is one word's worth of colour under the round number, not a wash across the stage.
  */
 export function RoundIntroStage({ stage }: { stage: RoundIntro }) {
   const t = useTranslations('screen.round')
 
   return (
-    <section className="flex h-full w-full flex-col items-center justify-center gap-[4cqh] bg-neutral-950 p-[5cqh] text-neutral-50">
+    <section className="flex h-full w-full flex-col items-center justify-center gap-[4cqh] p-[5cqh] text-neutral-50">
       <p className="text-[8cqh] font-medium tracking-[0.2em] text-neutral-400">
         {t('number', { number: stage.roundNumber })}
       </p>
@@ -33,7 +34,10 @@ export function RoundIntroStage({ stage }: { stage: RoundIntro }) {
         which is where the near-empty stage's weight comes from.
       */}
       <div className="h-[30cqh] w-full">
-        <FittedText max={22} className="font-semibold tracking-[0.15em] uppercase">
+        <FittedText
+          max={22}
+          className="main-display tracking-[0.15em] text-[var(--main-accent)] uppercase"
+        >
           {stage.title}
         </FittedText>
       </div>

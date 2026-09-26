@@ -9,6 +9,7 @@ import { AdjustmentBanner } from '@/components/screen/adjustment-banner'
 import { Arming, DisconnectedPulse, KwizMark } from '@/components/screen/arming'
 import { Stage } from '@/components/screen/stage'
 import { StageFrame } from '@/components/screen/stage-frame'
+import { ThemeChrome } from '@/components/screen/theme-chrome'
 import { armSound, setSoundMuted } from '@/lib/client/screen-sound'
 import { useLiveView } from '@/lib/client/use-live-view'
 import { usePointerActive } from '@/lib/client/use-screen-chrome'
@@ -92,9 +93,23 @@ export function MainScreen({ gameId }: { gameId: string }) {
 
   if (sound === null) return <Arming onArmed={setSound} />
 
+  /*
+   * PRD 4 §5.1 / D60 — the theme travels on the pushed view (D38), so this re-renders with a new
+   * `data-main-theme`/`data-main-font` on the very next SSE frame after a master changes it: no
+   * reload, no separate "apply" step. Falls back to the first preset before any view has arrived —
+   * only `<KwizMark>` or `<Arming>` show at that point, neither of which reads these variables.
+   */
+  const theme = shown?.theme ?? { colourScheme: 'BROADCAST', typography: 'IMPACT' }
+
   return (
-    <div className={pointerActive ? '' : 'cursor-none'}>
+    <div
+      className={pointerActive ? '' : 'cursor-none'}
+      data-main-theme={theme.colourScheme}
+      data-main-font={theme.typography}
+    >
       <StageFrame>
+        <ThemeChrome colourScheme={theme.colourScheme} />
+
         {/*
           §14 — the last good view **stays on screen** while the stream is down: it is still true, and
           blanking a projector mid-question is the one thing worse than a stale standing. Only the

@@ -226,6 +226,10 @@ export function BoardBuilder({
         question={openTile}
         index={round.questions.findIndex((question) => question.id === openTile?.id)}
         total={round.questions.length}
+        theme={{
+          colourScheme: quiz.mainScreenColourScheme,
+          typography: quiz.mainScreenTypography,
+        }}
         onClose={() => setOpenTile(undefined)}
         onStep={(delta) => {
           const current = round.questions.findIndex(

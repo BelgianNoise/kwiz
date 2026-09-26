@@ -20,7 +20,7 @@ import type { Teams } from '@/components/screen/stage'
 /** §8.1 — the correct answer replaces the prompt area, at hero scale. */
 export function CorrectAnswer({ text }: { text: string }) {
   return (
-    <p className="text-center text-[16cqh] leading-none font-semibold text-neutral-50">
+    <p className="main-display text-center text-[16cqh] leading-none text-[var(--main-accent)]">
       {text}
     </p>
   )

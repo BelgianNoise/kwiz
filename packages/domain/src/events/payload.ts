@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-import { TIE_PAYOUTS } from '../vocabulary'
+import {
+  MAIN_SCREEN_COLOUR_SCHEMES,
+  MAIN_SCREEN_TYPOGRAPHIES,
+  TIE_PAYOUTS,
+} from '../vocabulary'
 
 /**
  * protocol §4 — every `game_event.type` and its payload schema.
@@ -187,6 +191,15 @@ export const gameEventPayloadSchemas = {
    * default and needs no event.
    */
   FINISHED_TAB_SET: z.strictObject({ tab: z.enum(['RESULT', 'POINTS']) }),
+  /**
+   * PRD 4 §5.1 / D60 — overrides the game's copied default (`GameContent.mainScreenColourScheme`/
+   * `mainScreenTypography`), never edits it (I16). Either field alone is a valid partial override;
+   * an omitted field means "leave that half of the theme as it is."
+   */
+  MAIN_SCREEN_THEME_SET: z.strictObject({
+    colourScheme: z.enum(MAIN_SCREEN_COLOUR_SCHEMES).optional(),
+    typography: z.enum(MAIN_SCREEN_TYPOGRAPHIES).optional(),
+  }),
   /** Appended even when it merely confirms the rule, so the log always answers whose pick it
    * was without the reader re-deriving it (D30). */
   PICKER_ASSIGNED: z.strictObject({

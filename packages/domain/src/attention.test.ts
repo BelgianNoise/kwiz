@@ -45,6 +45,8 @@ const content: GameContent = {
   quizName: 'Q',
   code: 'K',
   defaultPlayerLocale: 'en',
+  mainScreenColourScheme: 'BROADCAST',
+  mainScreenTypography: 'IMPACT',
   rounds: [
     {
       id: 'r1',

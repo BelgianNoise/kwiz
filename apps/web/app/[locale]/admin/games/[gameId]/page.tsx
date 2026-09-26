@@ -65,6 +65,19 @@ export default async function GameDetailPage({
       ? { number: roundIndex + 1, total: state.content.rounds.length }
       : null
 
+  /**
+   * PRD 4 §5.1 / D60 — the game's *effective* theme, mirroring `toMainScreenView`'s own fallback:
+   * its own override once the master has set one, else the copied default. `state` is absent only
+   * for a game the registry has not loaded (data model's in-memory projection), in which case the
+   * copied default on the `game` row is also the effective value — nothing has overridden it yet.
+   */
+  const theme = state
+    ? (state.mainScreenThemeOverride ?? {
+        colourScheme: state.content.mainScreenColourScheme,
+        typography: state.content.mainScreenTypography,
+      })
+    : { colourScheme: game.mainScreenColourScheme, typography: game.mainScreenTypography }
+
   return (
     <GameDetail
       missed={missed}
@@ -90,6 +103,8 @@ export default async function GameDetailPage({
             0,
           ) ?? 0,
         hasTemplate: template !== undefined,
+        mainScreenColourScheme: theme.colourScheme,
+        mainScreenTypography: theme.typography,
       }}
       teams={[...(state?.teams.values() ?? [])]
         .sort((a, b) => a.position - b.position)

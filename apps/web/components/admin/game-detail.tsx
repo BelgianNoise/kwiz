@@ -1,6 +1,10 @@
 'use client'
 
-import type { MissedSoFar } from '@kwiz/domain'
+import type {
+  MainScreenColourScheme,
+  MainScreenTypography,
+  MissedSoFar,
+} from '@kwiz/domain'
 import {
   AlertTriangle,
   ChevronLeft,
@@ -16,6 +20,7 @@ import { AddTeamDialog } from '@/components/admin/add-team-dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { ExportDialog } from '@/components/admin/export-dialog'
 import { LiveTeams } from '@/components/admin/live-teams'
+import { MainScreenThemePicker } from '@/components/admin/main-screen-theme-picker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,6 +49,10 @@ export interface GameDetailData {
   rounds: number
   questions: number
   hasTemplate: boolean
+  /** PRD 4 §5.1 / D60 — this game's *effective* theme: its own override once set, else the quiz's
+   *  default it was created with (`toMainScreenView`'s own fallback, mirrored here for display). */
+  mainScreenColourScheme: MainScreenColourScheme
+  mainScreenTypography: MainScreenTypography
 }
 
 export interface TeamRow {
@@ -239,6 +248,22 @@ export function GameDetail({
         round={round}
         onClose={() => setAddingTeam(false)}
       />
+
+      {/*
+        PRD 4 §5.1 / D60 — available at every status, including `LIVE`, the same as `[Add team]`
+        above: a theme override should not require restarting the game. Overrides this **game's**
+        copy of the theme, never the quiz's own default (that is the quiz editor's `updateQuiz`).
+      */}
+      <section className="border-border rounded-xl border p-6">
+        <MainScreenThemePicker
+          quizName={game.quizName}
+          colourScheme={game.mainScreenColourScheme}
+          typography={game.mainScreenTypography}
+          onChange={(patch) => {
+            void api.setMainScreenTheme(game.id, patch).then(refresh)
+          }}
+        />
+      </section>
 
       <p className="text-muted-foreground text-sm">
         {t('rounds', { rounds: game.rounds, questions: game.questions })}

@@ -304,6 +304,8 @@ describe('isStale', () => {
     quizName: 'Q',
     sourceQuizId: 'q',
     quizRevision: 1,
+    mainScreenColourScheme: 'BROADCAST',
+    mainScreenTypography: 'IMPACT',
     createdAt: new Date(),
     finishedAt: null,
     teams: 2,

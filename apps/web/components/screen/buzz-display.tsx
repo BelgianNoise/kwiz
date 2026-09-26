@@ -51,7 +51,7 @@ export function BuzzDisplay({
             §8.3 — **two decimal places.** `4.21` versus `4.28` is the drama; whole seconds would
             flatten a photo finish into a tie (conventions §8.2's buzz-timing format).
           */}
-          <p className="text-center text-[12cqh] leading-none font-semibold tabular-nums">
+          <p className="main-display text-center text-[12cqh] leading-none text-[var(--main-accent)] tabular-nums">
             {seconds(leader.offsetMs)}
           </p>
         </>

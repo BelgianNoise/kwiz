@@ -32,7 +32,7 @@ export function BoardStage({ stage, teams }: { stage: BoardStageView; teams: Tea
     : undefined
 
   return (
-    <section className="flex h-full w-full flex-col bg-neutral-950 p-[5cqh] text-neutral-50">
+    <section className="flex h-full w-full flex-col p-[5cqh] text-neutral-50">
       {/*
         §9 — **the current picker is stated at the top in their colour** (D30). It is the only
         instruction the room needs, and it prevents the "whose turn is it?" pause. Colour is paired with
@@ -82,7 +82,10 @@ export function BoardStage({ stage, teams }: { stage: BoardStageView; teams: Tea
               return (
                 <div
                   key={`${category.id}-${value}`}
-                  className="flex min-h-0 flex-1 items-center justify-center rounded-[1cqh] bg-neutral-900"
+                  // Themed uniformly whether the tile is live or spent (§5.1) — the accent marks
+                  // "this is a tile", never "this one is still playable", which would make colour a
+                  // second, undocumented way to read a state §9 already tells apart by content alone.
+                  className="flex min-h-0 flex-1 items-center justify-center rounded-[1cqh] border border-[var(--main-accent-border)] bg-[var(--main-accent-soft)]"
                 >
                   {tile === undefined ? null : tile.used ? (
                     /*
@@ -94,7 +97,7 @@ export function BoardStage({ stage, teams }: { stage: BoardStageView; teams: Tea
                   ) : (
                     // §9 — values are the largest element, since that is what teams call out
                     // ("Music for 300").
-                    <span className="text-[9cqh] font-semibold tabular-nums">
+                    <span className="main-display text-[9cqh] text-[var(--main-accent)] tabular-nums">
                       {value}
                     </span>
                   )}

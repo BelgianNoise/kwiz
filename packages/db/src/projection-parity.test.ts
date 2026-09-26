@@ -89,6 +89,8 @@ function contentFor(seeded: SeededGame): GameContent {
     quizName: 'Test quiz',
     code: 'TEST',
     defaultPlayerLocale: 'en',
+    mainScreenColourScheme: 'BROADCAST',
+    mainScreenTypography: 'IMPACT',
     rounds: [
       {
         id: seeded.roundId,

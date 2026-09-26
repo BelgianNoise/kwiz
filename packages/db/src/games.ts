@@ -1,4 +1,10 @@
-import { codeFromBytes, normaliseCode, type GameStatus } from '@kwiz/domain'
+import {
+  codeFromBytes,
+  normaliseCode,
+  type GameStatus,
+  type MainScreenColourScheme,
+  type MainScreenTypography,
+} from '@kwiz/domain'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import type { KwizDatabase } from './client'
@@ -22,6 +28,9 @@ export interface GameRow {
   quizName: string
   sourceQuizId: string | null
   quizRevision: number
+  /** PRD 4 §5.1 / D60 — the quiz's default at creation; a `state.mainScreenThemeOverride` may win over it. */
+  mainScreenColourScheme: MainScreenColourScheme
+  mainScreenTypography: MainScreenTypography
 }
 
 export function findGame(database: KwizDatabase, gameId: string): GameRow | undefined {
@@ -33,6 +42,8 @@ export function findGame(database: KwizDatabase, gameId: string): GameRow | unde
       quizName: game.quizName,
       sourceQuizId: game.sourceQuizId,
       quizRevision: game.quizRevision,
+      mainScreenColourScheme: game.mainScreenColourScheme,
+      mainScreenTypography: game.mainScreenTypography,
     })
     .from(game)
     .where(eq(game.id, gameId))
@@ -57,6 +68,8 @@ export function findJoinableGameByCode(
       quizName: game.quizName,
       sourceQuizId: game.sourceQuizId,
       quizRevision: game.quizRevision,
+      mainScreenColourScheme: game.mainScreenColourScheme,
+      mainScreenTypography: game.mainScreenTypography,
     })
     .from(game)
     .where(
@@ -87,6 +100,8 @@ export function findEndedGameByCode(
       quizName: game.quizName,
       sourceQuizId: game.sourceQuizId,
       quizRevision: game.quizRevision,
+      mainScreenColourScheme: game.mainScreenColourScheme,
+      mainScreenTypography: game.mainScreenTypography,
     })
     .from(game)
     .where(
@@ -186,6 +201,8 @@ export function listGames(database: KwizDatabase): GameSummary[] {
       quizName: game.quizName,
       sourceQuizId: game.sourceQuizId,
       quizRevision: game.quizRevision,
+      mainScreenColourScheme: game.mainScreenColourScheme,
+      mainScreenTypography: game.mainScreenTypography,
       createdAt: game.createdAt,
       finishedAt: game.finishedAt,
       templateRevision: quiz.revision,

@@ -3,6 +3,8 @@ import type {
   AnswerMethod,
   GameReview,
   Locale,
+  MainScreenColourScheme,
+  MainScreenTypography,
   PreflightReport,
   QuizContent,
   RoundType,
@@ -112,8 +114,15 @@ export const api = {
   // ─── quizzes ───
 
   createQuiz: (name: string) => authoring<{ quizId: string }>('quizzes', { name }),
-  updateQuiz: (quizId: string, patch: { name?: string; description?: string | null }) =>
-    authoring(`quizzes/${quizId}`, patch),
+  updateQuiz: (
+    quizId: string,
+    patch: {
+      name?: string
+      description?: string | null
+      mainScreenColourScheme?: MainScreenColourScheme
+      mainScreenTypography?: MainScreenTypography
+    },
+  ) => authoring(`quizzes/${quizId}`, patch),
   deleteQuiz: (quizId: string) => authoring(`quizzes/${quizId}/delete`),
   duplicateQuiz: (quizId: string) =>
     authoring<{ quizId: string }>(`quizzes/${quizId}/duplicate`),
@@ -242,6 +251,17 @@ export const api = {
     teamId: string,
     patch: { name?: string; colour?: string },
   ) => send(`/api/games/${gameId}/teams/${teamId}`, patch),
+  /**
+   * PRD 4 §5.1 / D60 — legal at every status, including `LIVE` (same as `updateTeam` above).
+   * Overrides this game's own copy of the theme; the quiz's default is `updateQuiz` (§6).
+   */
+  setMainScreenTheme: (
+    gameId: string,
+    patch: {
+      colourScheme?: MainScreenColourScheme
+      typography?: MainScreenTypography
+    },
+  ) => send(`/api/games/${gameId}/main-screen-theme`, patch),
   resyncGame: (gameId: string) => send(`/api/games/${gameId}/resync`, {}),
   abandonGame: (gameId: string) => send(`/api/games/${gameId}/abandon`, {}),
   /** §12.1 — per game, never in bulk (data model Q5). Cascades; the quiz is untouched. */

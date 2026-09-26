@@ -51,7 +51,7 @@ export function QuestionStage({
     // §2.2 — dark background, light text. A light background washes out and makes a projector's
     // black level look grey. The 5% safe area is the padding: overscan clips the edges on some
     // projectors, and nothing meaningful may sit outside it.
-    <section className="relative h-full w-full bg-neutral-950 text-neutral-50">
+    <section className="relative h-full w-full text-neutral-50">
       <div className="flex h-full w-full flex-col p-[5cqh]">
         {buzzing ? (
           <div className="min-h-0 flex-1">

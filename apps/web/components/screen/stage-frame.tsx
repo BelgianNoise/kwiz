@@ -71,6 +71,11 @@ export function StageFrame({
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
             containerType: 'size',
+            // PRD 4 §5.1 / D60 — the theme's background lives here, once, rather than on each
+            // stage's own root: every stage removed its own `bg-neutral-950` so this shows through.
+            // `var(..., #0a0a0a)` is the pre-theme fallback for the one caller that doesn't set
+            // `data-main-theme` (`screen-preview.tsx`'s per-question preview).
+            background: 'var(--main-bg, #0a0a0a)',
           }}
           className="absolute top-0 left-0"
         >

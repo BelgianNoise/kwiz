@@ -44,8 +44,8 @@ export function BreakStage({
   const expired = seconds !== null && seconds <= 0
 
   return (
-    <section className="flex h-full w-full flex-col items-center bg-neutral-950 p-[5cqh] text-neutral-50">
-      <h1 className="shrink-0 text-[8cqh] font-semibold tracking-[0.15em] text-neutral-300 uppercase">
+    <section className="flex h-full w-full flex-col items-center p-[5cqh] text-neutral-50">
+      <h1 className="main-display shrink-0 text-[8cqh] tracking-[0.15em] text-neutral-300 uppercase">
         {open ? t('backShortly') : expired ? t('startingSoon') : t('backIn')}
       </h1>
 
@@ -53,7 +53,7 @@ export function BreakStage({
         // §11 / conventions §8.2 — **`m:ss` here**, unlike the finale's whole seconds (D57). A break is
         // minutes long and nobody is doing arithmetic on it, so `4:37` is the natural reading; the
         // finale's format exists for subtraction, which does not apply.
-        <p className="shrink-0 text-[24cqh] leading-none font-semibold tabular-nums">
+        <p className="main-display shrink-0 text-[24cqh] leading-none text-[var(--main-accent)] tabular-nums">
           {minuteSeconds(seconds ?? 0)}
         </p>
       )}

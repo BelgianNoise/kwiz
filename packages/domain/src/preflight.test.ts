@@ -53,6 +53,8 @@ const quiz = (rounds: RoundContent[]): QuizContent => ({
   description: null,
   revision: 1,
   updatedAt: 0,
+  mainScreenColourScheme: 'BROADCAST',
+  mainScreenTypography: 'IMPACT',
   rounds,
 })
 

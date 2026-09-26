@@ -29,6 +29,18 @@ export const LOCALES = ['en', 'nl'] as const
 export type Locale = (typeof LOCALES)[number]
 
 /**
+ * PRD 4 §5.1 / D60. Three vetted presets, never an open colour picker — each is checked in
+ * advance against the curated team palette (§9.3) for mutual distinguishability, which is
+ * exactly the guarantee an arbitrary per-quiz colour (O7) could not give.
+ */
+export const MAIN_SCREEN_COLOUR_SCHEMES = ['BROADCAST', 'MARQUEE', 'QUIET'] as const
+export type MainScreenColourScheme = (typeof MAIN_SCREEN_COLOUR_SCHEMES)[number]
+
+/** Independent of the colour scheme (D60) — any combination of the two is valid. */
+export const MAIN_SCREEN_TYPOGRAPHIES = ['IMPACT', 'RETRO', 'MODERN'] as const
+export type MainScreenTypography = (typeof MAIN_SCREEN_TYPOGRAPHIES)[number]
+
+/**
  * The three SSE audiences (protocol §2.1). One filter per audience, selected by the **route** —
  * never by a query parameter — so the wrong filter cannot be reached by editing a URL.
  *

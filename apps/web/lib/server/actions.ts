@@ -14,6 +14,8 @@ import {
 import {
   acceptsSubmissions,
   fail,
+  MAIN_SCREEN_COLOUR_SCHEMES,
+  MAIN_SCREEN_TYPOGRAPHIES,
   ok,
   type ActionResult,
   type Command,
@@ -139,6 +141,11 @@ export const ROUTES: readonly Route[] = [
    */
   route('add-team', 'teams', 'MASTER'),
   route('update-team', 'teams/:teamId', 'MASTER'),
+  /*
+   * PRD 4 §5.1 / D60 — legal at every status, including `LIVE`, same as `add-team`/`update-team`
+   * above: a theme that reads badly on a real projector is worth fixing without restarting the game.
+   */
+  route('main-screen-theme', 'main-screen-theme', 'MASTER'),
   /*
    * §12.1 — per game, never in bulk (data model Q5). Like `resync` it has **no domain command**: it
    * removes the game the state would be folded from, so there is nothing left to decide against.
@@ -654,6 +661,26 @@ function execute(
                 reason: parsed.data.reason ?? 'joined late',
               },
             }),
+      })
+    }
+
+    case 'main-screen-theme': {
+      const parsed = parseBody(
+        z.object({
+          colourScheme: z.enum(MAIN_SCREEN_COLOUR_SCHEMES).optional(),
+          typography: z.enum(MAIN_SCREEN_TYPOGRAPHIES).optional(),
+        }),
+        body,
+      )
+      if (!parsed.ok) return parsed
+      return run({
+        type: 'SET_MAIN_SCREEN_THEME',
+        ...(parsed.data.colourScheme === undefined
+          ? {}
+          : { colourScheme: parsed.data.colourScheme }),
+        ...(parsed.data.typography === undefined
+          ? {}
+          : { typography: parsed.data.typography }),
       })
     }
 

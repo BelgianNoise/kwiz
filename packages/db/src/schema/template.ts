@@ -1,3 +1,4 @@
+import { MAIN_SCREEN_COLOUR_SCHEMES, MAIN_SCREEN_TYPOGRAPHIES } from '@kwiz/domain'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { v7 as uuidv7 } from 'uuid'
 
@@ -27,6 +28,20 @@ export const quiz = sqliteTable('quiz', {
   id: primaryId(),
   name: text('name').notNull(),
   description: text('description'),
+
+  /**
+   * PRD 4 §5.1 / D60 — the default copied onto every game created from this quiz (PRD 2 §6). A
+   * game may override its own copy afterwards (`game.mainScreenColourScheme`/`mainScreenTypography`
+   * plus `MAIN_SCREEN_THEME_SET`); this column never changes retroactively for a played game.
+   */
+  mainScreenColourScheme: text('main_screen_colour_scheme', {
+    enum: MAIN_SCREEN_COLOUR_SCHEMES,
+  })
+    .notNull()
+    .default('BROADCAST'),
+  mainScreenTypography: text('main_screen_typography', { enum: MAIN_SCREEN_TYPOGRAPHIES })
+    .notNull()
+    .default('IMPACT'),
 
   /**
    * Bumped on every save of the quiz **or any descendant**, so import collision handling (D9)

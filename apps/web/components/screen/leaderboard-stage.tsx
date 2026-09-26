@@ -27,8 +27,8 @@ export function LeaderboardStage({
   const t = useTranslations('screen.leaderboard')
 
   return (
-    <section className="flex h-full w-full flex-col bg-neutral-950 p-[5cqh] text-neutral-50">
-      <h1 className="shrink-0 text-center text-[7cqh] font-semibold tracking-[0.15em] text-neutral-300 uppercase">
+    <section className="flex h-full w-full flex-col p-[5cqh] text-neutral-50">
+      <h1 className="main-display shrink-0 text-center text-[7cqh] tracking-[0.15em] text-neutral-300 uppercase">
         {stage.afterRoundNumber === null
           ? t('currentScores')
           : t('afterRound', { number: stage.afterRoundNumber })}

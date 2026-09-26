@@ -151,6 +151,8 @@ export function loadGameContent(
     quizName: row.quizName,
     code: row.code,
     defaultPlayerLocale: row.defaultPlayerLocale,
+    mainScreenColourScheme: row.mainScreenColourScheme,
+    mainScreenTypography: row.mainScreenTypography,
     rounds: rounds.map((round): RoundContent => ({
       id: round.id,
       position: round.position,

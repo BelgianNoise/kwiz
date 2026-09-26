@@ -28,7 +28,7 @@ export function FinishedStage({ stage, teams }: { stage: FinishedView; teams: Te
       : stage.finale.filter((row) => row.rank === 1).map((row) => row.teamId)
 
   return (
-    <section className="flex h-full w-full flex-col bg-neutral-950 p-[5cqh] text-neutral-50">
+    <section className="flex h-full w-full flex-col p-[5cqh] text-neutral-50">
       <Winners teamIds={winners} teams={teams} />
 
       {stage.finale === null ? (
@@ -58,7 +58,7 @@ function Winners({ teamIds, teams }: { teamIds: string[]; teams: Teams }) {
           <div key={teamId} className="flex items-center gap-[3cqh]">
             <Dot colour={team?.colour ?? '#737373'} size={size * 0.45} />
             <span
-              className="leading-none font-semibold uppercase"
+              className="main-display leading-none uppercase"
               style={{ fontSize: `${size}cqh` }}
             >
               {team?.name}

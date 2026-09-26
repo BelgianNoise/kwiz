@@ -125,6 +125,8 @@ export function loadQuizTree(
     description: row.description,
     revision: row.revision,
     updatedAt: row.updatedAt.getTime(),
+    mainScreenColourScheme: row.mainScreenColourScheme,
+    mainScreenTypography: row.mainScreenTypography,
     rounds: rounds.map((entry): RoundContent => ({
       id: entry.id,
       position: entry.position,

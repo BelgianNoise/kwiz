@@ -1,4 +1,5 @@
 import type { RoundContent } from './state'
+import type { MainScreenColourScheme, MainScreenTypography } from './vocabulary'
 
 /**
  * The **template** tree, as PRD 2's authoring surface reads it.
@@ -16,6 +17,9 @@ export interface QuizContent {
   revision: number
   /** What the import collision dialog actually compares (PRD 2 §14.2). Epoch ms. */
   updatedAt: number
+  /** PRD 4 §5.1 / D60 — the default copied onto every game created from this quiz (PRD 2 §6). */
+  mainScreenColourScheme: MainScreenColourScheme
+  mainScreenTypography: MainScreenTypography
   rounds: RoundContent[]
 }
 

@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { AddRoundDialog } from '@/components/admin/add-round-dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { ExportDialog } from '@/components/admin/export-dialog'
+import { MainScreenThemePicker } from '@/components/admin/main-screen-theme-picker'
 import { SaveIndicator } from '@/components/admin/save-indicator'
 import { Button } from '@/components/ui/button'
 import {
@@ -153,6 +154,26 @@ export function QuizEditor({ quiz, games }: { quiz: QuizContent; games: number }
             onChange={(event) => description.push(event.target.value)}
           />
         </div>
+      </section>
+
+      <section className="border-border rounded-xl border p-6">
+        <MainScreenThemePicker
+          quizName={quiz.name}
+          colourScheme={quiz.mainScreenColourScheme}
+          typography={quiz.mainScreenTypography}
+          onChange={(patch) => {
+            void api
+              .updateQuiz(quiz.id, {
+                ...(patch.colourScheme === undefined
+                  ? {}
+                  : { mainScreenColourScheme: patch.colourScheme }),
+                ...(patch.typography === undefined
+                  ? {}
+                  : { mainScreenTypography: patch.typography }),
+              })
+              .then(refresh)
+          }}
+        />
       </section>
 
       <section className="space-y-4">
