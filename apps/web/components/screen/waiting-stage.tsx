@@ -167,7 +167,15 @@ function Qr({ text }: { text: string }) {
   }, [text])
 
   return (
-    <div className="size-[45cqh] shrink-0 rounded-[2cqh] bg-white p-[2cqh]">
+    /*
+     * `h-full self-stretch` + `max-h-[45cqh]`, not a bare `size-[45cqh]` — a fixed size measured
+     * against the *whole stage* ignored how much room this row actually had left once the title
+     * and team list took theirs, and overflowed upward into the title on a real 16:9 view with a
+     * longer quiz name or a fuller team list. Stretching to the row's own height (capped at the
+     * original 45cqh for the common case) means it can only ever get smaller when room is tight,
+     * never overlap — `aspect-square` keeps the width following 1:1.
+     */
+    <div className="aspect-square h-full max-h-[45cqh] shrink-0 self-stretch rounded-[2cqh] bg-white p-[2cqh]">
       {svg === null ? null : (
         /*
           The SVG is generated here from a URL this server produced — not remote content — and there is
