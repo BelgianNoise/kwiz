@@ -96,8 +96,9 @@ export function MainScreen({ gameId }: { gameId: string }) {
   /*
    * PRD 4 §5.1 / D60 — the theme travels on the pushed view (D38), so this re-renders with a new
    * `data-main-theme`/`data-main-font` on the very next SSE frame after a master changes it: no
-   * reload, no separate "apply" step. Falls back to the first preset before any view has arrived —
-   * only `<KwizMark>` or `<Arming>` show at that point, neither of which reads these variables.
+   * reload, no separate "apply" step. Falls back to the first preset before any view has arrived;
+   * `<ThemeChrome>` itself is gated on `shown` below, so this fallback never actually paints —
+   * it only keeps `data-main-theme`/`data-main-font` defined on the wrapper.
    */
   const theme = shown?.theme ?? { colourScheme: 'BROADCAST', typography: 'IMPACT' }
 
@@ -108,15 +109,21 @@ export function MainScreen({ gameId }: { gameId: string }) {
       data-main-font={theme.typography}
     >
       <StageFrame>
-        <ThemeChrome colourScheme={theme.colourScheme} />
-
         {/*
           §14 — the last good view **stays on screen** while the stream is down: it is still true, and
           blanking a projector mid-question is the one thing worse than a stale standing. Only the
           very first connect has nothing to show.
         */}
         {shown && status !== 'FAILED' ? (
-          <Stage view={shown} teams={teams} sound={sound} />
+          <>
+            {/*
+              The theme's decorative chrome belongs to the stage, not to the surface — a
+              `KwizMark`/"connecting" moment below must stay genuinely neutral (§14: "no error
+              text", and no decoration either), so this renders only alongside a real `<Stage>`.
+            */}
+            <ThemeChrome colourScheme={theme.colourScheme} />
+            <Stage view={shown} teams={teams} sound={sound} />
+          </>
         ) : (
           /*
            * §14 — *"game not found / deleted: a neutral full-screen `kwiz` mark. No error text."*
