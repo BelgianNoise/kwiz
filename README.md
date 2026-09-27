@@ -100,14 +100,6 @@ you want to go deeper than this file does.
 
 [MIT](LICENSE).
 
-## Status
-
-Feature-complete for a real quiz night: setup, live control, the projected screen, the
-player phone, Jeopardy rounds and a keyword finale all work end to end, in English and
-Dutch, and are covered by an automated test suite. What's left is the kind of thing only a
-live room finds — see [`docs/field-rehearsal.md`](docs/field-rehearsal.md) for that
-runbook.
-
 ---
 
 *Built with AI assistance (mostly Claude Sonnet), from a fully-specified design down to
