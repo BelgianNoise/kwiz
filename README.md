@@ -43,6 +43,11 @@ every clock is derived from a durable log, not held in memory waiting to disappe
 *A leaderboard moment is free drama: rank, score, and who moved since last time — the
 kind of thing a room reacts to out loud.*
 
+![The same question shown three times side by side, once per main-screen colour theme: BROADCAST in warm amber, MARQUEE in teal, QUIET in neutral grey](docs/screenshots/07-main-themes.png)
+
+*Pick a look per quiz — colour scheme and typography are independent, so the projector
+can match the night without anyone touching a stylesheet.*
+
 ## Quick start
 
 Requires [Node](https://nodejs.org) 24+ and [pnpm](https://pnpm.io). Everything else —
@@ -68,8 +73,10 @@ on the same network as your laptop.
 
 ## How a night actually runs
 
-1. **Write your quiz** in the setup screen — free-text, multiple-choice, buzzer and
-   Jeopardy-style rounds, plus a keyword-guessing finale for the last round of the night.
+1. **Write your quiz** in the setup screen, mixing question types freely: free-text,
+   multiple-choice, buzzer, and physical/performance challenges the master judges live
+   ("dance for 30 seconds", scored winner-takes-all or per team). Build a Jeopardy-style
+   board for a whole round, and close the night with a keyword-guessing finale.
 2. **Start the game.** The main screen shows a join code and QR; teams tap in on one
    phone each.
 3. **Run the room from the control desk.** Open a question, watch answers land live,
