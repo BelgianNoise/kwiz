@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Self-hosted pub-quiz engine that runs offline on a LAN",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @kwiz/web dev",
